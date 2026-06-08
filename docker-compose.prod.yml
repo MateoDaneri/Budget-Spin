@@ -1,0 +1,46 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: .env.production
+        required: false
+    environment:
+      DATABASE_PATH: /app/data/budgetspin.sqlite
+      NODE_ENV: production
+    command: >
+      sh -c 'if [ -z "$$BUDGETSPIN_AUTH_SECRET" ]; then
+      echo "BUDGETSPIN_AUTH_SECRET is required" >&2;
+      exit 1;
+      fi;
+      npm run db:migrate &&
+      npm run start'
+    volumes:
+      - budgetspin-prod-data:/app/data
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_DOCKER_NETWORK:-proxy}
+      - traefik.http.routers.budgetspin.rule=Host(`${BUDGETSPIN_HOSTNAME:-budget-spin.ts.local}`)
+      - traefik.http.routers.budgetspin.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.budgetspin.tls=${TRAEFIK_TLS:-true}
+      - traefik.http.services.budgetspin.loadbalancer.server.port=3000
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "node -e \"fetch('http://127.0.0.1:3000/login').then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))\""
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  budgetspin-prod-data:
+    name: budgetspin-prod-data
+
+networks:
+  proxy:
+    external: true
+    name: ${TRAEFIK_DOCKER_NETWORK:-proxy}

@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+coverage
+.DS_Store
+.env
+.env.local
+.env.production
+.env.prod
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+.test-data

@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    command: sh -c "npm run db:migrate && npm run dev"
+    environment:
+      DATABASE_PATH: /app/data/budgetspin.sqlite
+      BUDGETSPIN_AUTH_SECRET: ${BUDGETSPIN_AUTH_SECRET:-budgetspin-local-dev-secret}
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - budgetspin-data:/app/data
+
+volumes:
+  budgetspin-data:
