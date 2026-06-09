@@ -1,243 +1,524 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <title>BudgetSpin Handoff</title>
   <style>
-    /* Default styles provided by pandoc.
-    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
-    */
-    html {
-      color: #1a1a1a;
-      background-color: #fdfdfd;
+    :root {
+      --bg: #eef4ef;
+      --surface: #ffffff;
+      --surface-soft: #f7faf7;
+      --ink: #17231b;
+      --muted: #637069;
+      --line: #cad7cd;
+      --green: #207447;
+      --green-bright: #34a268;
+      --green-soft: #e1f2e6;
+      --navy: #183153;
+      --navy-soft: #e9eff7;
+      --amber: #97640f;
+      --amber-soft: #fff1ce;
+      --red: #a83a31;
+      --red-soft: #fde6e2;
+      --code: #142017;
+      --code-ink: #e8f5ea;
+      --shadow: 0 18px 55px rgba(25, 55, 35, 0.13);
     }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
     body {
-      margin: 0 auto;
-      max-width: 36em;
-      padding-left: 50px;
-      padding-right: 50px;
-      padding-top: 50px;
-      padding-bottom: 50px;
-      hyphens: auto;
-      overflow-wrap: break-word;
-      text-rendering: optimizeLegibility;
-      font-kerning: normal;
-    }
-    @media (max-width: 600px) {
-      body {
-        font-size: 0.9em;
-        padding: 12px;
-      }
-      h1 {
-        font-size: 1.8em;
-      }
-    }
-    @media print {
-      html {
-        background-color: white;
-      }
-      body {
-        background-color: transparent;
-        color: black;
-        font-size: 12pt;
-      }
-      p, h2, h3 {
-        orphans: 3;
-        widows: 3;
-      }
-      h2, h3, h4 {
-        page-break-after: avoid;
-      }
-    }
-    p {
-      margin: 1em 0;
-    }
-    a {
-      color: #1a1a1a;
-    }
-    a:visited {
-      color: #1a1a1a;
-    }
-    img {
-      max-width: 100%;
-    }
-    svg {
-      height: auto;
-      max-width: 100%;
-    }
-    h1, h2, h3, h4, h5, h6 {
-      margin-top: 1.4em;
-    }
-    h5, h6 {
-      font-size: 1em;
-      font-style: italic;
-    }
-    h6 {
-      font-weight: normal;
-    }
-    ol, ul {
-      padding-left: 1.7em;
-      margin-top: 1em;
-    }
-    li > ol, li > ul {
-      margin-top: 0;
-    }
-    blockquote {
-      margin: 1em 0 1em 1.7em;
-      padding-left: 1em;
-      border-left: 2px solid #e6e6e6;
-      color: #606060;
-    }
-    code {
-      white-space: pre-wrap;
-      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
-      font-size: 85%;
       margin: 0;
-      hyphens: manual;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
     }
-    pre {
-      margin: 1em 0;
-      overflow: auto;
+
+    a { color: var(--green); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(202, 215, 205, 0.9);
+      background: rgba(238, 244, 239, 0.94);
+      backdrop-filter: blur(16px);
     }
-    pre code {
-      padding: 0;
-      overflow: visible;
-      overflow-wrap: normal;
+
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 12px 22px;
     }
-    .sourceCode {
-     background-color: transparent;
-     overflow: visible;
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-weight: 850;
+      white-space: nowrap;
     }
-    hr {
-      border: none;
-      border-top: 1px solid #1a1a1a;
-      height: 1px;
-      margin: 1em 0;
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--green);
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(32, 116, 71, 0.28);
     }
-    table {
-      margin: 1em 0;
-      border-collapse: collapse;
-      width: 100%;
+
+    nav {
+      display: flex;
+      justify-content: flex-end;
+      gap: 5px;
       overflow-x: auto;
-      display: block;
-      font-variant-numeric: lining-nums tabular-nums;
+      scrollbar-width: none;
     }
-    table caption {
-      margin-bottom: 0.75em;
+
+    nav::-webkit-scrollbar { display: none; }
+
+    nav a {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 7px 10px;
+      color: #314236;
+      font-size: 13px;
+      font-weight: 750;
     }
-    tbody {
-      margin-top: 0.5em;
-      border-top: 1px solid #1a1a1a;
-      border-bottom: 1px solid #1a1a1a;
-    }
-    th {
-      border-top: 1px solid #1a1a1a;
-      padding: 0.25em 0.5em 0.25em 0.5em;
-    }
-    td {
-      padding: 0.125em 0.5em 0.25em 0.5em;
-    }
-    header {
-      margin-bottom: 4em;
-      text-align: center;
-    }
-    #TOC li {
-      list-style: none;
-    }
-    #TOC ul {
-      padding-left: 1.3em;
-    }
-    #TOC > ul {
-      padding-left: 0;
-    }
-    #TOC a:not(:hover) {
+
+    nav a:hover {
+      background: var(--green-soft);
       text-decoration: none;
     }
-    span.smallcaps{font-variant: small-caps;}
-    div.columns{display: flex; gap: min(4vw, 1.5em);}
-    div.column{flex: auto; overflow-x: auto;}
-    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
-    /* The extra [class] is a hack that increases specificity enough to
-       override a similar rule in reveal.js */
-    ul.task-list[class]{list-style: none;}
-    ul.task-list li input[type="checkbox"] {
-      font-size: inherit;
-      width: 0.8em;
-      margin: 0 0.8em 0.2em -1.6em;
-      vertical-align: middle;
+
+    .hero {
+      border-bottom: 1px solid var(--line);
+      background: #e8f2eb;
     }
-    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
-    /* CSS for syntax highlighting */
-    html { -webkit-text-size-adjust: 100%; }
-    pre > code.sourceCode { white-space: pre; position: relative; }
-    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
-    pre > code.sourceCode > span:empty { height: 1.2em; }
-    .sourceCode { overflow: visible; }
-    code.sourceCode > span { color: inherit; text-decoration: inherit; }
-    div.sourceCode { margin: 1em 0; }
-    pre.sourceCode { margin: 0; }
-    @media screen {
-    div.sourceCode { overflow: auto; }
+
+    .hero-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 52px 22px 34px;
     }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 0.9fr);
+      gap: 30px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(32, 116, 71, 0.25);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.76);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--green-bright);
+      box-shadow: 0 0 0 0 rgba(52, 162, 104, 0.55);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      70% { box-shadow: 0 0 0 9px rgba(52, 162, 104, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(52, 162, 104, 0); }
+    }
+
+    h1 {
+      max-width: 790px;
+      margin: 0;
+      font-size: clamp(38px, 5vw, 62px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 730px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 800;
+      box-shadow: 0 4px 14px rgba(31, 55, 37, 0.08);
+      transition: transform 150ms ease, box-shadow 150ms ease;
+    }
+
+    .button.primary {
+      border-color: var(--green);
+      background: var(--green);
+      color: #fff;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+      text-decoration: none;
+      box-shadow: 0 7px 18px rgba(31, 55, 37, 0.12);
+    }
+
+    .panel {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding: 14px 17px;
+      background: var(--surface-soft);
+      font-weight: 850;
+    }
+
+    .dots { display: flex; gap: 6px; align-items: center; }
+    .dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #adc0b1;
+    }
+
+    .diagram {
+      position: relative;
+      min-height: 300px;
+      padding: 22px;
+    }
+
+    .scan-line {
+      position: absolute;
+      inset-inline: 0;
+      top: 0;
+      height: 2px;
+      background: rgba(52, 162, 104, 0.75);
+      animation: scan 4s linear infinite;
+    }
+
+    @keyframes scan {
+      from { transform: translateY(0); opacity: 0; }
+      14% { opacity: 1; }
+      86% { opacity: 1; }
+      to { transform: translateY(298px); opacity: 0; }
+    }
+
+    .node-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .node {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .node strong { display: block; margin-bottom: 4px; color: var(--navy); }
+    .node span { color: var(--muted); font-size: 13px; }
+
+    .hero-flow {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 7px;
+    }
+
+    .flow-step {
+      border-radius: 8px;
+      padding: 11px 8px;
+      background: var(--green-soft);
+      color: #173a24;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      animation: float 4s ease-in-out infinite;
+    }
+
+    .flow-step:nth-child(2) { animation-delay: 0.2s; }
+    .flow-step:nth-child(3) { animation-delay: 0.4s; }
+    .flow-step:nth-child(4) { animation-delay: 0.6s; }
+
+    @keyframes float { 50% { transform: translateY(-4px); } }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 10px 22px 68px;
+    }
+
+    section {
+      margin-top: 42px;
+      scroll-margin-top: 82px;
+    }
+
+    section > h2 {
+      margin: 0 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+      color: var(--navy);
+      font-size: 29px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 26px 0 10px;
+      color: var(--ink);
+      font-size: 19px;
+    }
+
+    p { max-width: 900px; }
+    li + li { margin-top: 5px; }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    code.inline {
+      border: 1px solid #dce6df;
+      border-radius: 6px;
+      padding: 2px 5px;
+      background: #f7faf6;
+      color: #23422d;
+      font-size: 0.92em;
+    }
+
+    .callout {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--green);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: #fff;
+    }
+
+    .callout.warn {
+      border-left-color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .callout.danger {
+      border-left-color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .checklist div {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 13px;
+      background: var(--surface);
+    }
+
+    .flow { display: grid; gap: 10px; margin: 16px 0; }
+    .flow-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+    .arrow { color: var(--green); font-weight: 900; }
+
+    .codeblock {
+      position: relative;
+      margin: 14px 0;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--code);
+      box-shadow: 0 12px 30px rgba(20, 32, 23, 0.15);
+    }
+
+    .codebar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 9px 12px;
+      color: #afc5b5;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .copy {
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 7px;
+      padding: 6px 9px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--code-ink);
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      overflow-x: auto;
+      color: var(--code-ink);
+      background: var(--code);
+      font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre;
+    }
+
+    pre code { color: inherit; font: inherit; white-space: inherit; }
+    .sourceCode { overflow: visible; background: transparent; }
+    div.sourceCode { margin: 0; }
+
+    table {
+      display: table;
+      width: 100%;
+      margin: 16px 0;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--navy-soft);
+      color: #28374b;
+      font-size: 13px;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    blockquote {
+      margin: 16px 0;
+      border-left: 5px solid var(--navy);
+      padding: 12px 16px;
+      background: var(--navy-soft);
+      color: #2d4059;
+    }
+
+    footer {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 22px 36px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      .hero-grid, .node-grid, .hero-flow, .checklist { grid-template-columns: 1fr; }
+      .topbar-inner { align-items: flex-start; flex-direction: column; }
+      nav { width: 100%; justify-content: flex-start; }
+      .hero-inner { padding-top: 38px; }
+    }
+
+    @media (max-width: 620px) {
+      .topbar-inner, .hero-inner, main, footer { padding-left: 15px; padding-right: 15px; }
+      h1 { font-size: 38px; }
+      .lead { font-size: 16px; }
+      .flow-row { grid-template-columns: 1fr; }
+      .arrow { justify-self: center; transform: rotate(90deg); }
+      section > h2 { font-size: 25px; }
+    }
+
     @media print {
-    pre > code.sourceCode { white-space: pre-wrap; }
-    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+      .topbar, .hero-actions, .copy, .scan-line { display: none; }
+      .hero { border: 0; background: #fff; }
+      body { background: #fff; color: #000; }
+      .panel, .codeblock { box-shadow: none; }
+      section { break-inside: avoid-page; }
     }
-    pre.numberSource code
-      { counter-reset: source-line 0; }
-    pre.numberSource code > span
-      { position: relative; left: -4em; counter-increment: source-line; }
-    pre.numberSource code > span > a:first-child::before
-      { content: counter(source-line);
-        position: relative; left: -1em; text-align: right; vertical-align: baseline;
-        border: none; display: inline-block;
-        -webkit-touch-callout: none; -webkit-user-select: none;
-        -khtml-user-select: none; -moz-user-select: none;
-        -ms-user-select: none; user-select: none;
-        padding: 0 4px; width: 4em;
-        color: #aaaaaa;
-      }
-    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
-    div.sourceCode
-      {   }
-    @media screen {
-    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
-    }
-    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
-    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
-    code span.at { color: #7d9029; } /* Attribute */
-    code span.bn { color: #40a070; } /* BaseN */
-    code span.bu { color: #008000; } /* BuiltIn */
-    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
-    code span.ch { color: #4070a0; } /* Char */
-    code span.cn { color: #880000; } /* Constant */
-    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
-    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
-    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
-    code span.dt { color: #902000; } /* DataType */
-    code span.dv { color: #40a070; } /* DecVal */
-    code span.er { color: #ff0000; font-weight: bold; } /* Error */
-    code span.ex { } /* Extension */
-    code span.fl { color: #40a070; } /* Float */
-    code span.fu { color: #06287e; } /* Function */
-    code span.im { color: #008000; font-weight: bold; } /* Import */
-    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
-    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
-    code span.op { color: #666666; } /* Operator */
-    code span.ot { color: #007020; } /* Other */
-    code span.pp { color: #bc7a00; } /* Preprocessor */
-    code span.sc { color: #4070a0; } /* SpecialChar */
-    code span.ss { color: #bb6688; } /* SpecialString */
-    code span.st { color: #4070a0; } /* String */
-    code span.va { color: #19177c; } /* Variable */
-    code span.vs { color: #4070a0; } /* VerbatimString */
-    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
-  </style>
+</style>
 </head>
 <body>
-<h1 id="budgetspin-handoff">BudgetSpin Handoff</h1>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top"><span class="brand-mark">B</span> BudgetSpin Docs</a>
+      <nav aria-label="Document sections"><a href="DEPLOY-ROADMAP.html">Deploy Roadmap ↗</a></nav>
+    </div>
+  </header>
+  <div class="hero" id="top">
+    <div class="hero-inner">
+      <div class="hero-grid">
+        <div>
+          <div class="eyebrow"><span class="pulse"></span>Project state · development and production</div>
+          <h1>BudgetSpin architecture, current state, and operational context</h1>
+          <p class="lead">A visual handoff covering the application capabilities, production hosting model, data ownership, known constraints, and the next work to resume.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#current-goal">Current goal</a>
+            <a class="button" href="#next-chat-suggested-first-steps">Next steps</a>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <span>Current operating model</span>
+            <span class="dots"><span></span><span></span><span></span></span>
+          </div>
+          <div class="diagram">
+            <div class="scan-line"></div>
+            <div class="node-grid">
+              <div class="node"><strong>Development</strong><span>Mac + Docker Compose</span></div><div class="node"><strong>Delivery</strong><span>Git and SSH over Tailscale</span></div><div class="node"><strong>Production</strong><span>Traefik + Next.js</span></div><div class="node"><strong>State</strong><span>SQLite Docker volume</span></div>
+              <div class="hero-flow"><div class="flow-step">Build</div><div class="flow-step">Validate</div><div class="flow-step">Deploy</div><div class="flow-step">Observe</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <main>
 <p>Last updated: 2026-06-08</p>
 <h2 id="current-goal">Current Goal</h2>
 <p>BudgetSpin is moving from a local-only Docker app to a self-hosted
@@ -280,7 +561,7 @@ this workspace.</p>
 </ol>
 <p>Useful checks from a normal terminal:</p>
 <div id="cb1" class="sourceCode">
-<div class="sourceCode" id="cb1"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">pwd</span> <span class="at">-P</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-ldO@</span> <span class="st">&quot;/Users/mdaneri/Documents/Knowledge Base/Docker/BudgetSpin&quot;</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">readlink</span> <span class="st">&quot;/Users/mdaneri/Documents/Knowledge Base/Docker/BudgetSpin&quot;</span></span></code></pre></div>
@@ -336,13 +617,13 @@ broken, this was not validated with typecheck/tests/build.</p>
 <p>In the next chat, inspect these files before making new dashboard
 changes:</p>
 <div id="cb2" class="sourceCode">
-<div class="sourceCode" id="cb2"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> diff <span class="at">--</span> app/page.tsx app/globals.css</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run typecheck</span></code></pre></div>
 </div>
 <p>If Docker is the supported route:</p>
 <div id="cb3" class="sourceCode">
-<div class="sourceCode" id="cb3"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose run <span class="at">--rm</span> app npm run typecheck</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose run <span class="at">--rm</span> app npm test</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose build <span class="at">--pull</span><span class="op">=</span>false</span>
@@ -380,7 +661,7 @@ cleaner if Traefik is already configured.</li>
 </ul>
 <p>Example production compose outline:</p>
 <div id="cb4" class="sourceCode">
-<div class="sourceCode" id="cb4"><pre
+<div class="sourceCode"><pre
 class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">services</span><span class="kw">:</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">app</span><span class="kw">:</span></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">build</span><span class="kw">:</span><span class="at"> .</span></span>
@@ -409,7 +690,7 @@ class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb4-1"><a href="
 </div>
 <p>If using HTTPS:</p>
 <div id="cb5" class="sourceCode">
-<div class="sourceCode" id="cb5"><pre
+<div class="sourceCode"><pre
 class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik.http.routers.budgetspin.entrypoints=websecure</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik.http.routers.budgetspin.tls=true</span></span></code></pre></div>
 </div>
@@ -427,7 +708,7 @@ class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb5-1"><a href="
 </ol>
 <p>Example server commands:</p>
 <div id="cb6" class="sourceCode">
-<div class="sourceCode" id="cb6"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/budgetspin</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> pull</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">-f</span> docker-compose.prod.yml build <span class="at">--pull</span><span class="op">=</span>false</span>
@@ -438,7 +719,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="
 <p>SQLite is the production data source, so backups matter.</p>
 <p>Recommended backup command from the server:</p>
 <div id="cb7" class="sourceCode">
-<div class="sourceCode" id="cb7"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">-f</span> docker-compose.prod.yml exec <span class="at">-T</span> app sqlite3 /app/data/budgetspin.sqlite <span class="st">&quot;.backup &#39;/app/data/backups/budgetspin-</span><span class="va">$(</span><span class="fu">date</span> +%F-%H%M%S<span class="va">)</span><span class="st">.sqlite&#39;&quot;</span></span></code></pre></div>
 </div>
 <p>If the image does not include <code>sqlite3</code>, either add it to
@@ -473,5 +754,70 @@ Steps</h2>
 </ul></li>
 <li>Deploy to server over SSH.</li>
 </ol>
+  </main>
+  <footer>BudgetSpin project handoff. Human-readable context belongs in this HTML document.</footer>
+  <script>
+    const main = document.querySelector("main");
+    const headings = [...main.querySelectorAll(":scope > h2")];
+
+    for (const heading of headings) {
+      const section = document.createElement("section");
+      main.insertBefore(section, heading);
+      let node = heading;
+      while (node && (node === heading || node.tagName !== "H2")) {
+        const next = node.nextSibling;
+        section.appendChild(node);
+        node = next;
+      }
+    }
+
+    for (const code of document.querySelectorAll("main code:not(pre code)")) {
+      code.classList.add("inline");
+    }
+
+    const nav = document.querySelector("nav");
+    for (const section of document.querySelectorAll("main > section")) {
+      const heading = section.querySelector(":scope > h2");
+      if (!heading?.id) continue;
+      const link = document.createElement("a");
+      link.href = "#" + heading.id;
+      link.textContent = heading.textContent.replace(/\s+/g, " ").trim();
+      nav.appendChild(link);
+    }
+
+    for (const pre of document.querySelectorAll("main pre")) {
+      if (pre.closest(".codeblock")) continue;
+      const wrapper = document.createElement("div");
+      wrapper.className = "codeblock";
+      const bar = document.createElement("div");
+      bar.className = "codebar";
+      const label = document.createElement("span");
+      label.textContent = pre.classList.contains("text") ? "Expected output" : "Command";
+      const button = document.createElement("button");
+      button.className = "copy";
+      button.type = "button";
+      button.textContent = "Copy";
+      bar.append(label, button);
+      pre.parentNode.insertBefore(wrapper, pre);
+      wrapper.append(bar, pre);
+
+      button.addEventListener("click", async () => {
+        const text = pre.textContent.trim();
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const area = document.createElement("textarea");
+          area.value = text;
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+        }
+        button.textContent = "Copied";
+        setTimeout(() => { button.textContent = "Copy"; }, 1100);
+      });
+    }
+  </script>
+
 </body>
 </html>

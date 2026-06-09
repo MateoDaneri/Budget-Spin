@@ -1,243 +1,524 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <title>BudgetSpin Runbook</title>
   <style>
-    /* Default styles provided by pandoc.
-    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
-    */
-    html {
-      color: #1a1a1a;
-      background-color: #fdfdfd;
+    :root {
+      --bg: #eef4ef;
+      --surface: #ffffff;
+      --surface-soft: #f7faf7;
+      --ink: #17231b;
+      --muted: #637069;
+      --line: #cad7cd;
+      --green: #207447;
+      --green-bright: #34a268;
+      --green-soft: #e1f2e6;
+      --navy: #183153;
+      --navy-soft: #e9eff7;
+      --amber: #97640f;
+      --amber-soft: #fff1ce;
+      --red: #a83a31;
+      --red-soft: #fde6e2;
+      --code: #142017;
+      --code-ink: #e8f5ea;
+      --shadow: 0 18px 55px rgba(25, 55, 35, 0.13);
     }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
     body {
-      margin: 0 auto;
-      max-width: 36em;
-      padding-left: 50px;
-      padding-right: 50px;
-      padding-top: 50px;
-      padding-bottom: 50px;
-      hyphens: auto;
-      overflow-wrap: break-word;
-      text-rendering: optimizeLegibility;
-      font-kerning: normal;
-    }
-    @media (max-width: 600px) {
-      body {
-        font-size: 0.9em;
-        padding: 12px;
-      }
-      h1 {
-        font-size: 1.8em;
-      }
-    }
-    @media print {
-      html {
-        background-color: white;
-      }
-      body {
-        background-color: transparent;
-        color: black;
-        font-size: 12pt;
-      }
-      p, h2, h3 {
-        orphans: 3;
-        widows: 3;
-      }
-      h2, h3, h4 {
-        page-break-after: avoid;
-      }
-    }
-    p {
-      margin: 1em 0;
-    }
-    a {
-      color: #1a1a1a;
-    }
-    a:visited {
-      color: #1a1a1a;
-    }
-    img {
-      max-width: 100%;
-    }
-    svg {
-      height: auto;
-      max-width: 100%;
-    }
-    h1, h2, h3, h4, h5, h6 {
-      margin-top: 1.4em;
-    }
-    h5, h6 {
-      font-size: 1em;
-      font-style: italic;
-    }
-    h6 {
-      font-weight: normal;
-    }
-    ol, ul {
-      padding-left: 1.7em;
-      margin-top: 1em;
-    }
-    li > ol, li > ul {
-      margin-top: 0;
-    }
-    blockquote {
-      margin: 1em 0 1em 1.7em;
-      padding-left: 1em;
-      border-left: 2px solid #e6e6e6;
-      color: #606060;
-    }
-    code {
-      white-space: pre-wrap;
-      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
-      font-size: 85%;
       margin: 0;
-      hyphens: manual;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
     }
-    pre {
-      margin: 1em 0;
-      overflow: auto;
+
+    a { color: var(--green); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(202, 215, 205, 0.9);
+      background: rgba(238, 244, 239, 0.94);
+      backdrop-filter: blur(16px);
     }
-    pre code {
-      padding: 0;
-      overflow: visible;
-      overflow-wrap: normal;
+
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 12px 22px;
     }
-    .sourceCode {
-     background-color: transparent;
-     overflow: visible;
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-weight: 850;
+      white-space: nowrap;
     }
-    hr {
-      border: none;
-      border-top: 1px solid #1a1a1a;
-      height: 1px;
-      margin: 1em 0;
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--green);
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(32, 116, 71, 0.28);
     }
-    table {
-      margin: 1em 0;
-      border-collapse: collapse;
-      width: 100%;
+
+    nav {
+      display: flex;
+      justify-content: flex-end;
+      gap: 5px;
       overflow-x: auto;
-      display: block;
-      font-variant-numeric: lining-nums tabular-nums;
+      scrollbar-width: none;
     }
-    table caption {
-      margin-bottom: 0.75em;
+
+    nav::-webkit-scrollbar { display: none; }
+
+    nav a {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 7px 10px;
+      color: #314236;
+      font-size: 13px;
+      font-weight: 750;
     }
-    tbody {
-      margin-top: 0.5em;
-      border-top: 1px solid #1a1a1a;
-      border-bottom: 1px solid #1a1a1a;
-    }
-    th {
-      border-top: 1px solid #1a1a1a;
-      padding: 0.25em 0.5em 0.25em 0.5em;
-    }
-    td {
-      padding: 0.125em 0.5em 0.25em 0.5em;
-    }
-    header {
-      margin-bottom: 4em;
-      text-align: center;
-    }
-    #TOC li {
-      list-style: none;
-    }
-    #TOC ul {
-      padding-left: 1.3em;
-    }
-    #TOC > ul {
-      padding-left: 0;
-    }
-    #TOC a:not(:hover) {
+
+    nav a:hover {
+      background: var(--green-soft);
       text-decoration: none;
     }
-    span.smallcaps{font-variant: small-caps;}
-    div.columns{display: flex; gap: min(4vw, 1.5em);}
-    div.column{flex: auto; overflow-x: auto;}
-    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
-    /* The extra [class] is a hack that increases specificity enough to
-       override a similar rule in reveal.js */
-    ul.task-list[class]{list-style: none;}
-    ul.task-list li input[type="checkbox"] {
-      font-size: inherit;
-      width: 0.8em;
-      margin: 0 0.8em 0.2em -1.6em;
-      vertical-align: middle;
+
+    .hero {
+      border-bottom: 1px solid var(--line);
+      background: #e8f2eb;
     }
-    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
-    /* CSS for syntax highlighting */
-    html { -webkit-text-size-adjust: 100%; }
-    pre > code.sourceCode { white-space: pre; position: relative; }
-    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
-    pre > code.sourceCode > span:empty { height: 1.2em; }
-    .sourceCode { overflow: visible; }
-    code.sourceCode > span { color: inherit; text-decoration: inherit; }
-    div.sourceCode { margin: 1em 0; }
-    pre.sourceCode { margin: 0; }
-    @media screen {
-    div.sourceCode { overflow: auto; }
+
+    .hero-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 52px 22px 34px;
     }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 0.9fr);
+      gap: 30px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(32, 116, 71, 0.25);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.76);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--green-bright);
+      box-shadow: 0 0 0 0 rgba(52, 162, 104, 0.55);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      70% { box-shadow: 0 0 0 9px rgba(52, 162, 104, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(52, 162, 104, 0); }
+    }
+
+    h1 {
+      max-width: 790px;
+      margin: 0;
+      font-size: clamp(38px, 5vw, 62px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 730px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 800;
+      box-shadow: 0 4px 14px rgba(31, 55, 37, 0.08);
+      transition: transform 150ms ease, box-shadow 150ms ease;
+    }
+
+    .button.primary {
+      border-color: var(--green);
+      background: var(--green);
+      color: #fff;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+      text-decoration: none;
+      box-shadow: 0 7px 18px rgba(31, 55, 37, 0.12);
+    }
+
+    .panel {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding: 14px 17px;
+      background: var(--surface-soft);
+      font-weight: 850;
+    }
+
+    .dots { display: flex; gap: 6px; align-items: center; }
+    .dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #adc0b1;
+    }
+
+    .diagram {
+      position: relative;
+      min-height: 300px;
+      padding: 22px;
+    }
+
+    .scan-line {
+      position: absolute;
+      inset-inline: 0;
+      top: 0;
+      height: 2px;
+      background: rgba(52, 162, 104, 0.75);
+      animation: scan 4s linear infinite;
+    }
+
+    @keyframes scan {
+      from { transform: translateY(0); opacity: 0; }
+      14% { opacity: 1; }
+      86% { opacity: 1; }
+      to { transform: translateY(298px); opacity: 0; }
+    }
+
+    .node-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .node {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .node strong { display: block; margin-bottom: 4px; color: var(--navy); }
+    .node span { color: var(--muted); font-size: 13px; }
+
+    .hero-flow {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 7px;
+    }
+
+    .flow-step {
+      border-radius: 8px;
+      padding: 11px 8px;
+      background: var(--green-soft);
+      color: #173a24;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      animation: float 4s ease-in-out infinite;
+    }
+
+    .flow-step:nth-child(2) { animation-delay: 0.2s; }
+    .flow-step:nth-child(3) { animation-delay: 0.4s; }
+    .flow-step:nth-child(4) { animation-delay: 0.6s; }
+
+    @keyframes float { 50% { transform: translateY(-4px); } }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 10px 22px 68px;
+    }
+
+    section {
+      margin-top: 42px;
+      scroll-margin-top: 82px;
+    }
+
+    section > h2 {
+      margin: 0 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+      color: var(--navy);
+      font-size: 29px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 26px 0 10px;
+      color: var(--ink);
+      font-size: 19px;
+    }
+
+    p { max-width: 900px; }
+    li + li { margin-top: 5px; }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    code.inline {
+      border: 1px solid #dce6df;
+      border-radius: 6px;
+      padding: 2px 5px;
+      background: #f7faf6;
+      color: #23422d;
+      font-size: 0.92em;
+    }
+
+    .callout {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--green);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: #fff;
+    }
+
+    .callout.warn {
+      border-left-color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .callout.danger {
+      border-left-color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .checklist div {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 13px;
+      background: var(--surface);
+    }
+
+    .flow { display: grid; gap: 10px; margin: 16px 0; }
+    .flow-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+    .arrow { color: var(--green); font-weight: 900; }
+
+    .codeblock {
+      position: relative;
+      margin: 14px 0;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--code);
+      box-shadow: 0 12px 30px rgba(20, 32, 23, 0.15);
+    }
+
+    .codebar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 9px 12px;
+      color: #afc5b5;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .copy {
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 7px;
+      padding: 6px 9px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--code-ink);
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      overflow-x: auto;
+      color: var(--code-ink);
+      background: var(--code);
+      font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre;
+    }
+
+    pre code { color: inherit; font: inherit; white-space: inherit; }
+    .sourceCode { overflow: visible; background: transparent; }
+    div.sourceCode { margin: 0; }
+
+    table {
+      display: table;
+      width: 100%;
+      margin: 16px 0;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--navy-soft);
+      color: #28374b;
+      font-size: 13px;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    blockquote {
+      margin: 16px 0;
+      border-left: 5px solid var(--navy);
+      padding: 12px 16px;
+      background: var(--navy-soft);
+      color: #2d4059;
+    }
+
+    footer {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 22px 36px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      .hero-grid, .node-grid, .hero-flow, .checklist { grid-template-columns: 1fr; }
+      .topbar-inner { align-items: flex-start; flex-direction: column; }
+      nav { width: 100%; justify-content: flex-start; }
+      .hero-inner { padding-top: 38px; }
+    }
+
+    @media (max-width: 620px) {
+      .topbar-inner, .hero-inner, main, footer { padding-left: 15px; padding-right: 15px; }
+      h1 { font-size: 38px; }
+      .lead { font-size: 16px; }
+      .flow-row { grid-template-columns: 1fr; }
+      .arrow { justify-self: center; transform: rotate(90deg); }
+      section > h2 { font-size: 25px; }
+    }
+
     @media print {
-    pre > code.sourceCode { white-space: pre-wrap; }
-    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+      .topbar, .hero-actions, .copy, .scan-line { display: none; }
+      .hero { border: 0; background: #fff; }
+      body { background: #fff; color: #000; }
+      .panel, .codeblock { box-shadow: none; }
+      section { break-inside: avoid-page; }
     }
-    pre.numberSource code
-      { counter-reset: source-line 0; }
-    pre.numberSource code > span
-      { position: relative; left: -4em; counter-increment: source-line; }
-    pre.numberSource code > span > a:first-child::before
-      { content: counter(source-line);
-        position: relative; left: -1em; text-align: right; vertical-align: baseline;
-        border: none; display: inline-block;
-        -webkit-touch-callout: none; -webkit-user-select: none;
-        -khtml-user-select: none; -moz-user-select: none;
-        -ms-user-select: none; user-select: none;
-        padding: 0 4px; width: 4em;
-        color: #aaaaaa;
-      }
-    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
-    div.sourceCode
-      {   }
-    @media screen {
-    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
-    }
-    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
-    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
-    code span.at { color: #7d9029; } /* Attribute */
-    code span.bn { color: #40a070; } /* BaseN */
-    code span.bu { color: #008000; } /* BuiltIn */
-    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
-    code span.ch { color: #4070a0; } /* Char */
-    code span.cn { color: #880000; } /* Constant */
-    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
-    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
-    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
-    code span.dt { color: #902000; } /* DataType */
-    code span.dv { color: #40a070; } /* DecVal */
-    code span.er { color: #ff0000; font-weight: bold; } /* Error */
-    code span.ex { } /* Extension */
-    code span.fl { color: #40a070; } /* Float */
-    code span.fu { color: #06287e; } /* Function */
-    code span.im { color: #008000; font-weight: bold; } /* Import */
-    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
-    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
-    code span.op { color: #666666; } /* Operator */
-    code span.ot { color: #007020; } /* Other */
-    code span.pp { color: #bc7a00; } /* Preprocessor */
-    code span.sc { color: #4070a0; } /* SpecialChar */
-    code span.ss { color: #bb6688; } /* SpecialString */
-    code span.st { color: #4070a0; } /* String */
-    code span.va { color: #19177c; } /* Variable */
-    code span.vs { color: #4070a0; } /* VerbatimString */
-    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
-  </style>
+</style>
 </head>
 <body>
-<h1 id="budgetspin-runbook">BudgetSpin Runbook</h1>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top"><span class="brand-mark">B</span> BudgetSpin Docs</a>
+      <nav aria-label="Document sections"><a href="DEPLOY-ROADMAP.html">Deploy Roadmap ↗</a></nav>
+    </div>
+  </header>
+  <div class="hero" id="top">
+    <div class="hero-inner">
+      <div class="hero-grid">
+        <div>
+          <div class="eyebrow"><span class="pulse"></span>Production operations · Tailscale + Traefik</div>
+          <h1>Operate BudgetSpin from local development to private production</h1>
+          <p class="lead">Commands, deployment flow, SQLite backup and restore, data promotion, and failure diagnosis for the self-hosted BudgetSpin service.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#production-first-setup">Production setup</a>
+            <a class="button" href="#promote-dev-data-to-production">Promote dev data</a>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <span>Effective request path</span>
+            <span class="dots"><span></span><span></span><span></span></span>
+          </div>
+          <div class="diagram">
+            <div class="scan-line"></div>
+            <div class="node-grid">
+              <div class="node"><strong>Mac</strong><span>Local dev and browser</span></div><div class="node"><strong>Tailscale</strong><span>Private network transport</span></div><div class="node"><strong>Traefik</strong><span>TLS and hostname routing</span></div><div class="node"><strong>BudgetSpin</strong><span>Next.js + persistent SQLite</span></div>
+              <div class="hero-flow"><div class="flow-step">Develop</div><div class="flow-step">Deploy</div><div class="flow-step">Route</div><div class="flow-step">Persist</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <main>
 <h2 id="assumptions">Assumptions</h2>
 <ul>
 <li>Docker and Docker Compose are installed and running.</li>
@@ -258,7 +539,7 @@ container to <code>https://api.frankfurter.dev</code>.</li>
 <h2 id="local-development">Local Development</h2>
 <p>Run:</p>
 <div id="cb1" class="sourceCode">
-<div class="sourceCode" id="cb1"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">--build</span></span></code></pre></div>
 </div>
 <p>Open:</p>
@@ -267,42 +548,42 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="
 create the password for user <code>mdaneri</code>.</p>
 <p>Stop:</p>
 <div id="cb3" class="sourceCode">
-<div class="sourceCode" id="cb3"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose down</span></code></pre></div>
 </div>
 <p>Restart:</p>
 <div id="cb4" class="sourceCode">
-<div class="sourceCode" id="cb4"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose restart app</span></code></pre></div>
 </div>
 <p>Logs:</p>
 <div id="cb5" class="sourceCode">
-<div class="sourceCode" id="cb5"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose logs <span class="at">-f</span> app</span></code></pre></div>
 </div>
 <p>Run migrations:</p>
 <div id="cb6" class="sourceCode">
-<div class="sourceCode" id="cb6"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose run <span class="at">--rm</span> app npm run db:migrate</span></code></pre></div>
 </div>
 <p>Run tests:</p>
 <div id="cb7" class="sourceCode">
-<div class="sourceCode" id="cb7"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose run <span class="at">--rm</span> app npm test</span></code></pre></div>
 </div>
 <p>Typecheck:</p>
 <div id="cb8" class="sourceCode">
-<div class="sourceCode" id="cb8"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose run <span class="at">--rm</span> app npm run typecheck</span></code></pre></div>
 </div>
 <p>Production build check:</p>
 <div id="cb9" class="sourceCode">
-<div class="sourceCode" id="cb9"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose build</span></code></pre></div>
 </div>
 <p>Reset local data:</p>
 <div id="cb10" class="sourceCode">
-<div class="sourceCode" id="cb10"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose down <span class="at">-v</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">--build</span></span></code></pre></div>
 </div>
@@ -331,7 +612,7 @@ needed.</p>
 <p>On the server, clone or copy this repo to the target directory. The
 examples below use <code>/opt/budgetspin</code>.</p>
 <div id="cb12" class="sourceCode">
-<div class="sourceCode" id="cb12"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/budgetspin</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> .env.production.example .env.production</span></code></pre></div>
 </div>
@@ -345,18 +626,18 @@ TLS for this private hostname, set the matching values:</p>
 TRAEFIK_TLS=false</code></pre>
 <p>Confirm the Traefik network exists:</p>
 <div id="cb16" class="sourceCode">
-<div class="sourceCode" id="cb16"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> network inspect proxy</span></code></pre></div>
 </div>
 <p>Build and start production:</p>
 <div id="cb17" class="sourceCode">
-<div class="sourceCode" id="cb17"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml build <span class="at">--pull</span><span class="op">=</span>false</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml up <span class="at">-d</span></span></code></pre></div>
 </div>
 <p>Check status:</p>
 <div id="cb18" class="sourceCode">
-<div class="sourceCode" id="cb18"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml ps</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml logs <span class="at">--tail</span><span class="op">=</span>100 app</span></code></pre></div>
 </div>
@@ -366,12 +647,12 @@ Mac:</p>
 <pre class="text"><code>100.x.y.z budget-spin.ts.local</code></pre>
 <p>Then verify resolution and route from the Mac:</p>
 <div id="cb20" class="sourceCode">
-<div class="sourceCode" id="cb20"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-k</span> <span class="at">-I</span> https://budget-spin.ts.local/login</span></code></pre></div>
 </div>
 <p>If <code>TRAEFIK_TLS=false</code>, use:</p>
 <div id="cb21" class="sourceCode">
-<div class="sourceCode" id="cb21"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-I</span> http://budget-spin.ts.local/login</span></code></pre></div>
 </div>
 <h2 id="deployments">Deployments</h2>
@@ -392,7 +673,7 @@ copying files instead, keep <code>.env.production</code> and the Docker
 volume on the server and do not overwrite them from the Mac.</p>
 <p>Manual deployment on the server:</p>
 <div id="cb22" class="sourceCode">
-<div class="sourceCode" id="cb22"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/budgetspin</span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> pull <span class="at">--ff-only</span></span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml build <span class="at">--pull</span><span class="op">=</span>false</span>
@@ -401,19 +682,19 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href=
 </div>
 <p>Remote deployment from the Mac:</p>
 <div id="cb23" class="sourceCode">
-<div class="sourceCode" id="cb23"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="va">BUDGETSPIN_SSH_TARGET</span><span class="op">=</span>user@server <span class="ex">./scripts/deploy-prod.sh</span></span></code></pre></div>
 </div>
 <p>Optional deployment variables:</p>
 <div id="cb24" class="sourceCode">
-<div class="sourceCode" id="cb24"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="va">BUDGETSPIN_REMOTE_DIR</span><span class="op">=</span>/opt/budgetspin</span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="va">BUDGETSPIN_BRANCH</span><span class="op">=</span>main</span></code></pre></div>
 </div>
 <h2 id="rollback">Rollback</h2>
 <p>Rollback assumes the previous commit is still available in git.</p>
 <div id="cb25" class="sourceCode">
-<div class="sourceCode" id="cb25"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/budgetspin</span>
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> log <span class="at">--oneline</span> <span class="at">-5</span></span>
 <span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> checkout <span class="op">&lt;</span>known-good-commit<span class="op">&gt;</span></span>
@@ -422,24 +703,120 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb25-1"><a href=
 </div>
 <p>After rollback, verify:</p>
 <div id="cb26" class="sourceCode">
-<div class="sourceCode" id="cb26"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml ps</span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml logs <span class="at">--tail</span><span class="op">=</span>100 app</span></code></pre></div>
 </div>
+<h2 id="promote-dev-data-to-production">Promote Dev Data To Production</h2>
+<div class="callout danger"><strong>This replaces the complete production database.</strong>
+It does not merge records. Back up production first and avoid writing new records during promotion.</div>
+<div class="callout"><strong>Important Compose behavior.</strong>
+Docker Compose derives its project name from the directory. Renaming <code>BudgetSpin</code> to
+<code>BudgetSpin-Dev</code> created <code>budgetspin-dev_budgetspin-data</code>, while historical
+records remained in <code>budgetspin_budgetspin-data</code>. Validate the source volume before export.</div>
+<div class="flow" aria-label="Validated development to production database promotion">
+<div class="flow-row"><div class="node"><strong>1. Locate source</strong>Verify counts and password state.</div><div class="arrow">→</div><div class="node"><strong>2. Export safely</strong>Use SQLite <code>VACUUM INTO</code>.</div></div>
+<div class="flow-row"><div class="node"><strong>3. Transfer</strong>Copy over SSH/Tailscale.</div><div class="arrow">→</div><div class="node"><strong>4. Restore and verify</strong>Check integrity before startup.</div></div>
+</div>
+<table><thead><tr><th>Location</th><th>Volume/file</th><th>Role</th></tr></thead><tbody>
+<tr><td>Mac, original dev</td><td><code>budgetspin_budgetspin-data</code></td><td>Historical records</td></tr>
+<tr><td>Mac, renamed project</td><td><code>budgetspin-dev_budgetspin-data</code></td><td>May be seed-only</td></tr>
+<tr><td>Server, production</td><td><code>budgetspin-prod-data</code></td><td>Production database</td></tr>
+</tbody></table>
+<h3>1. Validate the original volume on the Mac</h3>
+<pre class="bash"><code>docker run --rm \
+  -v budgetspin_budgetspin-data:/data \
+  node:25-slim \
+  node --input-type=module -e &apos;
+    import { DatabaseSync } from "node:sqlite";
+    const db = new DatabaseSync("/data/budgetspin.sqlite", { readOnly: true });
+    console.log(db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM income_items) AS income,
+        (SELECT COUNT(*) FROM recurring_expenses) AS expenses,
+        (SELECT COUNT(*) FROM financial_plans) AS plans
+    `).get());
+    console.log(db.prepare(`
+      SELECT id, username, password_hash IS NOT NULL AS has_password FROM users
+    `).all());
+    db.close();
+  &apos;</code></pre>
+<div class="callout"><strong>Observed successful source:</strong>
+<code>income: 2</code>, <code>expenses: 12</code>, <code>plans: 2</code>,
+<code>has_password: 1</code>. Do not continue if expected records are missing.</div>
+<h3>2. Export the verified volume</h3>
+<pre class="bash"><code>cd "/Users/mdaneri/Documents/Knowledge Base/Docker/BudgetSpin-Dev"
+EXPORT="budgetspin-original-$(date +%Y%m%d-%H%M%S).sqlite"
+
+docker run --rm \
+  --mount type=volume,src=budgetspin_budgetspin-data,dst=/data,readonly \
+  --mount "type=bind,src=$PWD,dst=/export" \
+  -e EXPORT="$EXPORT" \
+  node:25-slim \
+  node --input-type=module -e &apos;
+    import { DatabaseSync } from "node:sqlite";
+    const quote = String.fromCharCode(39);
+    const output = `/export/${process.env.EXPORT}`;
+    const escaped = output.replaceAll(quote, quote + quote);
+    const db = new DatabaseSync("/data/budgetspin.sqlite", { readOnly: true });
+    db.exec(`VACUUM INTO ${quote}${escaped}${quote}`);
+    db.close();
+  &apos;
+
+test -s "$EXPORT" &amp;&amp; ls -lh "$EXPORT"</code></pre>
+<h3>3. Transfer the export</h3>
+<pre class="bash"><code>scp "$EXPORT" mdaneri@100.92.154.91:/home/mdaneri/Docker/Budget-Spin/</code></pre>
+<h3>4. Restore on the production server</h3>
+<pre class="bash"><code>cd ~/Docker/Budget-Spin
+EXPORT="$(find . -maxdepth 1 -name &apos;budgetspin-original-*.sqlite&apos; -type f -print | sort | tail -1)"
+test -s "$EXPORT" || { echo "Verified export not found" &gt;&amp;2; exit 1; }
+
+docker compose --env-file .env.production -f docker-compose.prod.yml down
+docker compose --env-file .env.production -f docker-compose.prod.yml \
+  run --rm --no-deps app sh -c \
+  &apos;rm -f /app/data/budgetspin.sqlite /app/data/budgetspin.sqlite-wal /app/data/budgetspin.sqlite-shm&apos;
+docker compose --env-file .env.production -f docker-compose.prod.yml create app
+docker compose --env-file .env.production -f docker-compose.prod.yml cp \
+  "$EXPORT" app:/app/data/budgetspin.sqlite</code></pre>
+<h3>5. Verify before starting production</h3>
+<pre class="bash"><code>docker compose --env-file .env.production -f docker-compose.prod.yml \
+  run --rm --no-deps app node --input-type=module -e &apos;
+    import { DatabaseSync } from "node:sqlite";
+    const db = new DatabaseSync("/app/data/budgetspin.sqlite");
+    console.log(db.prepare("PRAGMA integrity_check").get());
+    console.log(db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM income_items) AS income,
+        (SELECT COUNT(*) FROM recurring_expenses) AS expenses,
+        (SELECT COUNT(*) FROM financial_plans) AS plans
+    `).get());
+    console.log(db.prepare(`
+      SELECT id, username, password_hash IS NOT NULL AS has_password FROM users
+    `).all());
+    db.close();
+  &apos;</code></pre>
+<pre class="text"><code>Expected: integrity_check ok, income 2, expenses 12, plans 2, has_password 1</code></pre>
+<h3>6. Start and verify</h3>
+<pre class="bash"><code>docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=100 app</code></pre>
+<div class="callout">If production shows <strong>Create your password</strong>, the imported database lacks
+<code>password_hash</code>/<code>password_salt</code> for <code>users.id = &apos;mdaneri&apos;</code>.
+Re-check the source volume instead of creating a new password.</div>
 <h2 id="production-data">Production Data</h2>
 <p>Before destructive operations or risky migrations, create a SQLite
 backup from inside the app container. This uses SQLite
 <code>VACUUM INTO</code> through Node’s <code>node:sqlite</code> module,
 so it does not require the <code>sqlite3</code> CLI in the image.</p>
 <div id="cb27" class="sourceCode">
-<div class="sourceCode" id="cb27"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="va">BACKUP</span><span class="op">=</span><span class="st">&quot;budgetspin-backup-</span><span class="va">$(</span><span class="fu">date</span> +%F-%H%M%S<span class="va">)</span><span class="st">.sqlite&quot;</span></span>
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml exec <span class="at">-T</span> app node <span class="at">--input-type</span><span class="op">=</span>module <span class="at">-e</span> <span class="st">&quot;import { DatabaseSync } from &#39;node:sqlite&#39;; const db = new DatabaseSync(&#39;/app/data/budgetspin.sqlite&#39;); db.exec(</span><span class="dt">\&quot;</span><span class="st">VACUUM INTO &#39;/app/data/</span><span class="va">$BACKUP</span><span class="st">&#39;</span><span class="dt">\&quot;</span><span class="st">); db.close();&quot;</span></span>
 <span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml cp <span class="st">&quot;app:/app/data/</span><span class="va">$BACKUP</span><span class="st">&quot;</span> <span class="st">&quot;./</span><span class="va">$BACKUP</span><span class="st">&quot;</span></span></code></pre></div>
 </div>
 <p>To restore from that file, stop the app first:</p>
 <div id="cb28" class="sourceCode">
-<div class="sourceCode" id="cb28"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml down</span>
 <span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml run <span class="at">--rm</span> <span class="at">--no-deps</span> app sh <span class="at">-c</span> <span class="st">&#39;rm -f /app/data/budgetspin.sqlite /app/data/budgetspin.sqlite-wal /app/data/budgetspin.sqlite-shm&#39;</span></span>
 <span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml create app</span>
@@ -449,18 +826,18 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href=
 <h2 id="troubleshooting">Troubleshooting</h2>
 <p>Check production config rendering:</p>
 <div id="cb29" class="sourceCode">
-<div class="sourceCode" id="cb29"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml config</span></code></pre></div>
 </div>
 <p>Check Traefik can see labels:</p>
 <div id="cb30" class="sourceCode">
-<div class="sourceCode" id="cb30"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml ps</span>
 <span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> inspect budgetspin-app-1 <span class="at">--format</span> <span class="st">&#39;{{json .Config.Labels}}&#39;</span></span></code></pre></div>
 </div>
 <p>Check the app directly from the server container namespace:</p>
 <div id="cb31" class="sourceCode">
-<div class="sourceCode" id="cb31"><pre
+<div class="sourceCode"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">--env-file</span> .env.production <span class="at">-f</span> docker-compose.prod.yml exec app node <span class="at">-e</span> <span class="st">&quot;fetch(&#39;http://127.0.0.1:3000/login&#39;).then(async r =&gt; { console.log(r.status); process.exit(r.status &lt; 500 ? 0 : 1); }).catch(error =&gt; { console.error(error); process.exit(1); })&quot;</span></span></code></pre></div>
 </div>
 <p>Common failures:</p>
@@ -476,5 +853,70 @@ secret.</li>
 <li>Browser resolves but Traefik returns 404: verify hostname,
 entrypoint, TLS, labels, and Docker network.</li>
 </ul>
+  </main>
+  <footer>BudgetSpin operational documentation. Keep this HTML updated with infrastructure and repeatable procedures.</footer>
+  <script>
+    const main = document.querySelector("main");
+    const headings = [...main.querySelectorAll(":scope > h2")];
+
+    for (const heading of headings) {
+      const section = document.createElement("section");
+      main.insertBefore(section, heading);
+      let node = heading;
+      while (node && (node === heading || node.tagName !== "H2")) {
+        const next = node.nextSibling;
+        section.appendChild(node);
+        node = next;
+      }
+    }
+
+    for (const code of document.querySelectorAll("main code:not(pre code)")) {
+      code.classList.add("inline");
+    }
+
+    const nav = document.querySelector("nav");
+    for (const section of document.querySelectorAll("main > section")) {
+      const heading = section.querySelector(":scope > h2");
+      if (!heading?.id) continue;
+      const link = document.createElement("a");
+      link.href = "#" + heading.id;
+      link.textContent = heading.textContent.replace(/\s+/g, " ").trim();
+      nav.appendChild(link);
+    }
+
+    for (const pre of document.querySelectorAll("main pre")) {
+      if (pre.closest(".codeblock")) continue;
+      const wrapper = document.createElement("div");
+      wrapper.className = "codeblock";
+      const bar = document.createElement("div");
+      bar.className = "codebar";
+      const label = document.createElement("span");
+      label.textContent = pre.classList.contains("text") ? "Expected output" : "Command";
+      const button = document.createElement("button");
+      button.className = "copy";
+      button.type = "button";
+      button.textContent = "Copy";
+      bar.append(label, button);
+      pre.parentNode.insertBefore(wrapper, pre);
+      wrapper.append(bar, pre);
+
+      button.addEventListener("click", async () => {
+        const text = pre.textContent.trim();
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const area = document.createElement("textarea");
+          area.value = text;
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          area.remove();
+        }
+        button.textContent = "Copied";
+        setTimeout(() => { button.textContent = "Copy"; }, 1100);
+      });
+    }
+  </script>
+
 </body>
 </html>
