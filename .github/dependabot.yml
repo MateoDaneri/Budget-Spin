@@ -1,6 +1,12 @@
 # Dependabot: automated, reviewable updates for the two supply chains this
 # repo depends on. Each update arrives as a PR that must pass CI — code from
 # third parties never changes silently.
+#
+# Updates are grouped to avoid serial lockfile conflicts (N individual PRs
+# editing package-lock.json conflict with each other after every merge).
+# Majors are deliberately NOT grouped: anything that matches no group still
+# gets an individual PR, so high-risk bumps arrive alone and can't block a
+# group of healthy low-risk updates (e.g. the eslint 10 incompatibility).
 version: 2
 updates:
   # Keeps the SHA pins in .github/workflows/*.yml pointing at the latest
@@ -9,6 +15,9 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      actions:
+        patterns: ["*"]
 
   # npm dependencies (package.json + package-lock.json). Security advisories
   # additionally trigger out-of-schedule PRs.
@@ -16,3 +25,8 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      npm-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
