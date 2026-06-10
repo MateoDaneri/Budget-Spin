@@ -2,6 +2,7 @@ import type { Currency } from "@/src/db/repository";
 
 export function parseMoneyToMinor(value: string, minorUnit: number) {
   const normalized = value.trim().replace(",", ".");
+  // eslint-disable-next-line security/detect-unsafe-regex -- false positive: no nested quantifiers or ambiguous alternation, backtracking is linear
   if (!/^\d+(\.\d+)?$/.test(normalized)) {
     throw new Error("Amount must be a positive decimal number.");
   }

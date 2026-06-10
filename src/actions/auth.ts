@@ -23,6 +23,7 @@ export async function initializePasswordAction(formData: FormData) {
   const password = readRequiredString(formData.get("password"), "Password");
   const confirmPassword = readRequiredString(formData.get("confirmPassword"), "Confirm password");
 
+  // eslint-disable-next-line security/detect-possible-timing-attacks -- false positive: compares two values the same user submitted in this request; no stored secret is involved. Real credential checks use crypto.timingSafeEqual in src/auth/session.ts
   if (password !== confirmPassword) {
     redirect(`/login?error=${encodeURIComponent("Passwords do not match.")}`);
   }

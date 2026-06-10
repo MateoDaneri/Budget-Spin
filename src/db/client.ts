@@ -21,6 +21,7 @@ export function getDb() {
   }
 
   if (dbPath !== ":memory:") {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- path comes from DATABASE_PATH (operator-controlled env var) or a constant default, never from request input
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   }
 

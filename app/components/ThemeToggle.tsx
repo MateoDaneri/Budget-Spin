@@ -18,6 +18,7 @@ export function ThemeToggle() {
           ? "dark"
           : "light";
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate one-time post-hydration sync: theme must be read from localStorage only on the client, and lazy state init would cause a hydration mismatch with the server-rendered "light" markup
     setTheme(initialTheme);
     document.documentElement.dataset.theme = initialTheme;
   }, []);

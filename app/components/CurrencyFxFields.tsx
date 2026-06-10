@@ -42,9 +42,6 @@ export function CurrencyFxFields({
 
   useEffect(() => {
     if (!needsFx) {
-      setFxRate("");
-      setState("idle");
-      setMessage(`Base currency: no FX rate needed.`);
       return;
     }
 
@@ -90,7 +87,15 @@ export function CurrencyFxFields({
         <select
           id={currencyInputId}
           name="currencyCode"
-          onChange={(event) => setCurrencyCode(event.target.value)}
+          onChange={(event) => {
+            const nextCode = event.target.value;
+            setCurrencyCode(nextCode);
+            if (nextCode === baseCurrencyCode) {
+              setFxRate("");
+              setState("idle");
+              setMessage("");
+            }
+          }}
           required
           value={currencyCode}
         >
@@ -114,7 +119,7 @@ export function CurrencyFxFields({
           value={fxRate}
         />
         <span className={`field-help ${state === "error" ? "field-help-error" : ""}`} id={fxHelpId}>
-          {message || `Required for non-${baseCurrencyCode} amounts.`}
+          {needsFx ? message || `Required for non-${baseCurrencyCode} amounts.` : "Base currency: no FX rate needed."}
         </span>
       </div>
     </>
