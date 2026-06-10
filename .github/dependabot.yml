@@ -8,11 +8,11 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: daily
 
   # npm dependencies (package.json + package-lock.json). Security advisories
   # additionally trigger out-of-schedule PRs.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: daily
