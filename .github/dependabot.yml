@@ -1,0 +1,18 @@
+# Dependabot: automated, reviewable updates for the two supply chains this
+# repo depends on. Each update arrives as a PR that must pass CI — code from
+# third parties never changes silently.
+version: 2
+updates:
+  # Keeps the SHA pins in .github/workflows/*.yml pointing at the latest
+  # releases (updates both the SHA and the human-readable version comment).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # npm dependencies (package.json + package-lock.json). Security advisories
+  # additionally trigger out-of-schedule PRs.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
