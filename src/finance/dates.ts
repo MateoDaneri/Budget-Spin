@@ -24,9 +24,13 @@ export function monthBounds(month: string) {
 }
 
 export function addMonths(month: string, offset: number) {
+  // Pure month arithmetic: routing this through Date and local-time getters
+  // shifts the result by one month in UTC-negative timezones.
   const { year, monthIndex } = parseMonthKey(month);
-  const date = new Date(Date.UTC(year, monthIndex + offset, 1));
-  return currentMonthKey(date);
+  const totalMonths = year * 12 + monthIndex + offset;
+  const newYear = Math.floor(totalMonths / 12);
+  const newMonthNumber = ((totalMonths % 12) + 12) % 12 + 1;
+  return `${newYear}-${String(newMonthNumber).padStart(2, "0")}`;
 }
 
 export function trailingMonths(month: string, count: number) {
