@@ -1,0 +1,85 @@
+# CI: every push and PR to main gets verified. No human memory involved.
+#
+# Three independent jobs run in parallel; branch protection will require all
+# of them. A failure in any one marks the commit ✗.
+#
+# Known trade-off (tracked in DEPLOY-ROADMAP.html backlog): actions are pinned
+# by version tag, not by commit SHA. Tags are mutable — SHA-pinning is the
+# hardened form against a compromised action repo.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least privilege: the default GITHUB_TOKEN can only read the repo contents.
+permissions:
+  contents: read
+
+# If a newer commit arrives while this one is still being checked, cancel the
+# older run — we only care about the latest state of the branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, lint, tests, build
+    runs-on: ubuntu-latest
+    env:
+      # Runners default to UTC, which masks timezone bugs (see the addMonths
+      # no-op fixed in 09405ff: green in UTC, infinite loop in UTC-3).
+      TZ: America/Montevideo
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # npm ci, never npm install: exact lockfile versions or fail.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint (zero warnings allowed)
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  secrets-scan:
+    name: Secrets scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # gitleaks scans commit history, not just the checkout snapshot.
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-scan:
+    name: Dependency scan (osv-scanner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Scans the lockfile against the OSV vulnerability database (SCA).
+      # Using the action directly instead of Google's reusable workflow:
+      # the latter uploads SARIF to code scanning, which requires Advanced
+      # Security on private repos (paid).
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
+        with:
+          scan-args: --lockfile=./package-lock.json
