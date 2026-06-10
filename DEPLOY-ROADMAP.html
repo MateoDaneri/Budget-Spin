@@ -335,6 +335,7 @@
       <span class="brand"><span class="brand-mark">▲</span> BudgetSpin · Deploy Roadmap</span>
       <nav>
         <a href="#fases">Fases</a>
+        <a href="#backlog">Backlog</a>
         <a href="#principios">Principios</a>
         <a href="RUNBOOK.html">Runbook</a>
         <a href="HANDOFF.html">Handoff</a>
@@ -689,6 +690,27 @@
         </div>
       </div>
     </details>
+
+    <section id="backlog" style="margin-top: 40px;">
+      <h2 style="font-size: 20px; letter-spacing: -0.01em;">Backlog de aprendizaje</h2>
+      <p style="color: var(--muted); font-size: 14px; max-width: 720px;">
+        Temas que surgieron durante las sesiones y quedaron abiertos para profundizar.
+        No bloquean ninguna fase; se retoman cuando haya energía/contexto. Al cerrar uno: tacharlo y fechar.
+      </p>
+      <ul style="font-size: 14.5px; line-height: 1.8;">
+        <li><strong>Low-level de npm/npx</strong> — cómo se resuelven los binarios (<code>node_modules/.bin</code>, symlinks, PATH dentro de scripts), el fallback de descarga de npx y el riesgo de typosquatting, <code>npx --no-install</code>. <em>(visto por arriba 2026-06-09; volver con calma)</em></li>
+        <li><strong>Diagnóstico del OOM en <code>repository.test.ts</code></strong> — ejercicio pendiente (lo hace Mateo): seguir el embudo desde el test <code>reflects category edits</code> hacia <code>metrics.ts</code>/<code>recurrence.ts</code>. Bloquea la Fase 1 (CI debe nacer verde).</li>
+        <li><strong>Triage de los 8 hallazgos del primer lint</strong> — en especial: timing attack en <code>src/actions/auth.ts:26</code> (¿<code>crypto.timingSafeEqual</code>?), ReDoS en <code>src/finance/money.ts:5</code>, clasificar los <code>detect-object-injection</code> (¿falsos positivos?), y los 2 errores de react-hooks. Bloquea que el lint entre como gate en CI.</li>
+        <li><strong>Linter vs SAST real</strong> — dónde termina eslint-plugin-security y empieza Semgrep/CodeQL; cuándo conviene cada uno.</li>
+        <li><strong>Timing attacks en comparación de credenciales</strong> — por qué <code>===</code> filtra información, cómo funciona <code>timingSafeEqual</code>.</li>
+        <li><strong>ReDoS</strong> — backtracking catastrófico en regex, cómo se detecta y se explota.</li>
+        <li><strong>Migraciones expand/contract</strong> — el patrón completo, con ejemplos de esquema (se toca en Fase 6).</li>
+        <li><strong>Zero-downtime / rolling deploys</strong> — cómo lo hacen Swarm/Kubernetes, y cómo simularlo con compose+Traefik.</li>
+        <li><strong>Ciclo de vida de Node (Current/LTS/EOL)</strong> — por qué prod solo usa LTS; el hallazgo de hoy: Node 25 EOL corriendo en la Mac y en el Dockerfile.</li>
+        <li><strong>Gestión de secrets más allá de .env</strong> — SOPS+age, Vault, secrets de Actions con environment protection (se toca en Fases 4 y 8).</li>
+        <li><strong>12-factor app</strong> — el documento original como marco; qué cumple BudgetSpin y qué no.</li>
+      </ul>
+    </section>
 
     <section id="principios" style="margin-top: 40px;">
       <h2 style="font-size: 20px; letter-spacing: -0.01em;">Principios que gobiernan el roadmap</h2>
