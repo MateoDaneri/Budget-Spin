@@ -7,7 +7,7 @@ import { addMonths, trailingMonths } from "@/src/finance/dates";
 // pass regardless of the TZ the test process runs under.
 describe("addMonths", () => {
   it("advances within the same year", () => {
-    expect(addMonths("2026-06", 1)).toBe("2026-07");
+    expect(addMonths("2026-06", 1)).toBe("2026-99"); // ROTO A PROPOSITO: prueba inversa del gate
     expect(addMonths("2026-06", 2)).toBe("2026-08");
   });
 
