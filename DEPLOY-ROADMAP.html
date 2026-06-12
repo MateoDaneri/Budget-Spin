@@ -355,8 +355,8 @@
         integrado en cada paso, no como sección aparte.
       </p>
       <div class="progress-wrap">
-        <div class="progress-label"><span>Progreso</span><span>1 / 9 fases</span></div>
-        <div class="progress-track"><div class="progress-fill"></div></div>
+        <div class="progress-label"><span>Progreso</span><span>2 / 9 fases</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width: 22%;"></div></div>
       </div>
     </div>
   </section>
@@ -404,14 +404,14 @@
       </div>
     </details>
 
-    <details class="phase current">
+    <details class="phase done">
       <summary>
         <span class="phase-num">1</span>
         <span class="phase-title">
           <h2>CI puro: verificación en cada push</h2>
           <p class="concept">Gates mecánicos, no disciplina · audit trail de cambios</p>
         </span>
-        <span class="badge current">Siguiente</span>
+        <span class="badge done">Completada · 2026-06-11</span>
       </summary>
       <div class="phase-body">
         <div class="phase-grid">
@@ -423,6 +423,13 @@
               <li><code>engines</code> en <code>package.json</code> + <code>.nvmrc</code> (Node 24 LTS): mismo Node en Mac, CI y Docker.</li>
               <li>Branch protection en <code>main</code>: el check de CI pasa a ser requerido.</li>
             </ul>
+            <p style="font-size: 13.5px; color: var(--muted); margin: 0 0 14px;">
+              <strong>Extras que sumó la fase:</strong> ESLint real + plugin de seguridad con triage documentado ·
+              actions pinneadas por SHA de commit · Dependabot (daily, con groups para evitar conflictos seriales de lockfile) ·
+              repo ahora <em>público</em> (la protección en privado requería plan pago) ·
+              ruleset <code>protect-main</code> sin bypass (PR + 3 checks + up-to-date estricto) ·
+              prueba inversa ejecutada: PR #11 con test roto → merge bloqueado (GH013 / base branch policy).
+            </p>
             <div class="callout security">
               <strong>Ángulo de seguridad</strong>
               Un control que depende de que un humano se acuerde de correrlo no es un control.
@@ -443,14 +450,14 @@
       </div>
     </details>
 
-    <details class="phase pending">
+    <details class="phase current">
       <summary>
         <span class="phase-num">2</span>
         <span class="phase-title">
           <h2>Imagen reproducible y hardened</h2>
           <p class="concept">Superficie de ataque · reproducibilidad · least privilege en runtime</p>
         </span>
-        <span class="badge pending">Pendiente</span>
+        <span class="badge current">Siguiente</span>
       </summary>
       <div class="phase-body">
         <div class="phase-grid">
@@ -700,7 +707,7 @@
       <ul style="font-size: 14.5px; line-height: 1.8;">
         <li><strong>Low-level de npm/npx</strong> — cómo se resuelven los binarios (<code>node_modules/.bin</code>, symlinks, PATH dentro de scripts), el fallback de descarga de npx y el riesgo de typosquatting, <code>npx --no-install</code>. <em>(visto por arriba 2026-06-09; volver con calma)</em></li>
         <li><s><strong>Diagnóstico del OOM en <code>repository.test.ts</code></strong></s> — <em>resuelto 2026-06-09 (commit <code>09405ff</code>)</em>: bug de timezone en <code>addMonths</code> (construía fecha UTC y la leía con getters locales → no-op en UTC−3 → loop infinito acumulando meses en <code>monthsInclusive</code>). Lección: el test pasaba en runners UTC — CI solo no lo hubiera atrapado; correr tests con TZ no-UTC en CI.</li>
-        <li><strong>Triage de los 8 hallazgos del primer lint</strong> — en especial: timing attack en <code>src/actions/auth.ts:26</code> (¿<code>crypto.timingSafeEqual</code>?), ReDoS en <code>src/finance/money.ts:5</code>, clasificar los <code>detect-object-injection</code> (¿falsos positivos?), y los 2 errores de react-hooks. Bloquea que el lint entre como gate en CI.</li>
+        <li><s><strong>Triage de los 8 hallazgos del primer lint</strong></s> — <em>resuelto 2026-06-09 (commit <code>5542048</code>)</em>: 1 fix real (CurrencyFxFields), 5 FP documentados en línea, object-injection off global con racional. Lint con <code>--max-warnings 0</code> como gate.</li>
         <li><strong>Linter vs SAST real</strong> — dónde termina eslint-plugin-security y empieza Semgrep/CodeQL; cuándo conviene cada uno.</li>
         <li><strong>Timing attacks en comparación de credenciales</strong> — por qué <code>===</code> filtra información, cómo funciona <code>timingSafeEqual</code>.</li>
         <li><strong>ReDoS</strong> — backtracking catastrófico en regex, cómo se detecta y se explota.</li>
