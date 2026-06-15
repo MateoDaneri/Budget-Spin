@@ -14,8 +14,8 @@ services:
       echo "BUDGETSPIN_AUTH_SECRET is required" >&2;
       exit 1;
       fi;
-      npm run db:migrate &&
-      npm run start'
+      node migrate.mjs &&
+      node server.js'
     volumes:
       - budgetspin-prod-data:/app/data
     networks:
