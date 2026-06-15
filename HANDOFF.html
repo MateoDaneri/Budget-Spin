@@ -2,822 +2,156 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>BudgetSpin Handoff</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BudgetSpin · Handoff</title>
   <style>
     :root {
-      --bg: #eef4ef;
-      --surface: #ffffff;
-      --surface-soft: #f7faf7;
-      --ink: #17231b;
-      --muted: #637069;
-      --line: #cad7cd;
-      --green: #207447;
-      --green-bright: #34a268;
-      --green-soft: #e1f2e6;
-      --navy: #183153;
-      --navy-soft: #e9eff7;
-      --amber: #97640f;
-      --amber-soft: #fff1ce;
-      --red: #a83a31;
-      --red-soft: #fde6e2;
-      --code: #142017;
-      --code-ink: #e8f5ea;
-      --shadow: 0 18px 55px rgba(25, 55, 35, 0.13);
+      --bg: #eef2f7; --surface: #fff; --surface-soft: #f6f8fc; --ink: #15202b;
+      --muted: #5d6b7a; --line: #cdd6e2; --navy: #183153; --navy-soft: #e7eef8;
+      --blue: #1f5fa8; --green: #207447; --green-soft: #e1f2e6; --amber: #97640f;
+      --amber-soft: #fff1ce; --red: #a83a31; --red-soft: #fde6e2;
+      --code: #121a26; --code-ink: #e8eef7; --shadow: 0 18px 55px rgba(20,40,70,.13);
     }
-
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--ink);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.55;
-    }
-
-    a { color: var(--green); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      border-bottom: 1px solid rgba(202, 215, 205, 0.9);
-      background: rgba(238, 244, 239, 0.94);
-      backdrop-filter: blur(16px);
-    }
-
-    .topbar-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 12px 22px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--ink);
-      font-weight: 850;
-      white-space: nowrap;
-    }
-
-    .brand-mark {
-      display: grid;
-      place-items: center;
-      width: 34px;
-      height: 34px;
-      border-radius: 8px;
-      background: var(--green);
-      color: #fff;
-      box-shadow: 0 8px 20px rgba(32, 116, 71, 0.28);
-    }
-
-    nav {
-      display: flex;
-      justify-content: flex-end;
-      gap: 5px;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-
-    nav::-webkit-scrollbar { display: none; }
-
-    nav a {
-      flex: 0 0 auto;
-      border-radius: 999px;
-      padding: 7px 10px;
-      color: #314236;
-      font-size: 13px;
-      font-weight: 750;
-    }
-
-    nav a:hover {
-      background: var(--green-soft);
-      text-decoration: none;
-    }
-
-    .hero {
-      border-bottom: 1px solid var(--line);
-      background: #e8f2eb;
-    }
-
-    .hero-inner {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 52px 22px 34px;
-    }
-
-    .hero-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(340px, 0.9fr);
-      gap: 30px;
-      align-items: center;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 16px;
-      border: 1px solid rgba(32, 116, 71, 0.25);
-      border-radius: 999px;
-      padding: 6px 10px;
-      background: rgba(255, 255, 255, 0.76);
-      color: var(--green);
-      font-size: 13px;
-      font-weight: 850;
-    }
-
-    .pulse {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: var(--green-bright);
-      box-shadow: 0 0 0 0 rgba(52, 162, 104, 0.55);
-      animation: pulse 1.8s infinite;
-    }
-
-    @keyframes pulse {
-      70% { box-shadow: 0 0 0 9px rgba(52, 162, 104, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(52, 162, 104, 0); }
-    }
-
-    h1 {
-      max-width: 790px;
-      margin: 0;
-      font-size: clamp(38px, 5vw, 62px);
-      line-height: 1;
-      letter-spacing: 0;
-    }
-
-    .lead {
-      max-width: 730px;
-      margin: 18px 0 0;
-      color: var(--muted);
-      font-size: 18px;
-    }
-
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 24px;
-    }
-
-    .button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 42px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px 14px;
-      background: var(--surface);
-      color: var(--ink);
-      font-weight: 800;
-      box-shadow: 0 4px 14px rgba(31, 55, 37, 0.08);
-      transition: transform 150ms ease, box-shadow 150ms ease;
-    }
-
-    .button.primary {
-      border-color: var(--green);
-      background: var(--green);
-      color: #fff;
-    }
-
-    .button:hover {
-      transform: translateY(-1px);
-      text-decoration: none;
-      box-shadow: 0 7px 18px rgba(31, 55, 37, 0.12);
-    }
-
-    .panel {
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.92);
-      box-shadow: var(--shadow);
-    }
-
-    .panel-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      border-bottom: 1px solid var(--line);
-      padding: 14px 17px;
-      background: var(--surface-soft);
-      font-weight: 850;
-    }
-
-    .dots { display: flex; gap: 6px; align-items: center; }
-    .dots span {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: #adc0b1;
-    }
-
-    .diagram {
-      position: relative;
-      min-height: 300px;
-      padding: 22px;
-    }
-
-    .scan-line {
-      position: absolute;
-      inset-inline: 0;
-      top: 0;
-      height: 2px;
-      background: rgba(52, 162, 104, 0.75);
-      animation: scan 4s linear infinite;
-    }
-
-    @keyframes scan {
-      from { transform: translateY(0); opacity: 0; }
-      14% { opacity: 1; }
-      86% { opacity: 1; }
-      to { transform: translateY(298px); opacity: 0; }
-    }
-
-    .node-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    .node {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 14px;
-      background: #fff;
-    }
-
-    .node strong { display: block; margin-bottom: 4px; color: var(--navy); }
-    .node span { color: var(--muted); font-size: 13px; }
-
-    .hero-flow {
-      grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-top: 7px;
-    }
-
-    .flow-step {
-      border-radius: 8px;
-      padding: 11px 8px;
-      background: var(--green-soft);
-      color: #173a24;
-      font-size: 12px;
-      font-weight: 800;
-      text-align: center;
-      animation: float 4s ease-in-out infinite;
-    }
-
-    .flow-step:nth-child(2) { animation-delay: 0.2s; }
-    .flow-step:nth-child(3) { animation-delay: 0.4s; }
-    .flow-step:nth-child(4) { animation-delay: 0.6s; }
-
-    @keyframes float { 50% { transform: translateY(-4px); } }
-
-    main {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 10px 22px 68px;
-    }
-
-    section {
-      margin-top: 42px;
-      scroll-margin-top: 82px;
-    }
-
-    section > h2 {
-      margin: 0 0 14px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--line);
-      color: var(--navy);
-      font-size: 29px;
-      letter-spacing: 0;
-    }
-
-    h3 {
-      margin: 26px 0 10px;
-      color: var(--ink);
-      font-size: 19px;
-    }
-
-    p { max-width: 900px; }
-    li + li { margin-top: 5px; }
-
-    code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    }
-
-    code.inline {
-      border: 1px solid #dce6df;
-      border-radius: 6px;
-      padding: 2px 5px;
-      background: #f7faf6;
-      color: #23422d;
-      font-size: 0.92em;
-    }
-
-    .callout {
-      border: 1px solid var(--line);
-      border-left: 5px solid var(--green);
-      border-radius: 8px;
-      padding: 14px 16px;
-      background: #fff;
-    }
-
-    .callout.warn {
-      border-left-color: var(--amber);
-      background: var(--amber-soft);
-    }
-
-    .callout.danger {
-      border-left-color: var(--red);
-      background: var(--red-soft);
-    }
-
-    .checklist {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin: 16px 0;
-    }
-
-    .checklist div {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 13px;
-      background: var(--surface);
-    }
-
-    .flow { display: grid; gap: 10px; margin: 16px 0; }
-    .flow-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-    }
-    .arrow { color: var(--green); font-weight: 900; }
-
-    .codeblock {
-      position: relative;
-      margin: 14px 0;
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--code);
-      box-shadow: 0 12px 30px rgba(20, 32, 23, 0.15);
-    }
-
-    .codebar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 9px 12px;
-      color: #afc5b5;
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    .copy {
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      border-radius: 7px;
-      padding: 6px 9px;
-      background: rgba(255, 255, 255, 0.08);
-      color: var(--code-ink);
-      cursor: pointer;
-      font-weight: 800;
-    }
-
-    pre {
-      margin: 0;
-      padding: 18px;
-      overflow-x: auto;
-      color: var(--code-ink);
-      background: var(--code);
-      font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      white-space: pre;
-    }
-
-    pre code { color: inherit; font: inherit; white-space: inherit; }
-    .sourceCode { overflow: visible; background: transparent; }
-    div.sourceCode { margin: 0; }
-
-    table {
-      display: table;
-      width: 100%;
-      margin: 16px 0;
-      border-collapse: separate;
-      border-spacing: 0;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-    }
-
-    th, td {
-      border-bottom: 1px solid var(--line);
-      padding: 11px 12px;
-      text-align: left;
-      vertical-align: top;
-    }
-
-    th {
-      background: var(--navy-soft);
-      color: #28374b;
-      font-size: 13px;
-    }
-
-    tr:last-child td { border-bottom: 0; }
-
-    blockquote {
-      margin: 16px 0;
-      border-left: 5px solid var(--navy);
-      padding: 12px 16px;
-      background: var(--navy-soft);
-      color: #2d4059;
-    }
-
-    footer {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 0 22px 36px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    @media (max-width: 860px) {
-      .hero-grid, .node-grid, .hero-flow, .checklist { grid-template-columns: 1fr; }
-      .topbar-inner { align-items: flex-start; flex-direction: column; }
-      nav { width: 100%; justify-content: flex-start; }
-      .hero-inner { padding-top: 38px; }
-    }
-
-    @media (max-width: 620px) {
-      .topbar-inner, .hero-inner, main, footer { padding-left: 15px; padding-right: 15px; }
-      h1 { font-size: 38px; }
-      .lead { font-size: 16px; }
-      .flow-row { grid-template-columns: 1fr; }
-      .arrow { justify-self: center; transform: rotate(90deg); }
-      section > h2 { font-size: 25px; }
-    }
-
-    @media print {
-      .topbar, .hero-actions, .copy, .scan-line { display: none; }
-      .hero { border: 0; background: #fff; }
-      body { background: #fff; color: #000; }
-      .panel, .codeblock { box-shadow: none; }
-      section { break-inside: avoid-page; }
-    }
-</style>
+    body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.6;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    a { color: var(--blue); }
+    header.top { background: linear-gradient(135deg, #1f5fa8 0%, var(--navy) 100%);
+      color: #fff; padding: 38px 22px 30px; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    header.top h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.02em; }
+    header.top p { margin: 0; color: #cfe0f3; font-size: 15px; max-width: 64ch; }
+    .kicker { display: inline-block; font-size: 12px; font-weight: 800;
+      letter-spacing: .08em; text-transform: uppercase; color: #9fc1e8; margin-bottom: 10px; }
+    nav.docs { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+    nav.docs a { background: rgba(255,255,255,.12); color: #eaf2fb; border-radius: 999px;
+      padding: 5px 12px; font-size: 13px; font-weight: 700; }
+    main { max-width: 900px; margin: 0 auto; padding: 26px 22px 70px; }
+    section.card { background: var(--surface); border: 1px solid var(--line);
+      border-radius: 16px; box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 22px; }
+    section.card > h2 { margin: 0 0 12px; font-size: 19px; letter-spacing: -.01em; }
+    h3 { margin: 16px 0 6px; font-size: 13px; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted); font-weight: 800; }
+    ul { margin: 6px 0; padding-left: 20px; } li { margin-bottom: 5px; font-size: 15px; }
+    p { font-size: 15px; }
+    code.inline { background: var(--surface-soft); border: 1px solid var(--line);
+      border-radius: 5px; padding: 1px 5px; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 8px 0; }
+    @media (min-width: 640px) { .grid.two { grid-template-columns: 1fr 1fr; } }
+    .tile { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft);
+      padding: 12px 14px; } .tile b { font-size: 14px; } .tile p { margin: 4px 0 0; font-size: 13.5px; color: #3a4756; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0; }
+    th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-soft); font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .callout { border-radius: 12px; padding: 13px 16px; margin: 12px 0; font-size: 14.5px; border-left: 4px solid; }
+    .callout h4 { margin: 0 0 5px; font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; }
+    .callout.sec { background: var(--red-soft); border-color: var(--red); } .callout.sec h4 { color: var(--red); }
+    .callout.note { background: var(--navy-soft); border-color: var(--blue); } .callout.note h4 { color: var(--blue); }
+    .badge { display: inline-block; border-radius: 999px; padding: 3px 11px; font-size: 12.5px; font-weight: 800; }
+    .badge.done { background: var(--green-soft); color: var(--green); }
+    .badge.next { background: var(--amber-soft); color: var(--amber); }
+    footer { max-width: 900px; margin: 0 auto; padding: 0 22px 50px; color: var(--muted); font-size: 13px; }
+  </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <a class="brand" href="#top"><span class="brand-mark">B</span> BudgetSpin Docs</a>
-      <nav aria-label="Document sections"><a href="DEPLOY-ROADMAP.html">Deploy Roadmap ↗</a></nav>
+  <header class="top">
+    <div class="wrap">
+      <span class="kicker">BudgetSpin · DevSecOps</span>
+      <h1>Project handoff</h1>
+      <p>Architecture, current state, and operational context for resuming work. Roadmap state is the source of truth in <a href="DEPLOY-ROADMAP.html">DEPLOY-ROADMAP</a>; this document covers the app and its hosting model.</p>
+      <nav class="docs">
+        <a href="DEPLOY-ROADMAP.html">Roadmap</a>
+        <a href="RUNBOOK.html">Runbook</a>
+        <a href="BITACORA-OBSTACULOS.html">Bitácora</a>
+        <a href="DESTACADOS.html">Destacados</a>
+        <a href="MEJORAS-APP.html">Mejoras</a>
+      </nav>
     </div>
   </header>
-  <div class="hero" id="top">
-    <div class="hero-inner">
-      <div class="hero-grid">
-        <div>
-          <div class="eyebrow"><span class="pulse"></span>Project state · development and production</div>
-          <h1>BudgetSpin architecture, current state, and operational context</h1>
-          <p class="lead">A visual handoff covering the application capabilities, production hosting model, data ownership, known constraints, and the next work to resume.</p>
-          <div class="hero-actions">
-            <a class="button primary" href="#current-goal">Current goal</a>
-            <a class="button" href="#next-chat-suggested-first-steps">Next steps</a>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <span>Current operating model</span>
-            <span class="dots"><span></span><span></span><span></span></span>
-          </div>
-          <div class="diagram">
-            <div class="scan-line"></div>
-            <div class="node-grid">
-              <div class="node"><strong>Development</strong><span>Mac + Docker Compose</span></div><div class="node"><strong>Delivery</strong><span>Git and SSH over Tailscale</span></div><div class="node"><strong>Production</strong><span>Traefik + Next.js</span></div><div class="node"><strong>State</strong><span>SQLite Docker volume</span></div>
-              <div class="hero-flow"><div class="flow-step">Build</div><div class="flow-step">Validate</div><div class="flow-step">Deploy</div><div class="flow-step">Observe</div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+
   <main>
-<p>Last updated: 2026-06-08</p>
-<h2 id="current-goal">Current Goal</h2>
-<p>BudgetSpin is moving from a local-only Docker app to a self-hosted
-production app on a personal server reached over Tailscale.</p>
-<p>Desired production access path:</p>
-<ul>
-<li>Mac resolves <code>budget-spin.ts.local</code> via
-<code>/etc/hosts</code>.</li>
-<li>Traffic goes over Tailscale to the server.</li>
-<li>Server routes HTTP(S) through Traefik.</li>
-<li>BudgetSpin runs behind Traefik as a production Docker service.</li>
-<li>Local machine remains the development environment.</li>
-</ul>
-<h2 id="important-workspace-note">Important Workspace Note</h2>
-<p>The current workspace path is:</p>
-<p><code>/Users/mdaneri/Documents/Knowledge Base/Docker/BudgetSpin</code></p>
-<p>This directory is under macOS <code>Documents</code>, which is
-protected by macOS privacy controls. Codex previously hit:</p>
-<p><code>Operation not permitted</code></p>
-<p>when reading or writing files directly in the workspace, even though
-the path exists and Unix permissions look normal.</p>
-<p>Observed failures:</p>
-<ul>
-<li><code>rg --files</code></li>
-<li><code>sed docker-compose.yml</code></li>
-<li><code>ls</code></li>
-<li><code>apply_patch</code></li>
-</ul>
-<p>The fix was granting Full Disk Access to the Codex app and restarting
-it. After that, <code>ls</code>, <code>rg</code>,
-<code>git status</code>, and <code>apply_patch</code> worked normally in
-this workspace.</p>
-<p>If the error comes back in a new chat:</p>
-<ol type="1">
-<li>Check macOS
-<code>System Settings &gt; Privacy &amp; Security &gt; Full Disk Access</code>.</li>
-<li>Confirm Codex is enabled.</li>
-<li>Restart Codex.</li>
-<li>Re-test file access.</li>
-</ol>
-<p>Useful checks from a normal terminal:</p>
-<div id="cb1" class="sourceCode">
-<div class="sourceCode"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">pwd</span> <span class="at">-P</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ls</span> <span class="at">-ldO@</span> <span class="st">&quot;/Users/mdaneri/Documents/Knowledge Base/Docker/BudgetSpin&quot;</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">readlink</span> <span class="st">&quot;/Users/mdaneri/Documents/Knowledge Base/Docker/BudgetSpin&quot;</span></span></code></pre></div>
-</div>
-<h2 id="current-app-capabilities">Current App Capabilities</h2>
-<p>Implemented before this handoff:</p>
-<ul>
-<li>Next.js app with App Router, TypeScript, Tailwind-style CSS,
-SQLite.</li>
-<li>Dockerized local development.</li>
-<li>SQLite data stored through Docker volume/bind data path.</li>
-<li>Auth:
-<ul>
-<li>Local user is <code>mdaneri</code>.</li>
-<li>Existing legacy <code>local-user</code> data migrates to
-<code>mdaneri</code>.</li>
-<li>First login initializes password for <code>mdaneri</code>.</li>
-<li>Password stored as hash + salt.</li>
-<li>Session stored as signed HTTP-only cookie.</li>
-<li>Routes protected by Next <code>proxy.ts</code>.</li>
-<li>Logout exists in the header.</li>
-</ul></li>
-<li>Finance:
-<ul>
-<li>Recurring income, including custom recurrence for things like
-aguinaldo.</li>
-<li>Recurring expenses, committed vs optional.</li>
-<li>Custom recurrences for expenses.</li>
-<li>Expense categories and expense families/groups.</li>
-<li>Dashboard metrics: income, committed spend, optional spend, net,
-category breakdown, family breakdown, six-month projection.</li>
-<li>Plans with target date/amount/currency, sub-purchases/checklist, and
-calculation detail showing included months.</li>
-</ul></li>
-<li>Currency behavior:
-<ul>
-<li>Amounts display in their default/source currency first.</li>
-<li>Amounts can be clicked to cycle currencies.</li>
-<li>FX is manually stored for records, with automatic lookup support
-used in forms.</li>
-</ul></li>
-</ul>
-<h2 id="partially-applied-needs-verification">Partially Applied / Needs
-Verification</h2>
-<p>The last attempted dashboard chart work may have partially
-modified:</p>
-<ul>
-<li><code>app/page.tsx</code></li>
-<li><code>app/globals.css</code></li>
-</ul>
-<p>Because the turn was interrupted and workspace permissions were
-broken, this was not validated with typecheck/tests/build.</p>
-<p>In the next chat, inspect these files before making new dashboard
-changes:</p>
-<div id="cb2" class="sourceCode">
-<div class="sourceCode"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> diff <span class="at">--</span> app/page.tsx app/globals.css</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run typecheck</span></code></pre></div>
-</div>
-<p>If Docker is the supported route:</p>
-<div id="cb3" class="sourceCode">
-<div class="sourceCode"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose run <span class="at">--rm</span> app npm run typecheck</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose run <span class="at">--rm</span> app npm test</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose build <span class="at">--pull</span><span class="op">=</span>false</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">-d</span> <span class="at">--force-recreate</span></span></code></pre></div>
-</div>
-<h2 id="production-hosting-plan">Production Hosting Plan</h2>
-<p>Recommended shape:</p>
-<ul>
-<li>Keep <code>docker-compose.yml</code> for local dev.</li>
-<li>Add <code>docker-compose.prod.yml</code> for production.</li>
-<li>Add <code>.env.production.example</code> with required
-variables.</li>
-<li>Keep secrets out of git.</li>
-<li>Use a persistent named Docker volume for production SQLite
-data.</li>
-<li>Use Traefik labels on the app service.</li>
-<li>Run app with
-<code>npm run db:migrate &amp;&amp; npm run build &amp;&amp; npm run start</code>
-or build a production image whose runtime command starts Next in
-production.</li>
-<li>Set <code>NODE_ENV=production</code>.</li>
-<li>Set stable <code>BUDGETSPIN_AUTH_SECRET</code>.</li>
-<li>Set <code>DATABASE_PATH=/app/data/budgetspin.sqlite</code>.</li>
-</ul>
-<p>Traefik assumptions to verify on the server:</p>
-<ul>
-<li>Traefik Docker network name, for example <code>traefik</code>.</li>
-<li>HTTP vs HTTPS entrypoint names, commonly <code>web</code> and
-<code>websecure</code>.</li>
-<li>Whether TLS certs are needed for <code>.ts.local</code>. Since
-access is over Tailscale and <code>/etc/hosts</code>, plain HTTP behind
-Tailscale may be acceptable for a first private setup, but HTTPS is
-cleaner if Traefik is already configured.</li>
-<li>Whether Traefik watches Docker labels on that network.</li>
-</ul>
-<p>Example production compose outline:</p>
-<div id="cb4" class="sourceCode">
-<div class="sourceCode"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">services</span><span class="kw">:</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">app</span><span class="kw">:</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">build</span><span class="kw">:</span><span class="at"> .</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">command</span><span class="kw">:</span><span class="at"> sh -c &quot;npm run db:migrate &amp;&amp; npm run build &amp;&amp; npm run start&quot;</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">environment</span><span class="kw">:</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">DATABASE_PATH</span><span class="kw">:</span><span class="at"> /app/data/budgetspin.sqlite</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">BUDGETSPIN_AUTH_SECRET</span><span class="kw">:</span><span class="at"> ${BUDGETSPIN_AUTH_SECRET}</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">NODE_ENV</span><span class="kw">:</span><span class="at"> production</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">volumes</span><span class="kw">:</span></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> budgetspin-data:/app/data</span></span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">networks</span><span class="kw">:</span></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik</span></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">labels</span><span class="kw">:</span></span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik.enable=true</span></span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik.http.routers.budgetspin.rule=Host(`budget-spin.ts.local`)</span></span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik.http.routers.budgetspin.entrypoints=web</span></span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik.http.services.budgetspin.loadbalancer.server.port=3000</span></span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">restart</span><span class="kw">:</span><span class="at"> unless-stopped</span></span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="fu">volumes</span><span class="kw">:</span></span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">budgetspin-data</span><span class="kw">:</span></span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="fu">networks</span><span class="kw">:</span></span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">traefik</span><span class="kw">:</span></span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">external</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
-</div>
-<p>If using HTTPS:</p>
-<div id="cb5" class="sourceCode">
-<div class="sourceCode"><pre
-class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik.http.routers.budgetspin.entrypoints=websecure</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> traefik.http.routers.budgetspin.tls=true</span></span></code></pre></div>
-</div>
-<h2 id="deployment-model">Deployment Model</h2>
-<p>Recommended initial deployment process:</p>
-<ol type="1">
-<li>Develop locally.</li>
-<li>Run tests locally in Docker.</li>
-<li>Commit changes.</li>
-<li>SSH to server over Tailscale.</li>
-<li>Pull latest repo on server.</li>
-<li>Run production compose build and recreate.</li>
-<li>Verify <code>/login</code> and dashboard through
-<code>http://budget-spin.ts.local</code>.</li>
-</ol>
-<p>Example server commands:</p>
-<div id="cb6" class="sourceCode">
-<div class="sourceCode"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /opt/budgetspin</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> pull</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">-f</span> docker-compose.prod.yml build <span class="at">--pull</span><span class="op">=</span>false</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">-f</span> docker-compose.prod.yml up <span class="at">-d</span> <span class="at">--force-recreate</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">-f</span> docker-compose.prod.yml logs <span class="at">--tail</span><span class="op">=</span>100 app</span></code></pre></div>
-</div>
-<h2 id="backup-model">Backup Model</h2>
-<p>SQLite is the production data source, so backups matter.</p>
-<p>Recommended backup command from the server:</p>
-<div id="cb7" class="sourceCode">
-<div class="sourceCode"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose <span class="at">-f</span> docker-compose.prod.yml exec <span class="at">-T</span> app sqlite3 /app/data/budgetspin.sqlite <span class="st">&quot;.backup &#39;/app/data/backups/budgetspin-</span><span class="va">$(</span><span class="fu">date</span> +%F-%H%M%S<span class="va">)</span><span class="st">.sqlite&#39;&quot;</span></span></code></pre></div>
-</div>
-<p>If the image does not include <code>sqlite3</code>, either add it to
-the image or run a temporary SQLite container against the same
-volume.</p>
-<p>Before destructive migrations or reset operations, take a SQLite
-backup.</p>
-<h2 id="security-notes">Security Notes</h2>
-<ul>
-<li>This is private self-hosting over Tailscale, not public Internet
-hosting.</li>
-<li>Still use a strong <code>BUDGETSPIN_AUTH_SECRET</code>; changing it
-invalidates sessions.</li>
-<li>Use a strong password for <code>mdaneri</code>.</li>
-<li>Do not commit <code>.env.production</code>.</li>
-<li>If exposing beyond Tailscale later, add HTTPS, stricter headers, and
-consider 2FA.</li>
-<li>Current 2FA remains future work.</li>
-</ul>
-<h2 id="next-chat-suggested-first-steps">Next Chat Suggested First
-Steps</h2>
-<ol type="1">
-<li>Inspect repo status and any partial chart changes.</li>
-<li>Decide HTTP vs HTTPS Traefik route for
-<code>budget-spin.ts.local</code>.</li>
-<li>Validate:
-<ul>
-<li>typecheck</li>
-<li>tests</li>
-<li>local docker compose</li>
-<li>production compose syntax</li>
-</ul></li>
-<li>Deploy to server over SSH.</li>
-</ol>
+    <section class="card">
+      <h2>Where the project is</h2>
+      <p>Goal: take BudgetSpin from a local-only Docker app to a self-hosted production app on a personal server reached over Tailscale, behind Traefik. Implemented incrementally, one phase per session.</p>
+      <p><span class="badge done">Phase 2 done</span> &nbsp; <span class="badge next">Phase 3 next</span> &nbsp; (3/9). Phases 0–2 complete: base hygiene, CI gates, and a reproducible hardened image. Next: build &amp; publish the image in CI with scanning as a gate. Full detail in <a href="DEPLOY-ROADMAP.html">DEPLOY-ROADMAP</a> — do not re-derive state from code/git.</p>
+      <div class="grid two">
+        <div class="tile"><b>Development</b><p>Mac + Docker Compose (<code class="inline">docker-compose.yml</code>).</p></div>
+        <div class="tile"><b>Delivery</b><p>Git + SSH over Tailscale (today server-side build; CD is Phase 4).</p></div>
+        <div class="tile"><b>Production</b><p>Traefik + non-root Next.js container (<code class="inline">docker-compose.prod.yml</code>).</p></div>
+        <div class="tile"><b>State</b><p>SQLite in a persistent Docker volume.</p></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Runtime architecture (as of Phase 2)</h2>
+      <ul>
+        <li><strong>Image:</strong> multi-stage Dockerfile. Builder runs <code class="inline">npm ci</code> + <code class="inline">next build</code>; the final stage carries only the Next <code class="inline">standalone</code> output + <code class="inline">.next/static</code> + <code class="inline">public</code> + an esbuild-bundled <code class="inline">migrate.mjs</code>. No devDeps, no toolchain, no <code class="inline">src/</code>. Base <code class="inline">node:24-slim</code> pinned by digest.</li>
+        <li><strong>Least privilege:</strong> runs as <code class="inline">USER node</code> (uid 1000); code is root-owned read-only, only <code class="inline">/app/data</code> is writable.</li>
+        <li><strong>Startup:</strong> <code class="inline">node migrate.mjs &amp;&amp; node server.js</code> (no npm at runtime). The prod compose wraps it with a guard that aborts if <code class="inline">BUDGETSPIN_AUTH_SECRET</code> is unset.</li>
+        <li><strong>Routing:</strong> Traefik labels on the app service; private hostname <code class="inline">budget-spin.ts.local</code> over Tailscale; no host port published.</li>
+        <li><strong>Data:</strong> SQLite at <code class="inline">/app/data/budgetspin.sqlite</code> in volume <code class="inline">budgetspin-prod-data</code>; created/seeded by <code class="inline">migrate()</code> on first start; persists across deploys. The image contains <em>no</em> database (see <a href="BITACORA-OBSTACULOS.html">OBS-008</a>).</li>
+      </ul>
+      <div class="callout note">
+        <h4>Result</h4>
+        Image 1.75 GB → 421 MB (−76%), non-root, reproducible (digest pin + <code class="inline">npm ci</code>). Verified: <code class="inline">whoami</code> = node, <code class="inline">migrate.mjs</code> runs standalone, <code class="inline">GET /login</code> 200.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>App capabilities</h2>
+      <h3>Auth</h3>
+      <ul>
+        <li>Single local user <code class="inline">mdaneri</code>; legacy local-user data migrates to it. First login initializes the password (stored as hash + salt).</li>
+        <li>Session as a signed HTTP-only cookie; credential comparison via <code class="inline">timingSafeEqual</code> (<code class="inline">src/auth/session.ts</code>); routes protected by <code class="inline">proxy.ts</code>; logout in the header.</li>
+        <li>2FA is modeled for later but <strong>not enforced yet</strong>.</li>
+      </ul>
+      <h3>Finance</h3>
+      <ul>
+        <li>Recurring income (incl. custom recurrences, e.g. aguinaldo) and recurring expenses (committed vs optional, custom recurrences).</li>
+        <li>Expense categories and families/groups.</li>
+        <li>Dashboard: income, committed/optional spend, net, category and family breakdown, six-month projection.</li>
+        <li>Plans with target date/amount/currency, sub-purchases/checklist, and calculation detail (included months).</li>
+        <li>Currency: amounts display in their source currency and can be clicked to cycle; FX stored per record, with automatic lookup in forms.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Data ownership &amp; volumes</h2>
+      <table>
+        <tr><th>Location</th><th>Volume / file</th><th>Role</th></tr>
+        <tr><td>Mac, original dev</td><td><code class="inline">budgetspin_budgetspin-data</code></td><td>Historical records</td></tr>
+        <tr><td>Mac, renamed project</td><td><code class="inline">budgetspin-dev_budgetspin-data</code></td><td>May be seed-only</td></tr>
+        <tr><td>Server, production</td><td><code class="inline">budgetspin-prod-data</code></td><td>Production database</td></tr>
+      </table>
+      <p>Backups and the dev→prod promotion procedure live in <a href="RUNBOOK.html">RUNBOOK</a>. The database is the one thing that can't be rebuilt — back up before destructive operations.</p>
+    </section>
+
+    <section class="card">
+      <h2>Known constraints &amp; security notes</h2>
+      <ul>
+        <li>Private self-hosting over Tailscale, not public Internet exposure. Still use a strong, stable <code class="inline">BUDGETSPIN_AUTH_SECRET</code> (changing it invalidates sessions) and a strong password.</li>
+        <li>Never commit <code class="inline">.env.production</code>. No secrets or personal data in the repo (it is public) — see the PII rule in <code class="inline">CLAUDE.md</code>.</li>
+        <li>Single instance behind Traefik; migrate-on-start is fine for one replica. Multi-instance would need migrations as a separate step (Phase 6).</li>
+        <li>If ever exposed beyond Tailscale: add HTTPS, stricter headers, and 2FA (currently future work).</li>
+      </ul>
+      <div class="callout sec">
+        <h4>Open improvement</h4>
+        The migration is hand-written idempotent SQL; <code class="inline">schema.ts</code> (Drizzle) is declared but disconnected from it. Migrating to Drizzle Kit versioned migrations is tracked as <a href="MEJORAS-APP.html">MEJ-001</a> (deferred to project close).
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Resume next</h2>
+      <ul>
+        <li><strong>Phase 3 — Build &amp; publish in CI:</strong> CI builds the image after tests, Trivy scans before push (gate on CRITICAL/HIGH), syft SBOM as artifact, push to GHCR with immutable SHA tags. Server still untouched.</li>
+        <li>Branch in flight: <code class="inline">feat/phase-2-hardened-image</code> (Phase 2 commits + doc restructure). Push/PR require explicit confirmation.</li>
+      </ul>
+    </section>
   </main>
-  <footer>BudgetSpin project handoff. Human-readable context belongs in this HTML document.</footer>
-  <script>
-    const main = document.querySelector("main");
-    const headings = [...main.querySelectorAll(":scope > h2")];
 
-    for (const heading of headings) {
-      const section = document.createElement("section");
-      main.insertBefore(section, heading);
-      let node = heading;
-      while (node && (node === heading || node.tagName !== "H2")) {
-        const next = node.nextSibling;
-        section.appendChild(node);
-        node = next;
-      }
-    }
-
-    for (const code of document.querySelectorAll("main code:not(pre code)")) {
-      code.classList.add("inline");
-    }
-
-    const nav = document.querySelector("nav");
-    for (const section of document.querySelectorAll("main > section")) {
-      const heading = section.querySelector(":scope > h2");
-      if (!heading?.id) continue;
-      const link = document.createElement("a");
-      link.href = "#" + heading.id;
-      link.textContent = heading.textContent.replace(/\s+/g, " ").trim();
-      nav.appendChild(link);
-    }
-
-    for (const pre of document.querySelectorAll("main pre")) {
-      if (pre.closest(".codeblock")) continue;
-      const wrapper = document.createElement("div");
-      wrapper.className = "codeblock";
-      const bar = document.createElement("div");
-      bar.className = "codebar";
-      const label = document.createElement("span");
-      label.textContent = pre.classList.contains("text") ? "Expected output" : "Command";
-      const button = document.createElement("button");
-      button.className = "copy";
-      button.type = "button";
-      button.textContent = "Copy";
-      bar.append(label, button);
-      pre.parentNode.insertBefore(wrapper, pre);
-      wrapper.append(bar, pre);
-
-      button.addEventListener("click", async () => {
-        const text = pre.textContent.trim();
-        try {
-          await navigator.clipboard.writeText(text);
-        } catch {
-          const area = document.createElement("textarea");
-          area.value = text;
-          document.body.appendChild(area);
-          area.select();
-          document.execCommand("copy");
-          area.remove();
-        }
-        button.textContent = "Copied";
-        setTimeout(() => { button.textContent = "Copy"; }, 1100);
-      });
-    }
-  </script>
-
+  <footer>
+    BudgetSpin project handoff. Human-readable context. Agent-readable mirror: <code>HANDOFF.md</code> — keep both in sync.
+  </footer>
 </body>
 </html>

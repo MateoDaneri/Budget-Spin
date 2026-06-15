@@ -726,7 +726,7 @@ records remained in <code>budgetspin_budgetspin-data</code>. Validate the source
 <h3>1. Validate the original volume on the Mac</h3>
 <pre class="bash"><code>docker run --rm \
   -v budgetspin_budgetspin-data:/data \
-  node:25-slim \
+  node:24-slim \
   node --input-type=module -e &apos;
     import { DatabaseSync } from "node:sqlite";
     const db = new DatabaseSync("/data/budgetspin.sqlite", { readOnly: true });
@@ -745,14 +745,14 @@ records remained in <code>budgetspin_budgetspin-data</code>. Validate the source
 <code>income: 2</code>, <code>expenses: 12</code>, <code>plans: 2</code>,
 <code>has_password: 1</code>. Do not continue if expected records are missing.</div>
 <h3>2. Export the verified volume</h3>
-<pre class="bash"><code>cd "/Users/mdaneri/Documents/Knowledge Base/Docker/BudgetSpin-Dev"
+<pre class="bash"><code>cd /path/to/BudgetSpin-Dev   # the repo root on your dev machine
 EXPORT="budgetspin-original-$(date +%Y%m%d-%H%M%S).sqlite"
 
 docker run --rm \
   --mount type=volume,src=budgetspin_budgetspin-data,dst=/data,readonly \
   --mount "type=bind,src=$PWD,dst=/export" \
   -e EXPORT="$EXPORT" \
-  node:25-slim \
+  node:24-slim \
   node --input-type=module -e &apos;
     import { DatabaseSync } from "node:sqlite";
     const quote = String.fromCharCode(39);
@@ -765,9 +765,10 @@ docker run --rm \
 
 test -s "$EXPORT" &amp;&amp; ls -lh "$EXPORT"</code></pre>
 <h3>3. Transfer the export</h3>
-<pre class="bash"><code>scp "$EXPORT" mdaneri@100.92.154.91:/home/mdaneri/Docker/Budget-Spin/</code></pre>
+<pre class="bash"><code># Replace the host/path with your server's Tailscale name and deploy dir.
+scp "$EXPORT" "$DEPLOY_USER@$SERVER_TS_HOST:/path/to/budgetspin/"</code></pre>
 <h3>4. Restore on the production server</h3>
-<pre class="bash"><code>cd ~/Docker/Budget-Spin
+<pre class="bash"><code>cd /path/to/budgetspin   # the deploy dir on the server
 EXPORT="$(find . -maxdepth 1 -name &apos;budgetspin-original-*.sqlite&apos; -type f -print | sort | tail -1)"
 test -s "$EXPORT" || { echo "Verified export not found" &gt;&amp;2; exit 1; }
 
