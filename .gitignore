@@ -11,3 +11,7 @@ coverage/
 .env.prod
 *.tsbuildinfo
 .test-data/
+
+# Local-only agent/personal context (never shared; no PII in the repo).
+CLAUDE.local.md
+.llm/

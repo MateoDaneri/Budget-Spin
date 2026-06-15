@@ -528,7 +528,7 @@
           <span class="id">OBS-008</span>
           <span class="tag phase">Fase 2 · Imagen hardened</span>
           <span class="tag sec">Supply chain / fuga de datos</span>
-          <span class="tag wip">Resuelto (capa A) · capa B pendiente</span>
+          <span class="tag ok">Resuelto (capas A + B aplicadas)</span>
         </div>
         <h2>El trace de <code>standalone</code> filtró la base de datos de desarrollo al artefacto</h2>
         <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-13 · <code class="inline">next.config.ts</code>, <code class="inline">src/db/client.ts</code></p>
@@ -578,8 +578,8 @@
             <p>En <code class="inline">next.config.ts</code>: <code class="inline">outputFileTracingExcludes: { "*": ["data/**"] }</code>. Le dice a nft que no bundlee <code class="inline">data/**</code>. Corrige en el origen y sirve aunque se buildee fuera de Docker. Verificado: tras rebuild, <code class="inline">.next/standalone/data</code> desaparece.</p>
           </div>
           <div class="layer">
-            <div class="lh"><b>Capa B — la imagen</b><span class="tag wip">Pendiente</span></div>
-            <p>En el Dockerfile (paso 2): <code class="inline">rm -rf .next/standalone/data</code> en el stage builder. Red de seguridad determinista por si A falla, cambia la versión de Next, o el build crea una DB durante "Collecting page data".</p>
+            <div class="lh"><b>Capa B — la imagen</b><span class="tag ok">Aplicado</span></div>
+            <p>En el Dockerfile: <code class="inline">rm -rf .next/standalone/data</code> en el stage builder. Red de seguridad determinista por si A falla, cambia la versión de Next, o el build crea una DB durante "Collecting page data".</p>
           </div>
         </div>
       </section>
