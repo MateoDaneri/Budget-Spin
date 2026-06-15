@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BudgetSpin · Destacados para estudiar</title>
+  <style>
+    :root {
+      --bg: #eef2f7;
+      --surface: #ffffff;
+      --surface-soft: #f6f8fc;
+      --ink: #15202b;
+      --muted: #5d6b7a;
+      --line: #cdd6e2;
+      --navy: #183153;
+      --navy-soft: #e7eef8;
+      --blue: #1f5fa8;
+      --green: #207447;
+      --green-soft: #e1f2e6;
+      --amber: #97640f;
+      --amber-soft: #fff1ce;
+      --violet: #5a3ea8;
+      --violet-soft: #ece6fb;
+      --code: #121a26;
+      --code-ink: #e8eef7;
+      --shadow: 0 18px 55px rgba(20, 40, 70, 0.13);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    code, pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+    a { color: var(--blue); }
+
+    header.top {
+      background: linear-gradient(135deg, #1f5fa8 0%, var(--navy) 100%);
+      color: #fff; padding: 38px 22px 32px;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    header.top h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+    header.top p { margin: 0; color: #cfe0f3; font-size: 15px; max-width: 62ch; }
+    .kicker {
+      display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #9fc1e8; margin-bottom: 10px;
+    }
+
+    main { max-width: 880px; margin: 0 auto; padding: 26px 22px 70px; }
+
+    .howto {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px 18px; margin-bottom: 26px; font-size: 14px; color: var(--muted);
+    }
+    .howto strong { color: var(--ink); }
+
+    .tag {
+      font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+      border: 1px solid var(--line); background: var(--surface-soft); color: #3a4756;
+    }
+    .tag.phase { background: var(--navy-soft); border-color: #c2d3ec; color: var(--navy); }
+    .tag.topic { background: var(--violet-soft); border-color: #d2c4f3; color: var(--violet); }
+
+    article.entry {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+      box-shadow: var(--shadow); padding: 26px 26px 22px; margin-bottom: 28px;
+    }
+    .entry-head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 18px; }
+    .entry-head h2 { margin: 8px 0 6px; font-size: 20px; letter-spacing: -0.01em; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .id { font-weight: 800; color: var(--blue); font-size: 13px; letter-spacing: 0.04em; }
+
+    section.block { margin: 18px 0; }
+    section.block > h3 {
+      margin: 0 0 8px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); font-weight: 800;
+    }
+    section.block p { margin: 0 0 8px; font-size: 15px; }
+    ul { margin: 6px 0; padding-left: 20px; }
+    li { margin-bottom: 5px; font-size: 15px; }
+
+    pre {
+      background: var(--code); color: var(--code-ink); border-radius: 10px;
+      padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.55; margin: 8px 0;
+    }
+    pre .c { color: #7d93ad; }
+    pre .good { color: #7fd6a0; }
+    pre .bad { color: #f0a39a; }
+    code.inline { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 13px; }
+
+    .callout { border-radius: 12px; padding: 14px 16px; margin: 14px 0; font-size: 14.5px; border-left: 4px solid; }
+    .callout h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .callout.why { background: var(--navy-soft); border-color: var(--blue); }
+    .callout.why h4 { color: var(--blue); }
+    .callout.counter { background: var(--amber-soft); border-color: var(--amber); }
+    .callout.counter h4 { color: var(--amber); }
+    .callout.remember { background: var(--green-soft); border-color: var(--green); }
+    .callout.remember h4 { color: var(--green); }
+
+    footer { max-width: 880px; margin: 0 auto; padding: 0 22px 50px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <span class="kicker">BudgetSpin · DevSecOps</span>
+      <h1>Destacados para estudiar</h1>
+      <p>Decisiones y conceptos que vale la pena subrayar — no porque hayan sido un problema (eso va en la bitácora de obstáculos), sino porque encierran un principio que quiero entender bien y reusar. Cada destacado se agrega cuando pido «destacar en html».</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="howto">
+      <strong>Cómo leer cada destacado.</strong> Estructura fija:
+      <em>la decisión</em> (qué se hizo) → <em>por qué</em> (el mecanismo) →
+      <em>contraejemplo</em> (qué pasaría si se hiciera al revés) →
+      <em>para recordar</em> (el principio transferible).
+    </div>
+
+    <!-- ====================== DESTACADO #1 ====================== -->
+    <article class="entry" id="dest-001">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">DEST-001</span>
+          <span class="tag phase">Fase 2 · Stage 1 (builder)</span>
+          <span class="tag topic">Docker · cache de capas</span>
+        </div>
+        <h2>El orden de las instrucciones decide la velocidad del build</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">Dockerfile · stage <code class="inline">builder</code></p>
+      </div>
+
+      <section class="block">
+        <h3>La decisión</h3>
+        <p>Copiar <strong>primero solo los manifiestos</strong> e instalar, y <strong>recién después</strong> copiar el resto del código:</p>
+        <pre><span class="c"># 1. solo package.json + package-lock.json</span>
+COPY package.json package-lock.json ./
+RUN npm ci
+
+<span class="c"># 2. recién ahora el resto del código fuente</span>
+COPY . .
+RUN npm run build</pre>
+      </section>
+
+      <div class="callout why">
+        <h4>Por qué — el mecanismo del cache de capas</h4>
+        <p style="margin:0 0 8px;">Cada instrucción del Dockerfile (<code class="inline">COPY</code>, <code class="inline">RUN</code>…) produce una <strong>capa</strong>. En cada build, Docker <strong>reusa</strong> una capa cacheada si la instrucción y sus inputs no cambiaron. Para un <code class="inline">COPY</code>, el input es el contenido de los archivos copiados; para un <code class="inline">RUN</code>, el comando más el estado de las capas anteriores.</p>
+        <p style="margin:0;">Regla clave: apenas una capa se invalida, <strong>todas las que siguen se reconstruyen</strong>. Como <code class="inline">npm ci</code> depende solo de <code class="inline">package*.json</code> (que cambia rara vez), su capa queda cacheada y la instalación de ~503&nbsp;MB <strong>no se repite</strong> cuando solo tocás un <code class="inline">.tsx</code>.</p>
+      </div>
+
+      <div class="callout counter">
+        <h4>Contraejemplo — el orden ingenuo</h4>
+        <p style="margin:0 0 8px;">Si copiás todo el código <em>antes</em> de instalar:</p>
+        <pre>COPY . .            <span class="bad"># cualquier cambio de código invalida acá…</span>
+RUN npm ci          <span class="bad"># …y reinstala los 503 MB en CADA build</span>
+RUN npm run build</pre>
+        <p style="margin:0;">Cada edición de una línea de código bustea el cache de <code class="inline">npm ci</code>. Builds lentos, y en CI eso se paga en cada push.</p>
+      </div>
+
+      <div class="callout remember">
+        <h4>Para recordar</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Ordená de lo que menos cambia a lo que más cambia.</strong> Dependencias (estables) arriba; código fuente (volátil) abajo.</li>
+          <li>Una capa invalidada arrastra a todas las siguientes → poné los pasos caros y estables lo más arriba posible.</li>
+          <li><strong>Ángulo DevSecOps:</strong> builds rápidos y deterministas acortan el ciclo de CI, y un ciclo corto es lo que hace viable parchear seguido. La velocidad del build no es solo comodidad: es <em>time-to-patch</em>. Y <code class="inline">npm ci</code> (no <code class="inline">install</code>) mantiene la reproducibilidad con verificación de hashes, independiente del orden.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== DESTACADO #2 ====================== -->
+    <article class="entry" id="dest-002">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">DEST-002</span>
+          <span class="tag phase">Fase 2 · Stage 1 (builder)</span>
+          <span class="tag topic">Compilación · fuente vs artefacto</span>
+        </div>
+        <h2>Tu app viaja compilada, no como <code>src/</code> — y por qué <code>migrate.ts</code> necesita esbuild aparte</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">esbuild · <code class="inline">next build</code> · <code class="inline">.next/standalone</code></p>
+      </div>
+
+      <section class="block">
+        <h3>El concepto</h3>
+        <p>El <strong>código fuente</strong> (<code class="inline">app/</code> + <code class="inline">src/</code>, en TypeScript) no es lo que corre en producción. Lo que corre es el <strong>artefacto compilado</strong>: <code class="inline">next build</code> transforma tu app a JavaScript plano y lo deja en <code class="inline">.next/standalone</code>. La carpeta <code class="inline">src/</code> cruda no viaja a la imagen porque <strong>en runtime nadie la lee</strong> — el servidor lee el <code class="inline">.next/</code> compilado.</p>
+        <pre>app/ + src/ (lo que la app usa)  <span class="c">──next build──▶</span>  .next/standalone/   <span class="c"># app web</span>
+src/db/migrate.ts (entrypoint suelto) <span class="c">──esbuild──▶</span>  migrate.mjs        <span class="c"># migración</span></pre>
+        <p>Analogía: en C escribís <code class="inline">.c</code> (fuente) y compilás a un binario; a producción mandás <strong>el binario, no los <code class="inline">.c</code></strong>. El binario <em>es</em> tu programa, solo que no es la fuente legible.</p>
+      </section>
+
+      <div class="callout why">
+        <h4>Por qué <code>migrate.ts</code> necesita esbuild por separado</h4>
+        <p style="margin:0;"><code class="inline">next build</code> solo compila lo conectado al <strong>grafo de imports de la app web</strong>. Tu <code class="inline">migrate.ts</code> es un <strong>entrypoint suelto</strong>: ninguna página lo importa, lo ejecutás aparte con <code class="inline">node</code> (vía <code class="inline">db:migrate</code>). Por eso Next no lo ve y su versión compilada no queda en <code class="inline">.next/standalone</code>. esbuild compila ese único entrypoint huérfano → <code class="inline">migrate.mjs</code>: TS→JS y bundle de <code class="inline">repository.ts</code>/<code class="inline">client.ts</code> en un archivo, sin externos salvo los <code class="inline">node:</code> builtins.</p>
+      </div>
+
+      <div class="callout counter">
+        <h4>La confusión común</h4>
+        <p style="margin:0;">«No veo <code class="inline">src/</code> en la imagen, ¿falta mi app?» No: tu app <strong>está</strong>, compilada en <code class="inline">.next/standalone</code> (las páginas <code class="inline">app/*.tsx</code> aparecen como <code class="inline">.next/server/app/*.js</code>) y la migración en <code class="inline">migrate.mjs</code>. Lo único que no viaja es la fuente cruda; y el código muerto (p. ej. <code class="inline">schema.ts</code>, que nadie importa) no se compila a ningún lado.</p>
+      </div>
+
+      <div class="callout remember">
+        <h4>Para recordar</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Embarcá el artefacto, no la fuente.</strong> Fuente = receta; artefacto compilado = plato cocinado. En runtime solo corre el artefacto.</li>
+          <li><strong>Los entrypoints fuera del grafo de la app necesitan su propia compilación.</strong> Un script CLI que el framework no conoce no aparece mágicamente en el build de la app.</li>
+          <li>Compilar en <em>build time</em> (esbuild/Next) y no en <em>runtime</em> (tsx) saca la maquinaria de compilación de la imagen → menos superficie de ataque.</li>
+          <li><strong>Ángulo de seguridad:</strong> que la fuente no viaje es el principio correcto («solo lo que corre»); no es un control fuerte (el JS es reversible), pero reduce superficie y no expone la estructura legible del código.</li>
+        </ul>
+      </div>
+    </article>
+
+  </main>
+
+  <footer>
+    Los destacados se agregan cuando pido «destacar en html». Material de estudio, autocontenido. Los obstáculos resueltos viven aparte en <code>BITACORA-OBSTACULOS.html</code>.
+  </footer>
+</body>
+</html>
