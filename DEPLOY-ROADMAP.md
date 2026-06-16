@@ -165,6 +165,16 @@ energy/context. On closing one: strike through and date it.
 - **Secrets beyond .env** — SOPS+age, Vault, Actions environment protection
   (touched in Phases 4 and 8).
 - **12-factor app** — what BudgetSpin complies with and what it doesn't.
+- **What each GitHub Action we use does** — deep dive of `actions/checkout`,
+  `setup-node`, `docker/setup-buildx-action`, `build-push-action`,
+  `metadata-action`, `login-action`, `aquasecurity/trivy-action`,
+  `anchore/sbom-action`, `gitleaks-action`, `osv-scanner-action`: what each runs
+  internally, key inputs, and why each is a supply-chain dependency (third-party
+  code in the runner). *(surfaced in Phase 3)*
+- **The `GITHUB_TOKEN`** — what it is, how it's minted per-job and ephemeral, its
+  permissions model (`contents: read` default, `packages: write` scoped to the
+  `image` job), how it differs from a PAT, and its relation to the
+  `read:packages` PAT the server will use in Phase 4. *(surfaced in Phase 3)*
 
 ## Principles governing the roadmap
 

@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <title>BudgetSpin · Deploy Roadmap</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <style>
     :root {
       --bg: #eef4ef;
@@ -722,6 +723,8 @@
         <li><strong>Ciclo de vida de Node (Current/LTS/EOL)</strong> — por qué prod solo usa LTS; el hallazgo de hoy: Node 25 EOL corriendo en la Mac y en el Dockerfile.</li>
         <li><strong>Gestión de secrets más allá de .env</strong> — SOPS+age, Vault, secrets de Actions con environment protection (se toca en Fases 4 y 8).</li>
         <li><strong>12-factor app</strong> — el documento original como marco; qué cumple BudgetSpin y qué no.</li>
+        <li><strong>Qué hace cada GitHub Action que usamos</strong> — deep dive de <code>actions/checkout</code>, <code>setup-node</code>, <code>docker/setup-buildx-action</code>, <code>build-push-action</code>, <code>metadata-action</code>, <code>login-action</code>, <code>aquasecurity/trivy-action</code>, <code>anchore/sbom-action</code>, <code>gitleaks-action</code>, <code>osv-scanner-action</code>: qué ejecuta cada una por dentro, sus inputs clave, y por qué cada una es una dependencia de supply chain (corre código de terceros en el runner). <em>(surgió en Fase 3)</em></li>
+        <li><strong>El <code>GITHUB_TOKEN</code></strong> — qué es, cómo se acuña por job de forma efímera, su modelo de permisos/scopes (<code>contents: read</code> default, <code>packages: write</code> acotado al job <code>image</code>), en qué se diferencia de un PAT, y cómo se relaciona con el PAT <code>read:packages</code> que el server usará en Fase 4. <em>(surgió en Fase 3)</em></li>
       </ul>
     </section>
 

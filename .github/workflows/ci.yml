@@ -1,7 +1,8 @@
 # CI: every push and PR to main gets verified.
 #
-# Three independent jobs run in parallel; branch protection will require all
-# of them. A failure in any one marks the commit ✗.
+# Three verification jobs run in parallel; branch protection will require all
+# of them. A failure in any one marks the commit ✗. A fourth job (image) builds
+# the production image, scans it, and — only on main — publishes it to GHCR.
 #
 # Actions are pinned by commit SHA (the trailing comment names the release).
 # Tags are mutable pointers — a compromised action repo can move them to
@@ -96,3 +97,96 @@ jobs:
       - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
         with:
           scan-args: --lockfile=./package-lock.json
+
+  # Build the production image, scan it as a gate, generate an SBOM, and — only
+  # on main — publish it to GHCR. Runs after the three verification jobs pass.
+  # The server still builds its own image for now; Phase 4 switches it to pull
+  # this published artifact. "Build once" starts here.
+  image:
+    name: Build, scan & publish image
+    runs-on: ubuntu-latest
+    needs: [checks, secrets-scan, dependency-scan]
+    # Least privilege: this is the only job that may write packages. The push
+    # below uses the default GITHUB_TOKEN — no long-lived registry credential.
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # GHCR requires a lowercase owner. Private package (see settings); Phase 4
+      # gives the server a read:packages PAT to pull it.
+      IMAGE: ghcr.io/mateodaneri/budget-spin
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      # Compute immutable + moving tags and OCI labels from the git metadata.
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Build amd64 and load it into the local Docker daemon so Trivy and syft
+      # can inspect the exact artifact BEFORE it is ever pushed. provenance:false
+      # keeps it a plain single-arch image (attestations break `load`). The gha
+      # cache makes the publish step below a near-instant rebuild.
+      - name: Build image (amd64, local — not pushed)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: budgetspin:ci
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The gate. Fail the build on fixable CRITICAL/HIGH vulnerabilities in the
+      # image (app deps + base OS packages — a superset of the lockfile that
+      # osv-scanner sees). ignore-unfixed: don't block on upstream issues with
+      # no patch available yet (they'd make CI permanently red).
+      - name: Scan image (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: budgetspin:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      # SBOM of the scanned image, uploaded as a run artifact: the inventory to
+      # answer "are we affected?" when the next CVE drops, without archaeology.
+      - name: Generate SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: budgetspin:ci
+          format: spdx-json
+          output-file: sbom.spdx.json
+          artifact-name: sbom.spdx.json
+
+      # Publish only from main: a PR builds and scans (you see the result) but
+      # never publishes unmerged code to the registry.
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image to GHCR (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          cache-from: type=gha
