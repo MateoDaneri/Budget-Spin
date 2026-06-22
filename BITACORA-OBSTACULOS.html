@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BudgetSpin · Bitácora de obstáculos</title>
+  <link rel="icon" type="image/svg+xml" href="public/favicon.svg" />
   <style>
     :root {
       --bg: #eef4ef;
@@ -592,6 +593,62 @@
           <li><strong>Defensa en profundidad</strong>: corregir en la fuente (A) <em>y</em> poner una red determinista (B); cada capa puede fallar sola.</li>
           <li><strong>El <code class="inline">.dockerignore</code> no cubre lo que pasa entre stages</strong> de un multi-stage build.</li>
           <li><strong>Verificar, no asumir</strong>: mtime + contenido + los <code class="inline">.nft.json</code> confirmaron el mecanismo antes de afirmar la causa.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #9 ====================== -->
+    <article class="entry" id="obs-009">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-009</span>
+          <span class="tag phase">Fase 3 · CI</span>
+          <span class="tag sec">Reproducibilidad del build</span>
+          <span class="tag ok">Resuelto</span>
+        </div>
+        <h2>Anda local, falla en CI: el Dockerfile copiaba <code>public/</code>, que git no versiona por estar vacía</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-22 · <code class="inline">public/</code>, <code class="inline">Dockerfile</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Primera corrida del job <code class="inline">image</code> en CI (Fase 3, PR&nbsp;#15): el build de la imagen Docker corriendo en el runner de GitHub, no en la Mac.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p>El build falla en el stage final:</p>
+        <pre>ERROR: failed to build: failed to solve: failed to compute cache key:
+failed to calculate checksum of ref ...: "/app/public": not found</pre>
+        <p>El mismo Dockerfile buildeaba sin problema en local.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia — verificado, no asumido</h4>
+        <ul style="margin-bottom:0;">
+          <li><code class="inline">git ls-files public/</code> devolvió <strong>vacío</strong> → git no tiene ningún archivo de esa carpeta.</li>
+          <li><code class="inline">public</code> <strong>no</strong> está en <code class="inline">.dockerignore</code> ni <code class="inline">.gitignore</code> — no es un tema de ignore.</li>
+          <li>Local: la carpeta <code class="inline">public/</code> existe en disco (vacía), así que el build context la incluye.</li>
+        </ul>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;"><strong>Git no versiona carpetas vacías.</strong> Como <code class="inline">public/</code> no tenía ningún archivo commiteado, <strong>no existe en el checkout</strong> que hace el CI. Entonces <code class="inline">COPY . .</code> no la trae al builder, y el <code class="inline">COPY --from=builder /app/public ./public</code> del stage final falla. Local funciona porque la carpeta existe en disco (en el build context), aunque esté vacía.</p>
+      </div>
+
+      <section class="block">
+        <h3>Comportamiento esperado</h3>
+        <p>El build de CI debe ser idéntico al local. El Dockerfile asume que <code class="inline">public/</code> existe (Next sirve assets estáticos desde ahí), así que esa carpeta tiene que estar presente en lo que git versiona, no solo en disco.</p>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Resolución y lección</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Resolución:</strong> mover <code class="inline">favicon.svg</code> a <code class="inline">public/</code> (le da contenido real, y es su lugar correcto para una app web) + un <code class="inline">.gitkeep</code> como red de seguridad para que la carpeta se versione aunque algún día quede vacía.</li>
+          <li><strong>Git no versiona carpetas vacías</strong> — un Dockerfile que <code class="inline">COPY</code>-ea una carpeta que puede estar vacía rompe <em>solo</em> en CI.</li>
+          <li><strong>"Anda local, falla en CI" casi siempre = diferencia entre tu working tree (disco) y lo que git realmente versiona.</strong> Verificar con <code class="inline">git ls-files</code>, no con <code class="inline">ls</code>.</li>
+          <li>El CI es la fuente de verdad de la reproducibilidad: buildea desde git, no desde tu disco. Si algo "está" pero git no lo tiene, no existe para el pipeline.</li>
         </ul>
       </div>
     </article>

@@ -89,3 +89,14 @@ Fase 2 · Imagen hardened · Supply chain / fuga de datos · Resuelto (capas A +
 - **Por qué `.dockerignore` no alcanza:** solo afecta el build context (`COPY . .`), no el `COPY --from=builder` entre stages, donde la sqlite ya vive dentro de standalone. Mitigación, no fix.
 - **Resolución (2 capas):** (A, aplicado) `outputFileTracingExcludes: { "*": ["data/**"] }` en `next.config.ts` — corrige en la fuente; verificado que `.next/standalone/data` desaparece. (B, aplicado) `rm -rf .next/standalone/data` en el stage builder del Dockerfile — red determinista por si A falla o cambia la versión de Next.
 - **Lección:** las herramientas de build que "ayudan" copiando assets pueden arrastrar estado mutable. Distinguir asset de build vs estado de runtime es central en contenedores inmutables. Defensa en profundidad: corregir en la fuente y poner una red determinista. El `.dockerignore` no cubre lo que pasa entre stages. Verificar, no asumir.
+
+## OBS-009 — Anda local, falla en CI: el Dockerfile copiaba `public/`, que git no versiona por estar vacía
+Fase 3 · CI · Reproducibilidad del build · Resuelto · 2026-06-22 · `public/`, `Dockerfile`
+
+- **Contexto:** primera corrida del job `image` en CI (Fase 3, PR #15) — el build de la imagen en el runner de GitHub, no en la Mac.
+- **Síntoma:** el build falla en el stage final con `failed to compute cache key: failed to calculate checksum of ref ...: "/app/public": not found`. El mismo Dockerfile buildeaba bien en local.
+- **Evidencia:** `git ls-files public/` devolvió **vacío** (git no tiene archivos de esa carpeta); `public` no está en `.dockerignore` ni `.gitignore`; local sí tiene la carpeta en disco (vacía).
+- **Causa raíz:** **git no versiona carpetas vacías.** `public/` sin archivos commiteados → no existe en el checkout de CI → `COPY . .` no la trae al builder → `COPY --from=builder /app/public` falla. Local funciona porque la carpeta existe en disco (build context), aunque vacía.
+- **Esperado:** el build de CI = el local; el Dockerfile asume que `public/` existe (Next sirve assets estáticos desde ahí).
+- **Resolución:** mover `favicon.svg` a `public/` (contenido real + su lugar correcto para una app web) + un `.gitkeep` como red de seguridad para versionar la carpeta aunque quede vacía.
+- **Lección:** git no versiona carpetas vacías → un `COPY` de una carpeta potencialmente vacía rompe solo en CI. "Anda local, falla en CI" casi siempre = diferencia entre tu working tree (disco) y lo que git versiona; verificar con `git ls-files`, no con `ls`. El CI buildea desde git, no desde tu disco: si git no lo tiene, no existe para el pipeline.
