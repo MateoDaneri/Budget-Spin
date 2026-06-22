@@ -143,10 +143,14 @@
     </section>
 
     <section class="card">
-      <h2>Resume next</h2>
+      <h2>Resume next — exact state as of 2026-06-22</h2>
+      <p>Phase 3 is implemented on <code class="inline">feat/phase-2-3</code> but <strong>not yet merged</strong>. PR <a href="https://github.com/MateoDaneri/Budget-Spin/pull/15">#15</a> is open and mergeable; do not merge until its image job is green.</p>
       <ul>
-        <li><strong>Phase 3 — Build &amp; publish in CI:</strong> CI builds the image after tests, Trivy scans before push (gate on CRITICAL/HIGH), syft SBOM as artifact, push to GHCR with immutable SHA tags. Server still untouched.</li>
-        <li>Branch in flight: <code class="inline">feat/phase-2-hardened-image</code> (Phase 2 commits + doc restructure). Push/PR require explicit confirmation.</li>
+        <li><strong>Prior CI evidence:</strong> the three verification jobs were green. The image job was blocked by <code class="inline">CVE-2026-12151</code> (HIGH) in undici 6.25.0. Trivy located it under the global npm shipped by <code class="inline">node:24-slim</code>, not in BudgetSpin's dependency tree.</li>
+        <li><strong>Risk acceptance:</strong> <code class="inline">.trivyignore-gate</code> accepts the finding until 2026-09-22. Production invokes <code class="inline">node</code>, never npm, and the repo uses no <code class="inline">WebSocket</code>/<code class="inline">WebSocketStream</code> client or <code class="inline">ws://</code>/<code class="inline">wss://</code> endpoint required by the advisory.</li>
+        <li><strong>Evidence remains visible:</strong> the workflow loads the acceptance explicitly only in the blocking gate. SARIF and Trivy JSON remain unfiltered for GitHub code scanning and the manual DefectDojo import; the SBOM still lists the package.</li>
+        <li><strong>Next:</strong> confirm the new PR run makes the image job green, then merge. The merge performs the first GHCR publish from <code class="inline">main</code>. Afterwards, add the image job as a required check in branch protection.</li>
+        <li><strong>Still deferred:</strong> whether the gate should set <code class="inline">scanners: vuln</code> because gitleaks already covers source secret scanning.</li>
       </ul>
     </section>
   </main>

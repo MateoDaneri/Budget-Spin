@@ -74,9 +74,24 @@ the one thing that can't be rebuilt — back up before destructive operations.
   (Drizzle) is declared but disconnected from it. Drizzle Kit versioned
   migrations tracked as MEJ-001 (deferred to project close).
 
-## Resume next
-- **Phase 3 — Build & publish in CI:** CI builds the image after tests, Trivy
-  scans before push (gate CRITICAL/HIGH), syft SBOM as artifact, push to GHCR
-  with immutable SHA tags. Server untouched.
-- Branch in flight: `feat/phase-2-hardened-image` (Phase 2 commits + doc
-  restructure). Push/PR require explicit confirmation.
+## Resume next — exact state as of 2026-06-22
+Phase 3 is implemented on `feat/phase-2-3` but not merged. PR #15 is open and
+mergeable; do not merge until its image job is green.
+
+- The three verification jobs were green on the prior run. The image job was
+  blocked by `CVE-2026-12151` (HIGH) in undici 6.25.0. Trivy located it under
+  the global npm shipped by the `node:24-slim` base image, not in BudgetSpin's
+  dependency tree.
+- `.trivyignore-gate` accepts that finding until 2026-09-22. Evidence: the
+  production command invokes `node`, never npm, and the repo uses no
+  `WebSocket`/`WebSocketStream` client or `ws://`/`wss://` endpoint required by
+  the advisory.
+- The workflow loads the acceptance explicitly only in the blocking gate.
+  SARIF and the Trivy JSON remain unfiltered, so GitHub code scanning and the
+  manual DefectDojo import retain the accepted finding; the SBOM still lists
+  the package.
+- Next: confirm the new PR run makes the image job green, then merge. The merge
+  performs the first GHCR publish from `main`. Afterwards, add the image job as
+  a required check in branch protection.
+- Still deferred: whether the gate should set `scanners: vuln` because gitleaks
+  already covers source secret scanning.

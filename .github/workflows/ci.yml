@@ -154,7 +154,8 @@ jobs:
       # SARIF for GitHub code scanning (the triage dashboard in the Security
       # tab, free on public repos). Includes unfixed findings so they can be
       # seen/accepted; limit-severities-for-sarif keeps it to CRITICAL/HIGH
-      # instead of flooding the tab with LOW/UNKNOWN.
+      # instead of flooding the tab with LOW/UNKNOWN. It deliberately does not
+      # load .trivyignore-gate: accepted risks remain visible in reporting.
       - name: Trivy report (SARIF)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -185,7 +186,8 @@ jobs:
       # Trivy JSON (all severities) as a run artifact — download it to import
       # into DefectDojo (scan_type "Trivy"; confirm the exact string against
       # your instance via /api/v2/test_types/). DefectDojo is private, so the
-      # push to it is done from your network, not from this cloud runner.
+      # push to it is done from your network, not from this cloud runner. This
+      # report also remains unfiltered by the gate-only risk acceptances.
       - name: Trivy report (JSON)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -203,7 +205,8 @@ jobs:
       # ── The gate (fails the build; runs after reports are uploaded) ──────
       # Fixable CRITICAL/HIGH in the image (app deps + base OS — a superset of
       # the lockfile osv-scanner sees) fail the build; ignore-unfixed avoids
-      # permanent red on unpatched upstream issues.
+      # permanent red on unpatched upstream issues. Risk acceptances are scoped
+      # to this gate so they don't disappear from SARIF/JSON reporting.
       - name: Scan image (gate)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -211,6 +214,7 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore-gate
           exit-code: "1"
 
       # Publish only from main: a PR builds and scans (you see the result) but

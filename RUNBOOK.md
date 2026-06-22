@@ -79,6 +79,25 @@ BUDGETSPIN_SSH_TARGET=user@server ./scripts/deploy-prod.sh
 # optional: BUDGETSPIN_REMOTE_DIR=/path/to/budgetspin  BUDGETSPIN_BRANCH=main
 ```
 
+## CI image gate and accepted risks
+The image job reports vulnerabilities before enforcing the CRITICAL/HIGH gate.
+SARIF goes to GitHub code scanning, Trivy JSON is retained for manual
+DefectDojo import, and syft produces the SBOM.
+
+Risk acceptances live in `.trivyignore-gate` and apply **only** to the blocking
+gate through the workflow's explicit `trivyignores` input. Before adding one:
+
+1. Verify the advisory and the exact package path reported by Trivy.
+2. Document why the vulnerable path is not reachable in BudgetSpin.
+3. Add an expiry (`exp:YYYY-MM-DD`) that forces re-review.
+4. Keep SARIF and JSON reporting unfiltered so the accepted risk remains
+   visible. Never move this file back to the default `.trivyignore` name unless
+   suppressing the finding from reports is intentional.
+
+At expiry Trivy stops honoring the entry and the gate becomes red again. Remove
+the entry earlier if a base-image update or runtime change eliminates the
+finding.
+
 ## Rollback
 Assumes the previous commit is still in git.
 ```bash

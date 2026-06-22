@@ -692,6 +692,18 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb23-1"><a href=
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="va">BUDGETSPIN_REMOTE_DIR</span><span class="op">=</span>/opt/budgetspin</span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="va">BUDGETSPIN_BRANCH</span><span class="op">=</span>main</span></code></pre></div>
 </div>
+<h2 id="ci-image-gate-and-accepted-risks">CI Image Gate And Accepted Risks</h2>
+<p>The image job reports vulnerabilities before enforcing the CRITICAL/HIGH gate. SARIF goes to GitHub code scanning, Trivy JSON is retained for manual DefectDojo import, and syft produces the SBOM.</p>
+<div class="callout"><strong>Gate-only suppression.</strong>
+Risk acceptances live in <code>.trivyignore-gate</code> and apply only to the blocking gate through the workflow&apos;s explicit <code>trivyignores</code> input. SARIF and JSON remain unfiltered so accepted risk stays visible.</div>
+<p>Before adding an acceptance:</p>
+<ol type="1">
+<li>Verify the advisory and the exact package path reported by Trivy.</li>
+<li>Document why the vulnerable path is not reachable in BudgetSpin.</li>
+<li>Add an expiry (<code>exp:YYYY-MM-DD</code>) that forces re-review.</li>
+<li>Keep SARIF and JSON reporting unfiltered. Never move the file back to the default <code>.trivyignore</code> name unless suppressing the finding from reports is intentional.</li>
+</ol>
+<p>At expiry Trivy stops honoring the entry and the gate becomes red again. Remove the entry earlier if a base-image update or runtime change eliminates the finding.</p>
 <h2 id="rollback">Rollback</h2>
 <p>Rollback assumes the previous commit is still available in git.</p>
 <div id="cb25" class="sourceCode">

@@ -209,6 +209,45 @@ src/db/migrate.ts (entrypoint suelto) <span class="c">──esbuild──▶</sp
       </div>
     </article>
 
+    <!-- ====================== DESTACADO #3 ====================== -->
+    <article class="entry" id="dest-003">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">DEST-003</span>
+          <span class="tag phase">Fase 3 · CI</span>
+          <span class="tag topic">Supply chain · inventario</span>
+        </div>
+        <h2>El lockfile de la app no es el inventario del artefacto</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">imagen base · undici en npm global · CVE-2026-12151</p>
+      </div>
+
+      <section class="block">
+        <h3>El concepto</h3>
+        <p>El gate de Trivy frenó por <code class="inline">CVE-2026-12151</code> (HIGH) en <strong>undici 6.25.0</strong>. <code class="inline">npm why undici</code> devolvió <em>"No dependencies found"</em> porque consultaba el árbol local de BudgetSpin, mientras que el log de Trivy ubicó el paquete en <code class="inline">/usr/local/lib/node_modules/npm/node_modules/undici/package.json</code>: lo incorpora el npm global de <code class="inline">node:24-slim</code>, fuera de <code class="inline">package-lock.json</code>.</p>
+      </section>
+
+      <div class="callout why">
+        <h4>Por qué — el artefacto hereda más que la aplicación</h4>
+        <pre>lo que DECLARÁS (package.json)  ⊂  lo que SHIPPEA (la imagen)</pre>
+        <p style="margin:0;">El artefacto también hereda SO, Node, npm y sus dependencias desde la imagen base. Por eso un lockfile limpio no prueba que la imagen esté limpia: hay que escanear e inventariar el artefacto final.</p>
+      </div>
+
+      <div class="callout counter">
+        <h4>El impacto en la remediación</h4>
+        <p style="margin:0;"><code class="inline">npm update undici</code> u <code class="inline">overrides</code> en BudgetSpin no alcanzan un paquete gestionado por el npm global de la base. Las opciones reales son actualizar el digest de la imagen base, retirar npm del stage runtime si no se necesita, o aceptar el riesgo con alcance y vencimiento. En este caso se aceptó hasta 2026-09-22: producción ejecuta <code class="inline">node</code> directamente y el repo no usa <code class="inline">new WebSocket</code>, <code class="inline">WebSocketStream</code>, <code class="inline">ws://</code> ni <code class="inline">wss://</code>, condiciones requeridas por el advisory.</p>
+      </div>
+
+      <div class="callout remember">
+        <h4>Para recordar</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Inventaria el artefacto, no solo el manifiesto.</strong> El SBOM de la imagen incluye paquetes heredados de la base que el lockfile de la app no conoce.</li>
+          <li><strong>El SBOM del artefacto es lo más cercano a la verdad, pero no es omnisciente.</strong> Punto ciego: dependencias <strong>inlineadas/minificadas</strong> en un bundle sin <code class="inline">package.json</code> (el bundler borró el límite del paquete) — ni el SBOM las ve.</li>
+          <li><strong>Antes de remediar, ubicá en qué capa vive la dependencia:</strong> app, framework, runtime o imagen base. Esa ubicación define qué actualización puede corregirla.</li>
+          <li>La aceptación vive en <code class="inline">.trivyignore-gate</code> y se aplica solo al gate; SARIF y JSON conservan el hallazgo para que <strong>aceptar no signifique dejar de verlo</strong>.</li>
+        </ul>
+      </div>
+    </article>
+
   </main>
 
   <footer>
