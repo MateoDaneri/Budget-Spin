@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BudgetSpin · Mejoras a la app</title>
+  <link rel="icon" type="image/svg+xml" href="public/favicon.svg" />
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --surface: #ffffff;
+      --surface-soft: #faf8f3;
+      --ink: #221d15;
+      --muted: #6e6557;
+      --line: #ddd5c6;
+      --amber: #97640f;
+      --amber-soft: #fdf0d2;
+      --green: #207447;
+      --green-soft: #e1f2e6;
+      --navy: #183153;
+      --navy-soft: #e7eef8;
+      --red: #a83a31;
+      --red-soft: #fde6e2;
+      --code: #1f1a12;
+      --code-ink: #f3ece0;
+      --shadow: 0 18px 55px rgba(70, 55, 20, 0.13);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    code, pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+    a { color: var(--amber); }
+
+    header.top {
+      background: linear-gradient(135deg, #9a6a14 0%, #6e4a0c 100%);
+      color: #fff; padding: 38px 22px 32px;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    header.top h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+    header.top p { margin: 0; color: #f0e2c4; font-size: 15px; max-width: 62ch; }
+    .kicker {
+      display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #e8cf95; margin-bottom: 10px;
+    }
+
+    main { max-width: 880px; margin: 0 auto; padding: 26px 22px 70px; }
+
+    .howto {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px 18px; margin-bottom: 26px; font-size: 14px; color: var(--muted);
+    }
+    .howto strong { color: var(--ink); }
+
+    .tag {
+      font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+      border: 1px solid var(--line); background: var(--surface-soft); color: #4a4234;
+    }
+    .tag.area { background: var(--navy-soft); border-color: #c2d3ec; color: var(--navy); }
+    .tag.when { background: var(--amber-soft); border-color: #ecd79a; color: var(--amber); }
+    .tag.prio-med { background: var(--amber-soft); border-color: #ecd79a; color: var(--amber); }
+    .tag.prio-low { background: var(--surface-soft); border-color: var(--line); color: var(--muted); }
+
+    article.item {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+      box-shadow: var(--shadow); padding: 26px 26px 22px; margin-bottom: 26px;
+    }
+    .item-head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 18px; }
+    .item-head h2 { margin: 8px 0 6px; font-size: 20px; letter-spacing: -0.01em; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .id { font-weight: 800; color: var(--amber); font-size: 13px; letter-spacing: 0.04em; }
+
+    section.block { margin: 16px 0; }
+    section.block > h3 {
+      margin: 0 0 8px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); font-weight: 800;
+    }
+    section.block p { margin: 0 0 8px; font-size: 15px; }
+    ul { margin: 6px 0; padding-left: 20px; }
+    li { margin-bottom: 5px; font-size: 15px; }
+
+    pre {
+      background: var(--code); color: var(--code-ink); border-radius: 10px;
+      padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.55; margin: 8px 0;
+    }
+    code.inline { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 13px; }
+
+    .callout { border-radius: 12px; padding: 14px 16px; margin: 14px 0; font-size: 14.5px; border-left: 4px solid; }
+    .callout h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .callout.benefit { background: var(--green-soft); border-color: var(--green); }
+    .callout.benefit h4 { color: var(--green); }
+    .callout.risk { background: var(--red-soft); border-color: var(--red); }
+    .callout.risk h4 { color: var(--red); }
+
+    footer { max-width: 880px; margin: 0 auto; padding: 0 22px 50px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <span class="kicker">BudgetSpin · DevSecOps</span>
+      <h1>Mejoras a la app</h1>
+      <p>Backlog de mejoras identificadas durante el trabajo pero diferidas a propósito para encarar al final del proyecto. No son bugs ni obstáculos: son cambios de calidad/arquitectura que conviene hacer cuando lo principal esté cerrado, para no desviar el foco.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="howto">
+      <strong>Cómo leer cada mejora.</strong> Estructura fija:
+      <em>qué</em> (el cambio) → <em>por qué</em> (el beneficio) →
+      <em>cómo</em> (enfoque, a verificar al implementar) → <em>alcance y riesgo</em> → <em>cuándo</em>.
+    </div>
+
+    <!-- ====================== MEJORA #1 ====================== -->
+    <article class="item" id="mej-001">
+      <div class="item-head">
+        <div class="meta">
+          <span class="id">MEJ-001</span>
+          <span class="tag area">Capa de datos · migraciones</span>
+          <span class="tag prio-med">Prioridad media</span>
+          <span class="tag when">Al final del proyecto</span>
+        </div>
+        <h2>Migrar a migraciones versionadas con Drizzle Kit</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/db/repository.ts</code> (<code class="inline">migrate()</code>), <code class="inline">src/db/schema.ts</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Qué</h3>
+        <p>Reemplazar el <code class="inline">migrate()</code> hecho a mano (SQL crudo idempotente: <code class="inline">CREATE TABLE IF NOT EXISTS</code> + helpers <code class="inline">ensureColumn</code>) por <strong>migraciones versionadas</strong> generadas con <strong>Drizzle Kit</strong>, haciendo de <code class="inline">schema.ts</code> la única fuente de verdad del esquema.</p>
+      </section>
+
+      <div class="callout benefit">
+        <h4>Por qué — qué gana en prod-readiness</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Historia auditable:</strong> una tabla de migraciones registra qué corrió y cuándo → se puede responder "¿en qué versión de esquema está prod?" con exactitud (valor forense y de compliance).</li>
+          <li><strong>Cambios destructivos y ordenados:</strong> renames, drops, splits — que el enfoque idempotente no puede expresar (solo sabe agregar).</li>
+          <li><strong>Backfills de datos con semántica run-once</strong> (hoy resuelto a mano en <code class="inline">migrateLegacyLocalUser()</code>).</li>
+          <li><strong>Coordinación de equipo y multi-instancia:</strong> orden explícito + locking, sin carreras al migrar.</li>
+          <li><strong>Salda deuda existente:</strong> hoy <code class="inline">schema.ts</code> (Drizzle) está declarado pero <em>desconectado</em> de la migración real — se paga el costo sin el beneficio. Esto lo conecta.</li>
+        </ul>
+      </div>
+
+      <section class="block">
+        <h3>Cómo (enfoque — verificar comandos/config al implementar)</h3>
+        <ul>
+          <li>Definir el esquema completo en <code class="inline">schema.ts</code> como fuente de verdad.</li>
+          <li>Configurar Drizzle Kit y <strong>generar</strong> las migraciones a partir del schema.</li>
+          <li>Sustituir el cuerpo de <code class="inline">migrate()</code> por la aplicación de las migraciones generadas.</li>
+          <li>Decidir <strong>cuándo</strong> corren: seguir en el arranque del contenedor, o pasar a un paso dedicado previo (relevante si algún día hay múltiples réplicas).</li>
+          <li>Preservar los datos existentes: probar la transición sobre una copia real de la DB, no solo en limpio.</li>
+        </ul>
+      </section>
+
+      <div class="callout risk">
+        <h4>Alcance y riesgo</h4>
+        <p style="margin:0;">Toca la capa de datos: requiere testing cuidadoso y preservación de datos. Matiz de SQLite: su <code class="inline">ALTER TABLE</code> es limitado (dropear/renombrar columnas implica reconstruir la tabla), así que incluso con Drizzle Kit algunos cambios hacen maniobras — no esperar que todo sea trivial. Hacerlo con la app ya estable, no en medio del hardening.</p>
+      </div>
+
+      <section class="block">
+        <h3>Cuándo</h3>
+        <p>Al final del proyecto, junto con los otros TODOs de cierre (p. ej. migración a Renovate). No es parte de la Fase 2 (imagen hardened).</p>
+      </section>
+    </article>
+
+  </main>
+
+  <footer>
+    Las mejoras se agregan a medida que se identifican y se difieren. Distinto de la bitácora de obstáculos (problemas resueltos) y de los destacados (conceptos para estudiar).
+  </footer>
+</body>
+</html>

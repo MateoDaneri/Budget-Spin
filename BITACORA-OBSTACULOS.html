@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BudgetSpin · Bitácora de obstáculos</title>
+  <link rel="icon" type="image/svg+xml" href="public/favicon.svg" />
+  <style>
+    :root {
+      --bg: #eef4ef;
+      --surface: #ffffff;
+      --surface-soft: #f7faf7;
+      --ink: #17231b;
+      --muted: #637069;
+      --line: #cad7cd;
+      --green: #207447;
+      --green-soft: #e1f2e6;
+      --navy: #183153;
+      --navy-soft: #e9eff7;
+      --amber: #97640f;
+      --amber-soft: #fff1ce;
+      --red: #a83a31;
+      --red-soft: #fde6e2;
+      --code: #142017;
+      --code-ink: #e8f5ea;
+      --shadow: 0 18px 55px rgba(25, 55, 35, 0.13);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    code, pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+    a { color: var(--green); }
+
+    header.top {
+      background: linear-gradient(135deg, var(--navy) 0%, #0f2440 100%);
+      color: #fff;
+      padding: 38px 22px 32px;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    header.top h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.02em; }
+    header.top p { margin: 0; color: #c6d4ea; font-size: 15px; max-width: 60ch; }
+    .kicker {
+      display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #8fb0e0; margin-bottom: 10px;
+    }
+
+    main { max-width: 880px; margin: 0 auto; padding: 26px 22px 70px; }
+
+    .howto {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px 18px; margin-bottom: 26px; font-size: 14px; color: var(--muted);
+    }
+    .howto strong { color: var(--ink); }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .tag {
+      font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+      border: 1px solid var(--line); background: var(--surface-soft); color: #3a4942;
+    }
+    .tag.sec { background: var(--red-soft); border-color: #eebcb4; color: var(--red); }
+    .tag.phase { background: var(--navy-soft); border-color: #c2d3ec; color: var(--navy); }
+    .tag.ok { background: var(--green-soft); border-color: #aadcbc; color: var(--green); }
+    .tag.wip { background: var(--amber-soft); border-color: #ecd79a; color: var(--amber); }
+
+    article.entry {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+      box-shadow: var(--shadow); padding: 26px 26px 22px; margin-bottom: 28px;
+    }
+    .entry-head { border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 18px; }
+    .entry-head h2 { margin: 8px 0 10px; font-size: 20px; letter-spacing: -0.01em; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .id { font-weight: 800; color: var(--green); font-size: 13px; letter-spacing: 0.04em; }
+
+    section.block { margin: 18px 0; }
+    section.block > h3 {
+      margin: 0 0 8px; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); font-weight: 800;
+    }
+    section.block p { margin: 0 0 8px; font-size: 15px; }
+    ul { margin: 6px 0; padding-left: 20px; }
+    li { margin-bottom: 5px; font-size: 15px; }
+
+    pre {
+      background: var(--code); color: var(--code-ink); border-radius: 10px;
+      padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.5; margin: 8px 0;
+    }
+    code.inline { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 13px; }
+
+    .callout {
+      border-radius: 12px; padding: 14px 16px; margin: 14px 0; font-size: 14.5px;
+      border-left: 4px solid;
+    }
+    .callout h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .callout.root { background: var(--amber-soft); border-color: var(--amber); }
+    .callout.root h4 { color: var(--amber); }
+    .callout.lesson { background: var(--green-soft); border-color: var(--green); }
+    .callout.lesson h4 { color: var(--green); }
+    .callout.evidence { background: var(--navy-soft); border-color: var(--navy); }
+    .callout.evidence h4 { color: var(--navy); }
+
+    .layers { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 10px 0; }
+    @media (min-width: 620px) { .layers { grid-template-columns: 1fr 1fr; } }
+    .layer { border: 1px solid var(--line); border-radius: 12px; padding: 14px 15px; background: var(--surface-soft); }
+    .layer .lh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .layer .lh b { font-size: 14px; }
+    .layer p { font-size: 13.5px; margin: 0; color: #3a4942; }
+
+    footer { max-width: 880px; margin: 0 auto; padding: 0 22px 50px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <span class="kicker">BudgetSpin · DevSecOps</span>
+      <h1>Bitácora de obstáculos</h1>
+      <p>Registro de los problemas no triviales que encontramos y resolvimos durante el proyecto, con su causa raíz, la evidencia y la lección. Pensado para estudiar después: por qué pasó, cómo se diagnosticó y qué principio general deja.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="howto">
+      <strong>Cómo leer cada entrada.</strong> Cada obstáculo sigue la misma estructura:
+      <em>contexto</em> (qué estábamos haciendo) → <em>síntoma</em> (qué apareció) →
+      <em>evidencia</em> (cómo lo verificamos, no asumimos) → <em>causa raíz</em> →
+      <em>comportamiento esperado</em> → <em>resolución</em> (en capas, cuando aplica) →
+      <em>lección</em> (el principio transferible a otros proyectos).
+      <div class="legend">
+        <span class="tag phase">Fase</span>
+        <span class="tag sec">Dominio de seguridad</span>
+        <span class="tag ok">Resuelto</span>
+        <span class="tag wip">Parcial / pendiente</span>
+      </div>
+    </div>
+
+    <!-- ====================== ENTRADA #1 ====================== -->
+    <article class="entry" id="obs-001">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-001</span>
+          <span class="tag phase">Fase 1 · CI</span>
+          <span class="tag sec">Integridad del entorno</span>
+          <span class="tag ok">Resuelto</span>
+        </div>
+        <h2>Árbol de <code>node_modules</code> corrupto: tipos fantasma y <code>Permission denied</code></h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-09 · <code class="inline">node_modules/</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Preparando el entorno local para correr typecheck y tests, antes de armar el pipeline de CI.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <ul>
+          <li><code class="inline">rm -rf node_modules</code> fallaba con <code class="inline">Permission denied</code>.</li>
+          <li>El typecheck tiraba <code class="inline">Cannot find type definition file for 'chai 2'</code> (y similares) — tipos que no existían en ninguna dependencia declarada.</li>
+        </ul>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia — verificado, no asumido</h4>
+        <ul style="margin-bottom:0;">
+          <li>Aparecían carpetas duplicadas con sufijo <code class="inline">&nbsp;2</code> (<code class="inline">@types/chai 2</code>, etc.) dentro de <code class="inline">node_modules</code> — la firma típica de un install interrumpido o concurrente.</li>
+          <li>Algunos directorios tenían permisos no-propios, lo que bloqueaba el borrado del usuario normal.</li>
+        </ul>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;">Instalación de npm corrupta: directorios duplicados y permisos inconsistentes. TypeScript levantaba los <code class="inline">@types/* 2</code> como archivos de definición válidos y se quejaba de que el paquete real (<code class="inline">chai</code>) no estaba — eran <em>definiciones fantasma</em>, no un problema del código.</p>
+      </div>
+
+      <section class="block">
+        <h3>Comportamiento esperado</h3>
+        <p>Un árbol de dependencias limpio y reproducible, reconstruido exactamente desde el lockfile.</p>
+      </section>
+
+      <section class="block">
+        <h3>Resolución</h3>
+        <pre>sudo rm -rf node_modules && npm ci</pre>
+        <p><code class="inline">npm ci</code> (no <code class="inline">install</code>) borra el árbol y lo reconstruye bit a bit desde <code class="inline">package-lock.json</code>, sin re-resolver rangos.</p>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección para estudiar</h4>
+        <ul style="margin-bottom:0;">
+          <li>Ante errores de <strong>tipos fantasma</strong> o módulos que "no existen", sospechar del árbol de <code class="inline">node_modules</code> antes que del código.</li>
+          <li>Las carpetas con sufijo <code class="inline">&nbsp;2</code> son señal de un install corrupto/concurrente.</li>
+          <li><code class="inline">npm ci</code> da un árbol determinista; <code class="inline">install</code> no garantiza lo mismo.</li>
+          <li><strong>Seguridad:</strong> un install no determinista es también un riesgo de integridad — no sabés con certeza qué quedó en el árbol que vas a ejecutar.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #2 ====================== -->
+    <article class="entry" id="obs-002">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-002</span>
+          <span class="tag phase">Fase 1 · CI</span>
+          <span class="tag sec">Clase de bug: timezone</span>
+          <span class="tag ok">Resuelto</span>
+        </div>
+        <h2>OOM en los tests: un bug de timezone en <code>addMonths</code> que disparaba un loop infinito</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-09 · <code class="inline">src/finance/dates.ts</code> · commit <code class="inline">09405ff</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Corriendo la suite de Vitest en local para dejarla verde antes de meterla como gate en CI.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p><code class="inline">FATAL ERROR: JavaScript heap out of memory</code> al correr <code class="inline">repository.test.ts</code>. El proceso de Node se comía toda la RAM y moría.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia — el síntoma estaba lejos de la causa</h4>
+        <ul style="margin-bottom:0;">
+          <li>Aislando tests con <code class="inline">-t</code> y corriendo con <code class="inline">--reporter=verbose</code>, el grep del crash header reveló que el test que crasheaba era el <strong>#10 ("tracks plan items")</strong> — que llama a <code class="inline">calculatePlanProjection</code> — y <strong>no el #6</strong> que el output verbose sugería al principio.</li>
+          <li>El run compuesto ocultaba cuál era el test real; recién aislado quedó claro.</li>
+        </ul>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;"><code class="inline">addMonths</code> construía la fecha con <code class="inline">Date.UTC(...)</code> pero la <strong>leía con getters de hora local</strong>. En UTC−3 el resultado era un <em>no-op</em>: devolvía el mismo mes que recibía. Eso hacía que <code class="inline">monthsInclusive</code> nunca llegara al mes final → loop infinito acumulando elementos → OOM.</p>
+      </div>
+
+      <section class="block">
+        <h3>Comportamiento esperado</h3>
+        <p><code class="inline">addMonths</code> debe ser independiente de la timezone del host: sumar N meses da el mismo resultado en UTC, en UTC−3 o donde sea.</p>
+      </section>
+
+      <section class="block">
+        <h3>Resolución — dos capas</h3>
+        <div class="layers">
+          <div class="layer">
+            <div class="lh"><b>El bug</b><span class="tag ok">Aplicado</span></div>
+            <p>Construir y leer la fecha consistentemente en UTC (<code class="inline">Date.UTC</code> + getters UTC). Tests de regresión en <code class="inline">tests/dates.test.ts</code> que afirman independencia de timezone.</p>
+          </div>
+          <div class="layer">
+            <div class="lh"><b>El enmascaramiento</b><span class="tag ok">Aplicado</span></div>
+            <p>En <code class="inline">ci.yml</code>: <code class="inline">TZ: America/Montevideo</code>. Los runners corren en UTC por default, lo que habría dejado pasar este bug — forzar una TZ no-UTC en CI lo atrapa.</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección para estudiar</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Los runners en UTC esconden toda una clase de bugs de timezone.</strong> Verde en CI ≠ correcto en tu zona; correr al menos un job con TZ no-UTC.</li>
+          <li>El síntoma (OOM) puede estar a kilómetros de la causa (aritmética de fechas). Seguir la cadena, no el primer error.</li>
+          <li><strong>Fechar/timestampear los veredictos antes de confiar:</strong> el reporte verbose apuntaba al test equivocado.</li>
+          <li>Los <strong>tests aislados</strong> exponen lo que el run compuesto oculta.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #3 ====================== -->
+    <article class="entry" id="obs-003">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-003</span>
+          <span class="tag phase">Fase 1 · CI</span>
+          <span class="tag sec">Supply chain</span>
+          <span class="tag ok">Resuelto</span>
+        </div>
+        <h2>Pinnear una Action por SHA: el tag anotado no es el commit que corre</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-10 · <code class="inline">.github/workflows/ci.yml</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Pinneando las Actions por SHA de commit (en vez de tags mutables) para cerrar el vector de supply chain del estilo <code class="inline">tj-actions/changed-files</code> (2025): un repo de Action comprometido puede mover un tag a código malicioso.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p>El SHA "obvio" que aparecía para el tag <code class="inline">v6.0.3</code> de <code class="inline">actions/checkout</code> no era el commit que realmente ejecuta la Action.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia</h4>
+        <p style="margin:0;"><code class="inline">v6.0.3</code> es un <strong>tag anotado</strong>: apunta a un objeto <em>tag</em> con su propio hash (<code class="inline">9f69817…</code>), no directamente a un commit. El commit dereferenciado — el que corre — es otro (<code class="inline">df4cb1c…</code>).</p>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;">En git, un tag anotado es un objeto propio con su propio SHA. Lo que tiene que ejecutar la Action es el <strong>commit</strong> al que el tag apunta, no el objeto tag. Confundirlos pinnea a un objeto que no es código ejecutable.</p>
+      </div>
+
+      <section class="block">
+        <h3>Resolución</h3>
+        <p>Dereferenciar el tag al commit y pinnear ese. En <code class="inline">ci.yml</code> quedó:</p>
+        <pre>uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3</pre>
+        <p>El comentario con el tag legible es para humanos; el SHA es la verdad inmutable.</p>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección para estudiar</h4>
+        <ul style="margin-bottom:0;">
+          <li>Pinnear por SHA es la defensa contra el repunte malicioso de tags — pero hay que pinnear el <strong>commit correcto</strong>.</li>
+          <li><strong>Tag anotado vs lightweight</strong> es una distinción que muerde justo acá: solo el anotado tiene un hash propio distinto del commit.</li>
+          <li>El SHA es content-addressed: no se puede repuntar. El tag es un puntero mutable.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #4 ====================== -->
+    <article class="entry" id="obs-004">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-004</span>
+          <span class="tag phase">Fase 1 · CI</span>
+          <span class="tag sec">Least privilege</span>
+          <span class="tag ok">Resuelto</span>
+        </div>
+        <h2>Gitleaks devolvía 403 en eventos <code>pull_request</code></h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-10 · job <code class="inline">secrets-scan</code> en <code class="inline">ci.yml</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>El workflow declaraba <code class="inline">permissions: contents: read</code> a nivel global (least privilege: zerea todos los scopes no mencionados). En el primer run sobre un evento <code class="inline">pull_request</code>, el job de gitleaks falló.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p><code class="inline">gitleaks-action</code> devolvía <strong>403</strong> al intentar listar los commits del PR vía API.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia — la respuesta dice el permiso exacto</h4>
+        <p style="margin:0;">Leyendo los headers de la respuesta de GitHub:</p>
+        <pre>x-accepted-github-permissions: pull_requests=read</pre>
+        <p style="margin:0;">El error no era ambiguo: nombra el permiso que falta.</p>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;">Declarar <code class="inline">permissions: contents: read</code> a nivel workflow pone <strong>todos</strong> los demás scopes en <code class="inline">none</code>, incluido <code class="inline">pull-requests</code>. En eventos <code class="inline">pull_request</code> gitleaks lista los commits del PR por API → necesita <code class="inline">pull-requests: read</code>, que estaba en <code class="inline">none</code>.</p>
+      </div>
+
+      <section class="block">
+        <h3>Comportamiento esperado</h3>
+        <p>Cada job con exactamente los permisos que usa: ni más (superficie innecesaria) ni menos (rompe).</p>
+      </section>
+
+      <section class="block">
+        <h3>Resolución</h3>
+        <p>Override a nivel de <strong>job</strong> (no de workflow) solo en <code class="inline">secrets-scan</code>:</p>
+        <pre>permissions:
+  contents: read
+  pull-requests: read</pre>
+        <p>Los otros dos jobs mantienen el default estricto. Además <code class="inline">GITLEAKS_ENABLE_COMMENTS: "false"</code>: comentar en el PR necesitaría <code class="inline">pull-requests: write</code>, y en runs de Dependabot el token está capado a read igual. La señal es el job en rojo; el detalle vive en el log.</p>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección para estudiar</h4>
+        <ul style="margin-bottom:0;">
+          <li>Declarar <code class="inline">permissions:</code> zerea lo no mencionado — ese es el objetivo (least privilege), pero hay que <strong>conceder explícitamente</strong> lo que cada job realmente usa.</li>
+          <li>El override <strong>a nivel de job</strong> mantiene el principio sin abrir todo el workflow.</li>
+          <li>Los headers de error de una API bien diseñada te dan el permiso exacto: leer la evidencia en vez de adivinar y abrir scopes de más.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #5 ====================== -->
+    <article class="entry" id="obs-005">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-005</span>
+          <span class="tag phase">Fase 1 · CI</span>
+          <span class="tag sec">Control de cambios</span>
+          <span class="tag ok">Resuelto (con decisión)</span>
+        </div>
+        <h2>La branch protection no se enforzaba en un repo privado del plan Free</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-11 · GitHub Ruleset <code class="inline">protect-main</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Configurando la protección de <code class="inline">main</code> vía Ruleset: requerir PR, requerir los 3 checks de CI, sin bypass.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p>El ruleset se creaba, pero con un <strong>warning</strong> de que no se enforzaría en este repositorio.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia</h4>
+        <p style="margin:0;">El aviso de la UI al crear el ruleset, confirmado contra la documentación: rulesets (y branch protection clásica) en repos <strong>privados</strong> requieren plan Team/Enterprise. En GitHub Free, los rulesets solo enforzan en repos <strong>públicos</strong>.</p>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;">Limitación de plan, no de configuración: GitHub Free no enforza protección de branch en repos privados. El ruleset existía pero era decorativo.</p>
+      </div>
+
+      <section class="block">
+        <h3>Comportamiento esperado</h3>
+        <p>Que el push directo a <code class="inline">main</code> y el merge sin checks estén <strong>físicamente bloqueados</strong>, no dependientes de disciplina.</p>
+      </section>
+
+      <section class="block">
+        <h3>Resolución — la decisión</h3>
+        <p>Hacer el repo <strong>público</strong>, tras <strong>auditar que el historial estuviera limpio</strong> (sin secrets — apoyado en gitleaks de <a href="#obs-004">OBS-004</a> y la higiene de <code class="inline">.gitignore</code> de Fase 0, que dejó los <code class="inline">.sqlite</code> fuera del repo). Beneficio extra: el code scanning con SARIF gratis es solo para repos públicos.</p>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección para estudiar</h4>
+        <ul style="margin-bottom:0;">
+          <li>Algunas features de <strong>server-side enforcement</strong> están detrás de un paywall: conocer el límite del plan <em>antes</em> de diseñar el control.</li>
+          <li>Antes de hacer público un repo, <strong>auditar el historial</strong>: lo commiteado es para siempre (clones, reflogs, cachés).</li>
+          <li><strong>Seguridad:</strong> público amplía la superficie de exposición del código — la verificación de "no hay secrets" va ANTES de publicar, no después. Acá fue aceptable porque los datos (<code class="inline">.sqlite</code>) nunca entraron al repo.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #6 ====================== -->
+    <article class="entry" id="obs-006">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-006</span>
+          <span class="tag phase">Fase 1 · CI</span>
+          <span class="tag sec">Mantenimiento de deps</span>
+          <span class="tag ok">Resuelto</span>
+        </div>
+        <h2>Dependabot: conflictos seriales de lockfile en cascada</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-11 · <code class="inline">.github/dependabot.yml</code> · PR #7</p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Dependabot abrió varios PRs de actualización de dependencias a la vez.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p>Al mergear uno, los otros empezaban a dar conflicto y pasaban de ✓ a ✗.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia</h4>
+        <p style="margin:0;">Cada PR individual edita <code class="inline">package-lock.json</code>. Tras mergear el primero, los demás quedaban desactualizados respecto de <code class="inline">main</code> → conflicto en el lockfile. El modo estricto ("require up to date") del ruleset lo amplificaba: cada uno tenía que re-actualizarse contra el nuevo <code class="inline">main</code>.</p>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;">Problema <strong>estructural N²</strong>: N PRs que tocan el mismo archivo compartido (el lockfile) generan conflictos en cascada cuando se mergean de a uno.</p>
+      </div>
+
+      <section class="block">
+        <h3>Resolución — arquitectónica, no procedimental</h3>
+        <p>Agregar <code class="inline">groups</code> a <code class="inline">dependabot.yml</code>: un grupo <code class="inline">npm-minor-patch</code> (todas las minor/patch en UN PR) y un grupo <code class="inline">actions</code>. Un PR, un cambio de lockfile, cero conflicto serial.</p>
+        <pre>groups:
+  npm-minor-patch:
+    applies-to: version-updates
+    patterns: ["*"]
+    update-types: ["minor", "patch"]</pre>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección para estudiar</h4>
+        <ul style="margin-bottom:0;">
+          <li>Cuando varios cambios automáticos tocan un <strong>archivo compartido</strong>, agruparlos resuelve el problema en la arquitectura. Mergear rápido o rebasear a mano es un parche que no escala.</li>
+          <li>El modo estricto del ruleset es correcto pero <strong>amplifica</strong> este patrón → la respuesta es agrupar, <em>no relajar el control</em>.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #7 ====================== -->
+    <article class="entry" id="obs-007">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-007</span>
+          <span class="tag phase">Fase 1 · CI</span>
+          <span class="tag sec">Mantenimiento de deps</span>
+          <span class="tag wip">Decisión consciente: no mergear</span>
+        </div>
+        <h2>ESLint 10 incompatible con <code>eslint-config-next</code></h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-11 · PR #5 (dejado abierto)</p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Dependabot propuso subir ESLint a la versión mayor 10.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p>El PR de ESLint 10 quedaba en rojo: el step de lint rompía con la config de Next.</p>
+      </section>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;"><code class="inline">eslint-config-next</code> todavía no soporta ESLint 10 — incompatibilidad de versión mayor entre un peer y el nuevo major.</p>
+      </div>
+
+      <section class="block">
+        <h3>Resolución — la decisión correcta es no mergear</h3>
+        <p>Dejar el <strong>PR #5 abierto</strong> como recordatorio vivo de que el upgrade está pendiente de soporte upstream. Mismo criterio con TypeScript 6 (PR #10) y <code class="inline">@types/node</code> 25: majors que se postergan hasta que el ecosistema acompañe.</p>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección para estudiar</h4>
+        <ul style="margin-bottom:0;">
+          <li>No todo lo que Dependabot propone se mergea: los <strong>majors</strong> pueden romper peers.</li>
+          <li>Dejar el PR abierto es un recordatorio barato y visible; la decisión "esperar a upstream" queda documentada en vez de perderse.</li>
+          <li><strong>Seguridad:</strong> hay una tensión entre <em>estar al día</em> (parches) y <em>estabilidad</em> — un major apurado puede romper más de lo que arregla.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #8 ====================== -->
+    <article class="entry" id="obs-008">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-008</span>
+          <span class="tag phase">Fase 2 · Imagen hardened</span>
+          <span class="tag sec">Supply chain / fuga de datos</span>
+          <span class="tag ok">Resuelto (capas A + B aplicadas)</span>
+        </div>
+        <h2>El trace de <code>standalone</code> filtró la base de datos de desarrollo al artefacto</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-13 · <code class="inline">next.config.ts</code>, <code class="inline">src/db/client.ts</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Activamos <code class="inline">output: "standalone"</code> en <code class="inline">next.config.ts</code>, el primer paso de la Fase 2. Standalone hace un <em>file tracing</em>: analiza estáticamente el código compilado y copia a <code class="inline">.next/standalone/</code> solo los archivos que la app alcanza en runtime (pasó de 319 paquetes / 503&nbsp;MB a 12 / 38&nbsp;MB).</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p>Dentro del output apareció algo que no era código: <code class="inline">.next/standalone/data/budgetspin.sqlite</code> — la base de datos de desarrollo, con datos sembrados.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia — verificado, no asumido</h4>
+        <ul style="margin-bottom:0;">
+          <li>Los archivos de trace <code class="inline">.nft.json</code> de casi todas las rutas listan <code class="inline">data/budgetspin.sqlite</code> como dependencia: nft la <strong>decidió</strong> incluir, no fue ruido.</li>
+          <li><strong>mtime</strong>: la copia en <code class="inline">standalone/</code> tiene fecha del build; el original <code class="inline">./data/</code> es viejo → fue una <em>copia</em> hecha durante el build.</li>
+          <li><strong>Contenido</strong>: la sqlite copiada tiene las tablas sembradas (<code class="inline">users</code>, <code class="inline">currencies</code>, <code class="inline">categories</code>, <code class="inline">income_items</code>…) → es la DB de dev real, no un archivo vacío.</li>
+        </ul>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;">El tracer (<code class="inline">@vercel/nft</code>) hace análisis estático de las operaciones de filesystem. Vio la ruta literal de <code class="inline">src/db/client.ts</code>:</p>
+        <pre>path.join(process.cwd(), "data", "budgetspin.sqlite")</pre>
+        <p style="margin:0;">y aplicó su heurística: <em>"el código lee este archivo → es un asset que tiene que viajar con la app"</em>. El problema: nft <strong>no puede distinguir</strong> un asset estático a hornear (un <code class="inline">config.json</code>, un <code class="inline">.wasm</code>) de <strong>estado mutable de runtime</strong> (una base de datos). En el código las dos se ven igual: <code class="inline">fs.read(path)</code>.</p>
+      </div>
+
+      <section class="block">
+        <h3>Comportamiento esperado</h3>
+        <p>La imagen debe ser <strong>inmutable y stateless</strong>: solo código. La base de datos no existe en el artefacto — vive en el <strong>volume</strong> de Docker (<code class="inline">budgetspin-prod-data:/app/data</code>), la crea <code class="inline">db:migrate</code> en el primer arranque, y persiste entre deploys. El <code class="inline">data/</code> de la imagen debería estar vacío o no existir.</p>
+      </section>
+
+      <section class="block">
+        <h3>Por qué <code class="inline">.dockerignore</code> no alcanzaba</h3>
+        <p>Ya excluía <code class="inline">data/*.sqlite</code>, pero el <code class="inline">.dockerignore</code> solo afecta el <em>build context</em> (lo que ve un <code class="inline">COPY . .</code>). En un Dockerfile multi-stage, el stage final copia con <code class="inline">COPY --from=builder</code> entre stages, donde la sqlite ya vive dentro de standalone. Es mitigación, no fix.</p>
+      </section>
+
+      <section class="block">
+        <h3>Resolución — dos capas (causa raíz + defensa en profundidad)</h3>
+        <div class="layers">
+          <div class="layer">
+            <div class="lh"><b>Capa A — la fuente</b><span class="tag ok">Aplicado</span></div>
+            <p>En <code class="inline">next.config.ts</code>: <code class="inline">outputFileTracingExcludes: { "*": ["data/**"] }</code>. Le dice a nft que no bundlee <code class="inline">data/**</code>. Corrige en el origen y sirve aunque se buildee fuera de Docker. Verificado: tras rebuild, <code class="inline">.next/standalone/data</code> desaparece.</p>
+          </div>
+          <div class="layer">
+            <div class="lh"><b>Capa B — la imagen</b><span class="tag ok">Aplicado</span></div>
+            <p>En el Dockerfile: <code class="inline">rm -rf .next/standalone/data</code> en el stage builder. Red de seguridad determinista por si A falla, cambia la versión de Next, o el build crea una DB durante "Collecting page data".</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección para estudiar</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Las herramientas de build que "ayudan" copiando assets pueden arrastrar estado mutable.</strong> Lo que para vos es una DB, para el tracer es "un archivo que el código lee".</li>
+          <li><strong>Distinguir asset de build vs. estado de runtime</strong> es un principio central de contenedores inmutables: el estado va en volumes/servicios externos, nunca horneado en la imagen.</li>
+          <li><strong>Defensa en profundidad</strong>: corregir en la fuente (A) <em>y</em> poner una red determinista (B); cada capa puede fallar sola.</li>
+          <li><strong>El <code class="inline">.dockerignore</code> no cubre lo que pasa entre stages</strong> de un multi-stage build.</li>
+          <li><strong>Verificar, no asumir</strong>: mtime + contenido + los <code class="inline">.nft.json</code> confirmaron el mecanismo antes de afirmar la causa.</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- ====================== ENTRADA #9 ====================== -->
+    <article class="entry" id="obs-009">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-009</span>
+          <span class="tag phase">Fase 3 · CI</span>
+          <span class="tag sec">Reproducibilidad del build</span>
+          <span class="tag ok">Resuelto</span>
+        </div>
+        <h2>Anda local, falla en CI: el Dockerfile copiaba <code>public/</code>, que git no versiona por estar vacía</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-06-22 · <code class="inline">public/</code>, <code class="inline">Dockerfile</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>Primera corrida del job <code class="inline">image</code> en CI (Fase 3, PR&nbsp;#15): el build de la imagen Docker corriendo en el runner de GitHub, no en la Mac.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p>El build falla en el stage final:</p>
+        <pre>ERROR: failed to build: failed to solve: failed to compute cache key:
+failed to calculate checksum of ref ...: "/app/public": not found</pre>
+        <p>El mismo Dockerfile buildeaba sin problema en local.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia — verificado, no asumido</h4>
+        <ul style="margin-bottom:0;">
+          <li><code class="inline">git ls-files public/</code> devolvió <strong>vacío</strong> → git no tiene ningún archivo de esa carpeta.</li>
+          <li><code class="inline">public</code> <strong>no</strong> está en <code class="inline">.dockerignore</code> ni <code class="inline">.gitignore</code> — no es un tema de ignore.</li>
+          <li>Local: la carpeta <code class="inline">public/</code> existe en disco (vacía), así que el build context la incluye.</li>
+        </ul>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;"><strong>Git no versiona carpetas vacías.</strong> Como <code class="inline">public/</code> no tenía ningún archivo commiteado, <strong>no existe en el checkout</strong> que hace el CI. Entonces <code class="inline">COPY . .</code> no la trae al builder, y el <code class="inline">COPY --from=builder /app/public ./public</code> del stage final falla. Local funciona porque la carpeta existe en disco (en el build context), aunque esté vacía.</p>
+      </div>
+
+      <section class="block">
+        <h3>Comportamiento esperado</h3>
+        <p>El build de CI debe ser idéntico al local. El Dockerfile asume que <code class="inline">public/</code> existe (Next sirve assets estáticos desde ahí), así que esa carpeta tiene que estar presente en lo que git versiona, no solo en disco.</p>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Resolución y lección</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Resolución:</strong> mover <code class="inline">favicon.svg</code> a <code class="inline">public/</code> (le da contenido real, y es su lugar correcto para una app web) + un <code class="inline">.gitkeep</code> como red de seguridad para que la carpeta se versione aunque algún día quede vacía.</li>
+          <li><strong>Git no versiona carpetas vacías</strong> — un Dockerfile que <code class="inline">COPY</code>-ea una carpeta que puede estar vacía rompe <em>solo</em> en CI.</li>
+          <li><strong>"Anda local, falla en CI" casi siempre = diferencia entre tu working tree (disco) y lo que git realmente versiona.</strong> Verificar con <code class="inline">git ls-files</code>, no con <code class="inline">ls</code>.</li>
+          <li>El CI es la fuente de verdad de la reproducibilidad: buildea desde git, no desde tu disco. Si algo "está" pero git no lo tiene, no existe para el pipeline.</li>
+        </ul>
+      </div>
+    </article>
+
+  </main>
+
+  <footer>
+    Las entradas se agregan a medida que el proyecto avanza. Cada una es autocontenida y pensada como material de estudio. El razonamiento técnico de continuidad para el agente vive aparte, en la memoria del proyecto.
+  </footer>
+</body>
+</html>

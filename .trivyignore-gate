@@ -1,0 +1,20 @@
+# Risk acceptances for the image scan gate only.
+#
+# The CI gate explicitly loads this file through trivy-action's `trivyignores`
+# input. The SARIF and JSON reporting scans intentionally do not load it, so
+# GitHub code scanning and the DefectDojo import retain visibility of accepted
+# findings. Every entry MUST include evidence, a justification, and an expiry.
+
+# CVE-2026-12151 / GHSA-vxpw-j846-p89q — undici WebSocket DoS, HIGH.
+# Accepted 2026-06-22; review by 2026-09-22.
+#
+# Evidence: Trivy located undici 6.25.0 at
+# /usr/local/lib/node_modules/npm/node_modules/undici/package.json in the
+# node:24-slim runtime image. It is shipped by the base image's global npm, not
+# by BudgetSpin's package-lock.json. Production starts with `node` directly and
+# never invokes npm. A repository search also found no use of `new WebSocket`,
+# `WebSocketStream`, or ws:// / wss:// endpoints. The upstream advisory requires
+# one of those client APIs to connect to an attacker-controlled or compromised
+# WebSocket endpoint, so the vulnerable path is not reachable in BudgetSpin.
+# Reassess if runtime startup or outbound networking changes, or at expiry.
+CVE-2026-12151 exp:2026-09-22

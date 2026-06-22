@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <title>BudgetSpin · Deploy Roadmap</title>
+  <link rel="icon" type="image/svg+xml" href="public/favicon.svg" />
   <style>
     :root {
       --bg: #eef4ef;
@@ -355,8 +356,8 @@
         integrado en cada paso, no como sección aparte.
       </p>
       <div class="progress-wrap">
-        <div class="progress-label"><span>Progreso</span><span>2 / 9 fases</span></div>
-        <div class="progress-track"><div class="progress-fill" style="width: 22%;"></div></div>
+        <div class="progress-label"><span>Progreso</span><span>3 / 9 fases</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width: 33%;"></div></div>
       </div>
     </div>
   </section>
@@ -450,26 +451,32 @@
       </div>
     </details>
 
-    <details class="phase current">
+    <details class="phase done">
       <summary>
         <span class="phase-num">2</span>
         <span class="phase-title">
           <h2>Imagen reproducible y hardened</h2>
           <p class="concept">Superficie de ataque · reproducibilidad · least privilege en runtime</p>
         </span>
-        <span class="badge current">Siguiente</span>
+        <span class="badge done">Completada · 2026-06-15</span>
       </summary>
       <div class="phase-body">
         <div class="phase-grid">
           <div>
             <ul>
-              <li><code>next.config.ts</code>: <code>output: "standalone"</code>.</li>
-              <li>Dockerfile multi-stage: stage de build con <code>npm ci</code>; stage final solo con el output standalone.</li>
-              <li>Base <strong>Node 24 LTS slim pinneada por digest</strong> (no más tag flotante <code>node:25-slim</code>).</li>
-              <li><code>USER node</code>: el contenedor deja de correr como root.</li>
-              <li>Resolver cómo corre <code>db:migrate</code> sin devDependencies en la imagen final.</li>
+              <li><code>next.config.ts</code>: <code>output: "standalone"</code> (runtime trazado: 319 → 12 paquetes).</li>
+              <li>Dockerfile multi-stage: builder con <code>npm ci</code>; stage final solo con standalone + static + public + <code>migrate.mjs</code> (sin devDeps, sin toolchain, sin <code>src/</code>).</li>
+              <li>Base <strong>Node 24 slim pinneada por digest</strong> (<code>sha256:2c87…</code>), en vez del tag flotante <code>node:25-slim</code>.</li>
+              <li><code>USER node</code> (uid 1000): el contenedor ya no corre como root; el código queda root-owned read-only y solo <code>data/</code> es escribible.</li>
+              <li><code>db:migrate</code> sin devDependencies: <code>migrate.ts</code> bundleado con <strong>esbuild</strong> a un <code>migrate.mjs</code> autocontenido.</li>
               <li>El deploy no cambia: el servidor sigue haciendo <code>build:</code> — cero conflicto.</li>
             </ul>
+            <p style="font-size: 13.5px; color: var(--muted); margin: 0 0 14px;">
+              <strong>Extras que sumó la fase:</strong> se detectó que el trace de standalone filtraba la <em>sqlite de dev</em> al artefacto → fix en dos capas (<code>outputFileTracingExcludes</code> + <code>rm</code> en el builder, defensa en profundidad) ·
+              <code>docker-compose.prod.yml</code>: CMD a <code>node migrate.mjs &amp;&amp; node server.js</code> (sin npm en runtime) ·
+              ecosistema <code>docker</code> sumado a Dependabot (el digest pin necesita alertas de parches) ·
+              <code>ENV HOSTNAME=0.0.0.0</code> para preservar el binding del <code>server.js</code> standalone.
+            </p>
             <div class="callout security">
               <strong>Ángulo de seguridad</strong>
               Single-stage como root con toolchain completa = máxima superficie de ataque.
@@ -478,26 +485,26 @@
           </div>
           <div>
             <h3>Herramientas</h3>
-            <div class="chips"><span class="chip">Docker multi-stage</span><span class="chip">hadolint (opcional)</span></div>
+            <div class="chips"><span class="chip">Docker multi-stage</span><span class="chip">esbuild</span></div>
             <h3>Archivos</h3>
-            <div class="chips"><span class="chip">Dockerfile</span><span class="chip">next.config.ts</span></div>
+            <div class="chips"><span class="chip">Dockerfile</span><span class="chip">next.config.ts</span><span class="chip">docker-compose.prod.yml</span><span class="chip">dependabot.yml</span></div>
             <div class="verify">
               <strong>Verificación</strong>
-              Build prod local OK · healthcheck verde · <code>whoami</code> en el contenedor = <code>node</code> · comparar tamaño de imagen antes/después.
+              Imagen <strong>1.75 GB → 421 MB</strong> (−76%) · <code>whoami</code> = <code>node</code> (uid 1000) · <code>migrate.mjs</code> corre standalone · GET <code>/login</code> 200.
             </div>
           </div>
         </div>
       </div>
     </details>
 
-    <details class="phase pending">
+    <details class="phase current">
       <summary>
         <span class="phase-num">3</span>
         <span class="phase-title">
           <h2>Build &amp; publish en CI</h2>
           <p class="concept">Build-once · artefacto inmutable · scanning como gate</p>
         </span>
-        <span class="badge pending">Pendiente</span>
+        <span class="badge current">Siguiente</span>
       </summary>
       <div class="phase-body">
         <div class="phase-grid">
@@ -716,6 +723,8 @@
         <li><strong>Ciclo de vida de Node (Current/LTS/EOL)</strong> — por qué prod solo usa LTS; el hallazgo de hoy: Node 25 EOL corriendo en la Mac y en el Dockerfile.</li>
         <li><strong>Gestión de secrets más allá de .env</strong> — SOPS+age, Vault, secrets de Actions con environment protection (se toca en Fases 4 y 8).</li>
         <li><strong>12-factor app</strong> — el documento original como marco; qué cumple BudgetSpin y qué no.</li>
+        <li><strong>Qué hace cada GitHub Action que usamos</strong> — deep dive de <code>actions/checkout</code>, <code>setup-node</code>, <code>docker/setup-buildx-action</code>, <code>build-push-action</code>, <code>metadata-action</code>, <code>login-action</code>, <code>aquasecurity/trivy-action</code>, <code>anchore/sbom-action</code>, <code>gitleaks-action</code>, <code>osv-scanner-action</code>: qué ejecuta cada una por dentro, sus inputs clave, y por qué cada una es una dependencia de supply chain (corre código de terceros en el runner). <em>(surgió en Fase 3)</em></li>
+        <li><strong>El <code>GITHUB_TOKEN</code></strong> — qué es, cómo se acuña por job de forma efímera, su modelo de permisos/scopes (<code>contents: read</code> default, <code>packages: write</code> acotado al job <code>image</code>), en qué se diferencia de un PAT, y cómo se relaciona con el PAT <code>read:packages</code> que el server usará en Fase 4. <em>(surgió en Fase 3)</em></li>
       </ul>
     </section>
 

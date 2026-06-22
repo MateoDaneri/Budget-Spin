@@ -1,4 +1,4 @@
-# Dependabot: automated, reviewable updates for the two supply chains this
+# Dependabot: automated, reviewable updates for the three supply chains this
 # repo depends on. Each update arrives as a PR that must pass CI — code from
 # third parties never changes silently.
 #
@@ -9,8 +9,7 @@
 # group of healthy low-risk updates (e.g. the eslint 10 incompatibility).
 version: 2
 updates:
-  # Keeps the SHA pins in .github/workflows/*.yml pointing at the latest
-  # releases (updates both the SHA and the human-readable version comment).
+  # Keeps the SHA pins in .github/workflows/*.yml pointing at the latest releases (updates both the SHA and the human-readable version comment).
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -19,8 +18,7 @@ updates:
       actions:
         patterns: ["*"]
 
-  # npm dependencies (package.json + package-lock.json). Security advisories
-  # additionally trigger out-of-schedule PRs.
+  # npm dependencies (package.json + package-lock.json). Security advisories additionally trigger out-of-schedule PRs.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -30,3 +28,9 @@ updates:
         applies-to: version-updates
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+  # Docker base image. The Dockerfile pins node:24-slim by digest for reproducibility and supply-chain integrity, so the base no longer updates on its own. Dependabot watches the pinned digest and opens a PR when a new one is published (e.g. a Node 24 security patch), keeping the trade-off of pinning (no silent drift) without losing patch visibility.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: daily
