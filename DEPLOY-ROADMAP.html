@@ -436,10 +436,24 @@
               Un control que depende de que un humano se acuerde de correrlo no es un control.
               Secrets y deps vulnerables se escanean en cada push, sin excepción.
             </div>
+            <div class="callout">
+              <strong>Follow-up identificado 2026-06-23 · pendiente</strong>
+              Quedaron sin habilitar dos features nativas de GitHub que complementan (no reemplazan) lo de arriba —
+              gratis en repo público, toggle puro en Settings, sin tocar workflows:
+              <strong>Dependabot Malware alerts</strong> (paquetes <em>confirmados</em> maliciosos —
+              typosquats, cuentas de maintainer comprometidas — distinto de osv-scanner, que solo mira CVEs
+              ya reportados) y <strong>Secret scanning + push protection</strong> nativo
+              (patrones validados por los proveedores, y puede <em>bloquear el push</em> antes de que el secret
+              entre al historial — gitleaks en CI solo avisa después). Encaja acá porque es la misma familia
+              que gitleaks/osv-scanner (gates de Fase 1), no algo de imagen (Fase 3). Sin dependencia de ninguna
+              fase futura — se puede activar cuando se quiera, vía Settings → Code security.
+            </div>
           </div>
           <div>
             <h3>Herramientas (OSS/free)</h3>
             <div class="chips"><span class="chip">GitHub Actions</span><span class="chip">gitleaks</span><span class="chip">osv-scanner</span></div>
+            <h3>Pendiente (follow-up)</h3>
+            <div class="chips"><span class="chip">Dependabot Malware alerts</span><span class="chip">Secret scanning + push protection</span></div>
             <h3>Archivos</h3>
             <div class="chips"><span class="chip">ci.yml</span><span class="chip">package.json</span><span class="chip">.nvmrc</span></div>
             <div class="verify">
