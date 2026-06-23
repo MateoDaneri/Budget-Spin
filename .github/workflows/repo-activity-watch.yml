@@ -1,0 +1,100 @@
+# Warns BEFORE GitHub auto-disables this repo's scheduled workflows.
+#
+# Verified (GitHub Community discussions, 2026-06-23): in a public repo,
+# scheduled (`on: schedule`) workflows are auto-disabled after 60 days with
+# no commits, PRs, or issues — and running a scheduled workflow does NOT
+# itself count as activity. That creates a structural paradox: a cron-only
+# watchdog cannot warn you AFTER the 60-day mark, because by then it would
+# already be disabled too. It can only warn BEFORE, with margin — which is
+# what this does (checks weekly, warns at >= 45 days of inactivity).
+#
+# "Activity" here = the most recent of: last push to the repo (pushed_at),
+# last updated PR (open or closed), last updated issue (open or closed) — the
+# closest practical proxy to GitHub's undocumented exact definition. Verified
+# via `gh api repos/.../pushed_at` and the search/issues endpoint.
+#
+# Opening the tracking issue below IS activity, so it resets the 60-day clock
+# for every scheduled workflow in the repo (including this one and
+# node-lts-watch.yml) and naturally prevents itself from re-firing next week.
+
+name: Repo activity watch
+
+on:
+  schedule:
+    # Weekly, Monday 09:00 UTC — frequent enough to catch the 45-day
+    # threshold with a few days of resolution, not so frequent it's noisy.
+    - cron: "0 9 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check days since last repo activity
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      # Margin before GitHub's 60-day cutoff. 45 leaves ~15 days to react.
+      WARN_THRESHOLD_DAYS: "45"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Compute days since last activity
+        id: activity
+        run: |
+          days_since() {
+            local ts="$1"
+            if [ -z "$ts" ] || [ "$ts" = "null" ]; then
+              echo 999999
+              return
+            fi
+            local now epoch
+            now=$(date -u +%s)
+            epoch=$(date -u -d "$ts" +%s)
+            echo $(( (now - epoch) / 86400 ))
+          }
+
+          pushed_at=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.pushed_at')
+          pr_at=$(gh api "search/issues?q=repo:$GITHUB_REPOSITORY+is:pr&sort=updated&order=desc&per_page=1" --jq '.items[0].updated_at // "null"')
+          issue_at=$(gh api "search/issues?q=repo:$GITHUB_REPOSITORY+is:issue&sort=updated&order=desc&per_page=1" --jq '.items[0].updated_at // "null"')
+
+          d_push=$(days_since "$pushed_at")
+          d_pr=$(days_since "$pr_at")
+          d_issue=$(days_since "$issue_at")
+
+          days=$d_push
+          [ "$d_pr" -lt "$days" ] && days=$d_pr
+          [ "$d_issue" -lt "$days" ] && days=$d_issue
+
+          echo "push: $pushed_at ($d_push d ago) | pr: $pr_at ($d_pr d ago) | issue: $issue_at ($d_issue d ago)"
+          echo "Most recent activity: $days day(s) ago (warn threshold: $WARN_THRESHOLD_DAYS)"
+
+          echo "days=$days" >> "$GITHUB_OUTPUT"
+          if [ "$days" -ge "$WARN_THRESHOLD_DAYS" ]; then
+            echo "warn=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "warn=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open tracking issue if approaching the cutoff
+        if: steps.activity.outputs.warn == 'true'
+        env:
+          TITLE: "Repo approaching the 60-day Actions inactivity cutoff"
+          DAYS: ${{ steps.activity.outputs.days }}
+          ISSUE_BODY: |
+            No commit, PR, or issue activity detected in the last ${{ steps.activity.outputs.days }} day(s).
+
+            GitHub auto-disables scheduled (`on: schedule`) workflows in public repos after 60 days with no repository activity — and a scheduled workflow running does **not** count as activity by itself. At the current pace, `node-lts-watch.yml` and this watchdog are at risk of being silently disabled.
+
+            To reset the clock, do anything that counts as activity: push a commit, open/update a PR, or comment on an issue. Opening this issue already counts, which is why this won't re-fire next week.
+
+            Opened automatically by `.github/workflows/repo-activity-watch.yml`. Close it once acknowledged.
+        run: |
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title \"$TITLE\"" --json number --jq 'length')
+          if [ "$existing" -gt 0 ]; then
+            echo "An open tracking issue already exists ($existing found), skipping."
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$ISSUE_BODY"

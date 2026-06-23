@@ -34,3 +34,13 @@ updates:
     directory: /
     schedule:
       interval: daily
+    ignore:
+      # Block major bumps of the node image (e.g. 24 -> 26) until we
+      # deliberately decide to adopt the next LTS — Node's odd majors are
+      # Current-only (never become LTS) and even majors spend ~6 months as
+      # Current before reaching LTS. .github/workflows/node-lts-watch.yml
+      # opens a tracking issue the day the next major actually reaches LTS;
+      # only then remove/raise this rule. Security updates are never
+      # filtered by update-types, so a critical patch still gets through.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

@@ -1,0 +1,78 @@
+# Closes the gap left by the Dependabot `ignore` rule in dependabot.yml:
+# blocking major Node bumps stops the *problem* (jumping to a Current,
+# non-LTS major) but doesn't tell anyone *when* it's safe to lift the block.
+# Instead of a calendar reminder (which would use a guessed date), this asks
+# the authoritative source — endoflife.date's Node.js API — for the real
+# ltsFrom date, on a schedule, and opens a tracking issue the day it's true.
+#
+# Verified response shape (2026-06-23, via curl against the live API):
+#   { "result": { "releases": [ { "name": "26", "isLts": false,
+#       "ltsFrom": "2026-10-28", ... }, ... ] } }
+
+name: Node LTS watch
+
+on:
+  schedule:
+    # 09:00 UTC on the 1st of each month. GitHub may disable scheduled
+    # workflows after 60 days with no repo activity — this repo is active.
+    - cron: "0 9 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check if the watched Node major reached LTS
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      # The major version currently blocked by the `ignore` rule for the
+      # node dependency in .github/dependabot.yml. When this major reaches
+      # LTS and you adopt it (lift the ignore, bump the Dockerfile/engines/
+      # .nvmrc together), update this to the NEXT major you want to watch.
+      NODE_MAJOR_TO_WATCH: "26"
+    steps:
+      - name: Query Node.js release lifecycle
+        id: query
+        run: |
+          response=$(curl -sf "https://endoflife.date/api/v1/products/nodejs")
+          is_lts=$(echo "$response" | jq -r --arg v "$NODE_MAJOR_TO_WATCH" \
+            '.result.releases[] | select(.name == $v) | .isLts')
+          lts_from=$(echo "$response" | jq -r --arg v "$NODE_MAJOR_TO_WATCH" \
+            '.result.releases[] | select(.name == $v) | .ltsFrom')
+          echo "Node ${NODE_MAJOR_TO_WATCH}: isLts=$is_lts ltsFrom=$lts_from"
+          echo "is_lts=$is_lts" >> "$GITHUB_OUTPUT"
+          echo "lts_from=$lts_from" >> "$GITHUB_OUTPUT"
+
+      - name: Open tracking issue if it reached LTS
+        if: steps.query.outputs.is_lts == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "Node ${{ env.NODE_MAJOR_TO_WATCH }} reached LTS (${{ steps.query.outputs.lts_from }}) — review base image upgrade"
+          # YAML block scalar: the common leading indentation below (10
+          # spaces) is stripped by the parser, leaving clean text — the
+          # ${{ }} expressions are resolved by Actions before the shell
+          # ever sees this string, so no bash heredoc is involved.
+          ISSUE_BODY: |
+            Node.js ${{ env.NODE_MAJOR_TO_WATCH }} became Active LTS on ${{ steps.query.outputs.lts_from }} (source: https://endoflife.date/nodejs).
+
+            This repo deliberately stays on the previous LTS until a major is confirmed stable — see the `ignore` rule for the `node` dependency in `.github/dependabot.yml`.
+
+            To adopt Node ${{ env.NODE_MAJOR_TO_WATCH }}:
+            1. Remove (or raise to the next major) the `ignore` rule in `.github/dependabot.yml`.
+            2. Let Dependabot open the base-image bump PR and review it.
+            3. In that same PR, bump `engines` in `package.json` and `.nvmrc` to `${{ env.NODE_MAJOR_TO_WATCH }}` — keep Mac/CI/Docker on the same Node version.
+            4. Update `NODE_MAJOR_TO_WATCH` in this workflow to the next major to watch.
+
+            Opened automatically by `.github/workflows/node-lts-watch.yml`. It will not reopen itself — close it once handled.
+        run: |
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state all \
+            --search "in:title \"$TITLE\"" --json number --jq 'length')
+          if [ "$existing" -gt 0 ]; then
+            echo "Issue already exists ($existing found), skipping."
+            exit 0
+          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
+            --label docker --body "$ISSUE_BODY"
