@@ -74,24 +74,42 @@ the one thing that can't be rebuilt — back up before destructive operations.
   (Drizzle) is declared but disconnected from it. Drizzle Kit versioned
   migrations tracked as MEJ-001 (deferred to project close).
 
-## Resume next — exact state as of 2026-06-22
-Phase 3 is implemented on `feat/phase-2-3` but not merged. PR #15 is open and
-mergeable; do not merge until its image job is green.
+## Resume next — exact state as of 2026-06-23
+Phase 3 PR #15 **merged** 2026-06-22 (the undici `CVE-2026-12151` risk
+acceptance in `.trivyignore-gate` unblocked the gate; SARIF/JSON reporting
+stayed unfiltered, evidence still visible). First-ever GHCR publish happened —
+private package, tagged by SHA. CI on `main` is green end to end.
 
-- The three verification jobs were green on the prior run. The image job was
-  blocked by `CVE-2026-12151` (HIGH) in undici 6.25.0. Trivy located it under
-  the global npm shipped by the `node:24-slim` base image, not in BudgetSpin's
-  dependency tree.
-- `.trivyignore-gate` accepts that finding until 2026-09-22. Evidence: the
-  production command invokes `node`, never npm, and the repo uses no
-  `WebSocket`/`WebSocketStream` client or `ws://`/`wss://` endpoint required by
-  the advisory.
-- The workflow loads the acceptance explicitly only in the blocking gate.
-  SARIF and the Trivy JSON remain unfiltered, so GitHub code scanning and the
-  manual DefectDojo import retain the accepted finding; the SBOM still lists
-  the package.
-- Next: confirm the new PR run makes the image job green, then merge. The merge
-  performs the first GHCR publish from `main`. Afterwards, add the image job as
-  a required check in branch protection.
-- Still deferred: whether the gate should set `scanners: vuln` because gitleaks
-  already covers source secret scanning.
+**Live issue on `main` right now:** a Dependabot PR (#18) bumped the
+Dockerfile's base image `node:24-slim → node:26-slim` and got merged without
+review catching that Node 26 is Current, not LTS (verified against
+endoflife.date: `isLts: false`, `ltsFrom: 2026-10-28`) — the same mistake
+explicitly rejected for Node 25 earlier in the project. **`main` is building
+production images on a non-LTS Node right now.** The fix is ready but not yet
+merged — see below.
+
+- **Branch `chore/node-lts-discipline` (2 commits, pushed, no PR opened yet):**
+  reverts the Dockerfile to `node:24-slim` (freshly re-pulled digest — the old
+  digest had gone stale); adds an `ignore` rule (`update-types:
+  semver-major`) for the `node` dependency in the `docker` ecosystem of
+  `dependabot.yml`, mirroring the manual-review discipline already used for
+  npm majors (ESLint 10, TypeScript 6) but structurally this time; adds two
+  new scheduled workflows: `node-lts-watch.yml` (monthly, queries
+  endoflife.date, opens a tracking issue the day the watched major reaches
+  LTS) and `repo-activity-watch.yml` (weekly, opens a tracking issue if no
+  commit/PR/issue activity in ≥45 days — proactive, because GitHub
+  auto-disables scheduled workflows after 60 days of inactivity and a cron
+  run itself does not count as activity).
+- **Next action:** open the PR for `chore/node-lts-discipline` against `main`,
+  confirm CI green (image job rebuilds on node:24-slim, gate should pass —
+  same undici acceptance still applies), then merge.
+- **Separately open, NOT part of this branch:** Dependabot PR #20 bumps
+  `@types/node` 24.12.4 → 26.0.0 — same Current-vs-LTS class of mistake on the
+  npm side. Mateo is closing it manually.
+- **Still pending from Phase 3 (not done):** the `image` job is **not yet** a
+  required check in branch protection — only the original 3 verification jobs
+  are required. Add it once confident in its stability (it can only be added
+  after it has run at least once, which it now has).
+- **Still deferred, undecided:** whether to add `scanners: vuln` to the gate
+  step to exclude Trivy's secret scanning from the image gate (gitleaks
+  already covers secrets at the source) — raised mid-Phase-3, never applied.

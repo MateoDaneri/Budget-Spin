@@ -356,8 +356,8 @@
         integrado en cada paso, no como sección aparte.
       </p>
       <div class="progress-wrap">
-        <div class="progress-label"><span>Progreso</span><span>3 / 9 fases</span></div>
-        <div class="progress-track"><div class="progress-fill" style="width: 33%;"></div></div>
+        <div class="progress-label"><span>Progreso</span><span>4 / 9 fases</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width: 44%;"></div></div>
       </div>
     </div>
   </section>
@@ -497,14 +497,14 @@
       </div>
     </details>
 
-    <details class="phase current">
+    <details class="phase done">
       <summary>
         <span class="phase-num">3</span>
         <span class="phase-title">
           <h2>Build &amp; publish en CI</h2>
           <p class="concept">Build-once · artefacto inmutable · scanning como gate</p>
         </span>
-        <span class="badge current">Siguiente</span>
+        <span class="badge done">Completada · 2026-06-22</span>
       </summary>
       <div class="phase-body">
         <div class="phase-grid">
@@ -512,38 +512,45 @@
             <ul>
               <li>CI buildea la imagen tras los tests (buildx + cache de Actions).</li>
               <li>Tags inmutables: <code>ghcr.io/mateodaneri/budget-spin:sha-&lt;short&gt;</code> + <code>:latest</code>.</li>
-              <li><strong>Trivy</strong> escanea la imagen ANTES del push — gate en CRITICAL/HIGH.</li>
-              <li><strong>syft</strong> genera SBOM como artifact del run.</li>
-              <li>Push a GHCR con <code>GITHUB_TOKEN</code> (<code>packages: write</code>).</li>
-              <li>Retención: limpiar tags viejos (verificar cuota de storage del free tier en docs de GitHub).</li>
+              <li><strong>Trivy</strong> escanea la imagen ANTES del push — gate en CRITICAL/HIGH (<code>ignore-unfixed</code>, con risk-acceptances explícitas vía <code>.trivyignore-gate</code>, justificadas y con expiración).</li>
+              <li><strong>syft</strong> genera SBOM (SPDX JSON) como artifact del run.</li>
+              <li>Reporting separado del gate: SARIF → GitHub code scanning (Security tab) y JSON de Trivy → artifact para importar a DefectDojo — ambos <em>sin</em> filtrar las risk-acceptances, para que el riesgo aceptado siga visible.</li>
+              <li>Push a GHCR (paquete <strong>privado</strong>) con <code>GITHUB_TOKEN</code> (<code>packages: write</code>, acotado al job) — solo desde <code>main</code>, nunca desde un PR.</li>
               <li>El servidor todavía no se toca: las imágenes quedan «en espera» en el registry.</li>
             </ul>
+            <p style="font-size: 13.5px; color: var(--muted); margin: 0 0 14px;">
+              <strong>Extras que sumó la fase:</strong> se detectó que Dependabot había mergeado solo un bump de major de la imagen base (<code>node:24-slim → node:26-slim</code>, Node 26 era <em>Current</em>, no LTS — PR #18) sin que el ecosistema <code>docker</code> tuviera freno de majors, a diferencia de npm · revertido + <code>ignore</code> estructural por <code>update-types</code> en <code>dependabot.yml</code> · <strong>2 workflows de vigilancia nuevos</strong>: <code>node-lts-watch.yml</code> (consulta la API de endoflife.date y abre un issue el día que el próximo major llegue a LTS) y <code>repo-activity-watch.yml</code> (avisa antes de que GitHub apague los workflows programados por 60 días de inactividad — verificado que correr un cron no cuenta como actividad).
+            </p>
             <div class="callout security">
               <strong>Ángulo de seguridad</strong>
               La imagen que pasó tests y scan es bit a bit la que correrá en prod.
               SBOM = saber qué hay adentro cuando salga el próximo CVE de una dependencia.
+              Una imagen escaneada hoy puede dejar de pasar el gate mañana sin que cambie una línea de código —
+              el mundo descubre CVEs nuevos contra binarios que no tocaste (pasó dos veces en esta fase: esbuild y undici).
             </div>
           </div>
           <div>
             <h3>Herramientas (OSS/free)</h3>
-            <div class="chips"><span class="chip">GHCR</span><span class="chip">Trivy</span><span class="chip">syft</span><span class="chip">buildx</span></div>
+            <div class="chips"><span class="chip">GHCR</span><span class="chip">Trivy</span><span class="chip">syft</span><span class="chip">buildx</span><span class="chip">code scanning</span></div>
+            <h3>Archivos</h3>
+            <div class="chips"><span class="chip">ci.yml</span><span class="chip">.trivyignore-gate</span><span class="chip">dependabot.yml</span><span class="chip">node-lts-watch.yml</span><span class="chip">repo-activity-watch.yml</span></div>
             <div class="verify">
               <strong>Verificación</strong>
-              Imagen visible en GHCR con tag por SHA · Trivy en los logs del run · SBOM descargable.
+              Imagen visible en GHCR (privada) con tag por SHA · gate de Trivy verde en el run de <code>main</code> · SBOM y JSON descargables como artifacts · Security tab poblado con SARIF.
             </div>
           </div>
         </div>
       </div>
     </details>
 
-    <details class="phase pending">
+    <details class="phase current">
       <summary>
         <span class="phase-num">4</span>
         <span class="phase-title">
           <h2>CD: el deploy lo dispara CI</h2>
           <p class="concept">Acceso humano ≠ acceso de máquina · blast radius por credencial</p>
         </span>
-        <span class="badge pending">Pendiente</span>
+        <span class="badge current">Siguiente</span>
       </summary>
       <div class="phase-body">
         <div class="phase-grid">

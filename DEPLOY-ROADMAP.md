@@ -4,7 +4,7 @@
 > sync rule in `CLAUDE.md`). From "SSH and pray" to a real production pipeline,
 > incrementally, OSS/free only, one phase per session, security integrated.
 
-**Progress: 3 / 9 phases (33%).** Started 2026-06-09.
+**Progress: 4 / 9 phases (44%).** Started 2026-06-09.
 
 Legend: ✅ done · ▶ next · ◻ pending · ◌ future (not yet detailed).
 
@@ -65,21 +65,42 @@ Legend: ✅ done · ▶ next · ◻ pending · ◌ future (not yet detailed).
 - **Verified:** image 1.75 GB → 421 MB (−76%) · `whoami` = node (uid 1000) ·
   `migrate.mjs` runs standalone · GET `/login` 200.
 
-## ▶ Phase 3 — Build & publish in CI · next
+## ✅ Phase 3 — Build & publish in CI · done 2026-06-22
 *Build-once · immutable artifact · scanning as a gate.*
 
 - CI builds the image after tests (buildx + Actions cache).
 - Immutable tags: `ghcr.io/mateodaneri/budget-spin:sha-<short>` + `:latest`.
-- **Trivy** scans the image BEFORE push — gate on CRITICAL/HIGH.
-- **syft** generates SBOM as a run artifact.
-- Push to GHCR with `GITHUB_TOKEN` (`packages: write`).
-- Retention: prune old tags (check free-tier storage quota in GitHub docs).
+- **Trivy** scans the image BEFORE push — gate on CRITICAL/HIGH (`ignore-unfixed`,
+  with explicit risk acceptances via `.trivyignore-gate`, justified and expiring).
+- **syft** generates SBOM (SPDX JSON) as a run artifact.
+- Reporting decoupled from the gate: SARIF → GitHub code scanning (Security
+  tab) and Trivy JSON → artifact for DefectDojo import — neither filters the
+  risk acceptances, so accepted risk stays visible.
+- Push to GHCR (**private** package) with `GITHUB_TOKEN` (`packages: write`,
+  scoped to the job) — main only, never from a PR.
 - Server untouched: images wait "on hold" in the registry.
+- **Extras:** caught that Dependabot had merged a base-image major bump alone
+  (`node:24-slim → node:26-slim`, Node 26 was *Current*, not LTS — PR #18)
+  because the `docker` ecosystem had no major-version guard, unlike npm →
+  reverted + structural `ignore` by `update-types` in `dependabot.yml` ·
+  **2 new watch workflows**: `node-lts-watch.yml` (queries the endoflife.date
+  API, opens an issue the day the next major reaches LTS) and
+  `repo-activity-watch.yml` (warns before GitHub auto-disables scheduled
+  workflows after 60 days of inactivity — verified that a cron run itself
+  doesn't count as activity).
 - **Security:** the image that passed tests and scan is bit-for-bit what runs in
-  prod. SBOM = knowing what's inside when the next dependency CVE drops.
-- Tools: GHCR, Trivy, syft, buildx.
+  prod. SBOM = knowing what's inside when the next dependency CVE drops. An
+  image scanned clean today can fail the gate tomorrow with no code change —
+  the world discovers new CVEs against binaries you never touched (happened
+  twice this phase: esbuild, then undici).
+- Tools: GHCR, Trivy, syft, buildx, code scanning. Files: `ci.yml`,
+  `.trivyignore-gate`, `dependabot.yml`, `node-lts-watch.yml`,
+  `repo-activity-watch.yml`.
+- **Verified:** image visible in GHCR (private) tagged by SHA · Trivy gate green
+  on the `main` run · SBOM and JSON downloadable as artifacts · Security tab
+  populated with SARIF.
 
-## ◻ Phase 4 — CD: CI triggers the deploy · pending
+## ▶ Phase 4 — CD: CI triggers the deploy · next
 *Human access ≠ machine access · blast radius per credential.*
 
 - Server: dedicated `deploy` user + restricted SSH key in `authorized_keys`
