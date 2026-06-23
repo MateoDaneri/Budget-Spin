@@ -248,6 +248,50 @@ src/db/migrate.ts (entrypoint suelto) <span class="c">──esbuild──▶</sp
       </div>
     </article>
 
+    <!-- ====================== DESTACADO #4 ====================== -->
+    <article class="entry" id="dest-004">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">DEST-004</span>
+          <span class="tag phase">Git/GitHub · workflow</span>
+          <span class="tag topic">PRs encadenados · base branch</span>
+        </div>
+        <h2>El "base" de un PR es una etiqueta, no un commit — y encadenar PRs sobre ramas sin mergear tiene una trampa</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">PR #21 (chore/node-lts-discipline → main) · PR #22 (docs/... → chore/node-lts-discipline)</p>
+      </div>
+
+      <section class="block">
+        <h3>La decisión</h3>
+        <p>Para un cambio que depende de docs ya editados en una rama todavía sin mergear, conviene ramificar <strong>desde esa rama</strong>, no desde <code class="inline">main</code> — evita editar una versión vieja del archivo y generar conflicto cuando la primera rama se mergee. Resultado: PR #22 (base <code class="inline">chore/node-lts-discipline</code>) encadenado sobre PR #21 (base <code class="inline">main</code>), todavía abierto.</p>
+      </section>
+
+      <div class="callout why">
+        <h4>Por qué — qué ES el "base" de un PR</h4>
+        <p style="margin:0;">Un PR tiene dos puntas: <strong>head</strong> (la rama con los commits nuevos) y <strong>base</strong> (la rama a la que apunta el botón "Merge" — adónde caen esos commits al mergear). El base <strong>no es un commit fijo ni una copia</strong> — es una <em>etiqueta</em> que GitHub usa para calcular el diff que muestra y para decidir el destino real del merge. Cambiarlo (<code class="inline">gh pr edit N --base main</code>) no toca ningún commit ni reescribe historia: solo redirige el sobre, no cambia el contenido.</p>
+      </div>
+
+      <div class="callout counter">
+        <h4>La trampa de encadenar sobre una rama no mergeada</h4>
+        <p style="margin:0 0 8px;">Mergear el PR de abajo (#21 → main) <strong>no</strong> mueve solo el base del PR de arriba (#22 → chore/node-lts-discipline). Quedan dos rutas, con resultados distintos:</p>
+        <pre>Merge #21 + NO borro la rama   → #22 sigue apuntando a chore/node-lts-discipline (ya "cumplió su función")
+                                  → mergear #22 entraría DENTRO de esa rama, no llega a main solo
+
+Merge #21 + SÍ borro la rama   → GitHub auto-retargetea #22 hacia main (su "padre")
+                                  → mergear #22 ahora sí cae directo en main</pre>
+        <p style="margin:0;">El auto-retargeteo de GitHub <strong>solo se dispara al borrar la rama base</strong> de un PR abierto, no al mergearla. Si la rama queda viva "por las dudas", el PR de arriba queda flotando sin que nada avise.</p>
+      </div>
+
+      <div class="callout remember">
+        <h4>Para recordar</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>El base de un PR es metadata, no contenido.</strong> Cambiarlo antes o después de mergear el PR de abajo no afecta los commits — solo el destino final.</li>
+          <li><strong>La forma más prolija de encadenar PRs:</strong> retargetear explícitamente el de arriba a la rama final (ej. <code class="inline">main</code>) en cuanto se sabe cuál va a ser, en vez de confiar en el auto-retargeteo por borrado — elimina la ambigüedad de orden de operaciones.</li>
+          <li>Si retargeteás <em>antes</em> de mergear el PR de abajo, el diff se ve "inflado" temporalmente (incluye los commits de ese PR, porque todavía no están en el destino) — se acomoda solo en cuanto se mergea.</li>
+          <li>Encadenar PRs sobre ramas no mergeadas es válido y común (evita conflictos de editar el mismo archivo dos veces en estados distintos), pero exige ser explícito sobre el destino final — no asumir que "se va a arreglar solo".</li>
+        </ul>
+      </div>
+    </article>
+
   </main>
 
   <footer>
