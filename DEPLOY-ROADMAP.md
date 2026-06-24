@@ -37,6 +37,17 @@ Legend: ✅ done · ▶ next · ◻ pending · ◌ future (not yet detailed).
   control. Secrets and vulnerable deps scanned on every push, no exception.
 - Tools: GitHub Actions, gitleaks, osv-scanner. Files: `ci.yml`,
   `package.json`, `.nvmrc`.
+- **Follow-up identified 2026-06-23 · pending:** two native GitHub features
+  left unenabled, complementing (not replacing) the above — free on a public
+  repo, pure Settings toggle, no workflow changes. **Dependabot Malware
+  alerts** (packages *confirmed* malicious — typosquats, compromised
+  maintainer accounts — distinct from osv-scanner, which only matches
+  already-reported CVEs) and **native Secret scanning + push protection**
+  (provider-validated patterns, and can block the push before a secret ever
+  enters history — gitleaks in CI only warns after the fact). Fits here
+  because it's the same family as gitleaks/osv-scanner (Phase 1 gates), not
+  image-related (Phase 3). No dependency on any future phase — can be
+  enabled whenever, via Settings → Code security.
 
 ## ✅ Phase 2 — Reproducible & hardened image · done 2026-06-15
 *Attack surface · reproducibility · least privilege at runtime.*
