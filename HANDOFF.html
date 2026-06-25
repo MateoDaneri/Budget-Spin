@@ -118,6 +118,22 @@
     </section>
 
     <section class="card">
+      <h2>UI refresh — in progress (branch <code class="inline">feat/ui-modern-refresh</code>, uncommitted)</h2>
+      <p>Not a roadmap phase — a UI/architecture change running in parallel with the deploy roadmap, kept here per the doc-system convention (architecture/state → HANDOFF) regardless of roadmap fit.</p>
+      <ul>
+        <li>Layout switched from a single top bar (<code class="inline">page-shell</code>/<code class="inline">topbar</code>) to a sidebar shell: <code class="inline">app-layout</code> &gt; <code class="inline">sidebar</code> (brand, <code class="inline">NavLinks</code>, theme toggle + logout) + <code class="inline">app-content</code> &gt; <code class="inline">content-inner</code> (<code class="inline">Breadcrumb</code> + page content).</li>
+        <li>Unauthenticated render path split into its own <code class="inline">auth-shell</code>/<code class="inline">auth-topbar</code> (previously the same <code class="inline">topbar</code> handled both states via conditional rendering).</li>
+        <li>Nav links extracted from inline JSX in <code class="inline">layout.tsx</code> into <code class="inline">app/components/nav-config.ts</code>: single source of truth for the 6 routes (Overview, Income, Recurring, Plans, Categories, Setup) + <code class="inline">isNavLinkActive</code>/<code class="inline">matchNavLink</code> helpers.</li>
+        <li><code class="inline">app/components/NavLinks.tsx</code> (client component, <code class="inline">usePathname</code>): renders the sidebar nav, marks the active link (<code class="inline">is-active</code> class, <code class="inline">aria-current="page"</code>).</li>
+        <li><code class="inline">app/components/NavIcon.tsx</code>: inline SVG icon set keyed by route (<code class="inline">NavIconKey</code>), one path set per nav item.</li>
+        <li><code class="inline">app/components/Breadcrumb.tsx</code> (client component): shows <code class="inline">Budget / &lt;current section&gt;</code> above page content, driven by <code class="inline">matchNavLink(pathname)</code>.</li>
+        <li><code class="inline">app/globals.css</code>: large rework (~787 lines changed) adding the new layout/sidebar/breadcrumb/nav-icon classes plus incidental visual polish (tables, form fields, status pills, charts) not yet isolated from the layout change in the diff.</li>
+        <li><strong>Security note:</strong> no auth-logic change — <code class="inline">getCurrentSession()</code> in <code class="inline">layout.tsx</code> is the same gate as before; the <code class="inline">auth-shell</code> vs <code class="inline">app-layout</code> split only changes which markup renders <em>after</em> that existing check, not what's checked.</li>
+        <li><strong>State:</strong> all of the above is unstaged/untracked on <code class="inline">feat/ui-modern-refresh</code> — not committed, not merged, not part of any roadmap phase.</li>
+      </ul>
+    </section>
+
+    <section class="card">
       <h2>Data ownership &amp; volumes</h2>
       <table>
         <tr><th>Location</th><th>Volume / file</th><th>Role</th></tr>
