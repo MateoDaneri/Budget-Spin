@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Breadcrumb } from "@/app/components/Breadcrumb";
+import { NavLinks } from "@/app/components/NavLinks";
 import { ThemeToggle } from "@/app/components/ThemeToggle";
 import { logoutAction } from "@/src/actions/auth";
 import { getCurrentSession } from "@/src/auth/session";
@@ -13,38 +15,51 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const session = await getCurrentSession();
 
+  if (!session) {
+    return (
+      <html lang="en" suppressHydrationWarning>
+        <body>
+          <div className="auth-shell">
+            <header className="auth-topbar">
+              <Link className="brand-block" href="/">
+                <span className="brand">BudgetSpin</span>
+                <span className="brand-subtitle">Personal finance planner</span>
+              </Link>
+              <ThemeToggle />
+            </header>
+            {children}
+          </div>
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <main className="page-shell">
-          <header className="topbar">
-            <Link className="brand-block" href="/">
+        <div className="app-layout">
+          <aside className="sidebar">
+            <Link className="brand-block sidebar-brand" href="/">
               <span className="brand">BudgetSpin</span>
               <span className="brand-subtitle">Personal finance planner</span>
             </Link>
-            {session ? (
-              <nav className="nav" aria-label="Main navigation">
-                <Link href="/">Overview</Link>
-                <Link href="/income">Income</Link>
-                <Link href="/expenses">Recurring</Link>
-                <Link href="/plans">Plans</Link>
-                <Link href="/categories">Categories</Link>
-                <Link href="/setup">Setup</Link>
-              </nav>
-            ) : null}
-            <div className="topbar-actions">
+            <NavLinks />
+            <div className="sidebar-footer">
               <ThemeToggle />
-              {session ? (
-                <form action={logoutAction}>
-                  <button className="button button-secondary" type="submit">
-                    Logout
-                  </button>
-                </form>
-              ) : null}
+              <form action={logoutAction}>
+                <button className="button button-secondary" type="submit">
+                  Logout
+                </button>
+              </form>
             </div>
-          </header>
-          {children}
-        </main>
+          </aside>
+          <main className="app-content">
+            <div className="content-inner">
+              <Breadcrumb />
+              {children}
+            </div>
+          </main>
+        </div>
       </body>
     </html>
   );

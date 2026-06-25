@@ -51,6 +51,38 @@ date/amount/currency, sub-purchases/checklist, calculation detail; currency
 amounts display in source currency and cycle on click, FX stored per record with
 automatic lookup in forms.
 
+## UI refresh — in progress (branch `feat/ui-modern-refresh`, uncommitted)
+Not a roadmap phase — a UI/architecture change running in parallel with the
+deploy roadmap, kept here per the doc-system convention (architecture/state →
+HANDOFF) regardless of roadmap fit.
+
+- Layout switched from a single top bar (`page-shell`/`topbar`) to a sidebar
+  shell: `app-layout` > `sidebar` (brand, `NavLinks`, theme toggle + logout) +
+  `app-content` > `content-inner` (`Breadcrumb` + page content).
+- Unauthenticated render path split into its own `auth-shell`/`auth-topbar`
+  (previously the same `topbar` handled both states via conditional
+  rendering).
+- Nav links extracted from inline JSX in `layout.tsx` into
+  `app/components/nav-config.ts`: single source of truth for the 6 routes
+  (Overview, Income, Recurring, Plans, Categories, Setup) +
+  `isNavLinkActive`/`matchNavLink` helpers.
+- `app/components/NavLinks.tsx` (client component, `usePathname`): renders the
+  sidebar nav, marks the active link (`is-active` class, `aria-current="page"`).
+- `app/components/NavIcon.tsx`: inline SVG icon set keyed by route
+  (`NavIconKey`), one path set per nav item.
+- `app/components/Breadcrumb.tsx` (client component): shows `Budget / <current
+  section>` above page content, driven by `matchNavLink(pathname)`.
+- `app/globals.css`: large rework (~787 lines changed) adding the new
+  layout/sidebar/breadcrumb/nav-icon classes plus incidental visual polish
+  (tables, form fields, status pills, charts) not yet isolated from the
+  layout change in the diff.
+- **Security note:** no auth-logic change — `getCurrentSession()` in
+  `layout.tsx` is the same gate as before; the `auth-shell` vs `app-layout`
+  split only changes which markup renders *after* that existing check, not
+  what's checked.
+- **State:** all of the above is unstaged/untracked on `feat/ui-modern-refresh`
+  — not committed, not merged, not part of any roadmap phase.
+
 ## Data ownership & volumes
 | Location | Volume / file | Role |
 |---|---|---|
