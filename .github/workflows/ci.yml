@@ -137,7 +137,7 @@ jobs:
       # keeps it a plain single-arch image (attestations break `load`). The gha
       # cache makes the publish step below a near-instant rebuild.
       - name: Build image (amd64, local — not pushed)
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           platforms: linux/amd64
@@ -229,7 +229,7 @@ jobs:
 
       - name: Push image to GHCR (main only)
         if: github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           platforms: linux/amd64
