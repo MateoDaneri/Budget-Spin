@@ -33,7 +33,7 @@
     "eslint-plugin-security": "^4.0.1",
     "tailwindcss": "^4.1.17",
     "tsx": "^4.23.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "overrides": {
