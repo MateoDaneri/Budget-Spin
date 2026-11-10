@@ -101,6 +101,27 @@ export type PlanItem = {
   isActive: boolean;
 };
 
+export type TransactionKind = "purchase" | "transfer_out" | "transfer_in";
+export type TransactionStatus = "confirmed" | "pending" | "discarded";
+
+export type Transaction = {
+  id: number;
+  userId: string;
+  txnDate: string;
+  description: string;
+  currencyCode: string;
+  amountMinor: number;
+  categoryId: number | null;
+  kind: TransactionKind;
+  cardNetwork: string | null;
+  cardLast4: string | null;
+  source: string;
+  messageId: string | null;
+  rawExcerpt: string | null;
+  status: TransactionStatus;
+  createdAt: string;
+};
+
 export function migrate() {
   const db = getDb();
 
@@ -223,8 +244,113 @@ export function migrate() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      txn_date TEXT NOT NULL,
+      description TEXT NOT NULL,
+      currency_code TEXT NOT NULL REFERENCES currencies(code),
+      amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
+      category_id INTEGER REFERENCES categories(id),
+      card_network TEXT,
+      card_last4 TEXT,
+      source TEXT NOT NULL DEFAULT 'itau_email',
+      message_id TEXT,
+      raw_excerpt TEXT,
+      status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'pending')),
+      created_at TEXT NOT NULL
+    );
+
+    -- Idempotency: the email Message-ID is unique per notification, so re-processing
+    -- the same mail (poll overlap, retry) cannot insert a duplicate. A content hash is
+    -- deliberately NOT used as the unique key: two identical purchases (same merchant,
+    -- amount and day) are distinct transactions and must both be kept.
+    CREATE UNIQUE INDEX IF NOT EXISTS transactions_user_message_idx
+      ON transactions(user_id, message_id);
+
+    CREATE TABLE IF NOT EXISTS transaction_reviews (
+      transaction_id INTEGER PRIMARY KEY REFERENCES transactions(id) ON DELETE CASCADE,
+      decision TEXT NOT NULL CHECK (decision IN ('confirmed', 'discarded')),
+      reviewed_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ingest_cursors (
+      mailbox_key TEXT PRIMARY KEY,
+      uid_validity TEXT NOT NULL,
+      last_uid INTEGER NOT NULL CHECK (last_uid >= 0)
+    );
+
+    CREATE TABLE IF NOT EXISTS ingest_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      messages_seen INTEGER NOT NULL DEFAULT 0,
+      inserted INTEGER NOT NULL DEFAULT 0,
+      skipped INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL CHECK (status IN ('ok', 'error')),
+      error TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS import_pair_exclusions (
+      transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      account_id INTEGER NOT NULL,
+      expense_id INTEGER NOT NULL,
+      PRIMARY KEY (transaction_id, account_id, expense_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS splitwise_sync_account (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      account_id INTEGER NOT NULL,
+      synced_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS splitwise_imports (
+      account_id INTEGER NOT NULL,
+      expense_id INTEGER NOT NULL,
+      txn_date TEXT NOT NULL,
+      description TEXT NOT NULL,
+      currency TEXT NOT NULL,
+      total TEXT NOT NULL,
+      paid TEXT,
+      owed TEXT,
+      payment INTEGER NOT NULL CHECK (payment IN (0, 1)),
+      deleted INTEGER NOT NULL CHECK (deleted IN (0, 1)),
+      category_id INTEGER REFERENCES categories(id),
+      PRIMARY KEY (account_id, expense_id)
+    );
+    CREATE TABLE IF NOT EXISTS import_category_rules (
+      description_key TEXT PRIMARY KEY,
+      category_id INTEGER NOT NULL REFERENCES categories(id)
+    );
+    CREATE TABLE IF NOT EXISTS splitwise_balance_observations (
+      account_id INTEGER NOT NULL,
+      observed_at TEXT NOT NULL,
+      friend_id INTEGER NOT NULL,
+      person TEXT NOT NULL,
+      currency TEXT NOT NULL,
+      amount TEXT NOT NULL,
+      PRIMARY KEY (account_id, observed_at, friend_id, currency)
+    );
+    CREATE TABLE IF NOT EXISTS splitwise_activity_events (
+      account_id INTEGER NOT NULL,
+      event_id INTEGER NOT NULL,
+      occurred_at TEXT NOT NULL,
+      observed_at TEXT NOT NULL,
+      event_type INTEGER NOT NULL,
+      expense_id INTEGER NOT NULL,
+      actor_id INTEGER,
+      PRIMARY KEY (account_id, event_id)
+    );
+    CREATE TABLE IF NOT EXISTS splitwise_activity_sync (
+      account_id INTEGER PRIMARY KEY,
+      first_observed_at TEXT NOT NULL,
+      last_observed_at TEXT NOT NULL
+    );
   `);
 
+  ensureColumn("transactions", "kind", "TEXT NOT NULL DEFAULT 'purchase' CHECK (kind IN ('purchase', 'transfer_out', 'transfer_in'))");
+  ensureColumn("splitwise_imports", "category_id", "INTEGER REFERENCES categories(id)");
   ensureUserAuthColumns();
   migrateLegacyLocalUser();
   ensureColumn("recurring_expenses", "is_optional", "INTEGER NOT NULL DEFAULT 0 CHECK (is_optional IN (0, 1))");
@@ -234,6 +360,9 @@ export function migrate() {
 
   seedDefaults();
   ensureRecurringExpensesGroupColumn();
+  const uncategorized = db.prepare("SELECT id, description FROM transactions WHERE user_id=? AND kind='purchase' AND category_id IS NULL").all(LOCAL_USER_ID) as Array<{ id: number; description: string }>;
+  const updateCategory = db.prepare("UPDATE transactions SET category_id=? WHERE id=? AND user_id=? AND category_id IS NULL");
+  for (const row of uncategorized) updateCategory.run(automaticImportCategory(row.description), row.id, LOCAL_USER_ID);
 }
 
 function ensureUserAuthColumns() {
@@ -1223,4 +1352,200 @@ export function deletePlanItem(id: number) {
   getDb()
     .prepare("UPDATE plan_items SET is_active = 0, updated_at = ? WHERE id = ? AND user_id = ?")
     .run(nowIso(), id, LOCAL_USER_ID);
+}
+
+/**
+ * Inserts an imported transaction, skipping it if its Message-ID was already
+ * recorded for this user (idempotent re-processing). Returns whether a row was
+ * actually inserted so the ingest run can report inserted vs skipped.
+ */
+/** Call after migrate; exact-description rules are learned only from explicit edits. */
+export function automaticImportCategory(description: string): number {
+  const db = getDb();
+  const key = description.trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+  const rule = db.prepare(`SELECT c.id FROM import_category_rules r JOIN categories c ON c.id=r.category_id
+    WHERE r.description_key=? AND c.user_id=? AND c.type='expense' AND c.is_active=1`).get(key, LOCAL_USER_ID) as { id: number } | undefined;
+  if (rule) return rule.id;
+  let other = db.prepare("SELECT id FROM categories WHERE user_id=? AND type='expense' AND is_active=1 AND lower(name)='other' ORDER BY id LIMIT 1").get(LOCAL_USER_ID) as { id: number } | undefined;
+  if (!other) {
+    const result = db.prepare("INSERT INTO categories (user_id, name, type, is_active, sort_order, created_at) VALUES (?, 'Other', 'expense', 1, 9999, ?)").run(LOCAL_USER_ID, nowIso());
+    other = { id: Number(result.lastInsertRowid) };
+  }
+  return other.id;
+}
+
+export function rememberImportCategory(description: string, categoryId: number) {
+  const db = getDb();
+  const valid = db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND type='expense' AND is_active=1").get(categoryId, LOCAL_USER_ID);
+  if (!valid) throw new Error("Invalid category.");
+  const key = description.trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+  if (!key) throw new Error("Empty description.");
+  db.prepare("INSERT INTO import_category_rules (description_key, category_id) VALUES (?, ?) ON CONFLICT(description_key) DO UPDATE SET category_id=excluded.category_id").run(key, categoryId);
+}
+
+export function setTransactionCategory(id: number, categoryId: number) {
+  migrate();
+  const db = getDb();
+  const row = db.prepare("SELECT description FROM transactions WHERE id=? AND user_id=? AND kind='purchase'").get(id, LOCAL_USER_ID) as { description: string } | undefined;
+  if (!row) throw new Error("Invalid transaction.");
+  db.exec("BEGIN IMMEDIATE");
+  try { rememberImportCategory(row.description, categoryId); db.prepare("UPDATE transactions SET category_id=? WHERE id=? AND user_id=?").run(categoryId, id, LOCAL_USER_ID); db.exec("COMMIT"); }
+  catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export function insertImportedTransaction(input: {
+  txnDate: string;
+  description: string;
+  currencyCode: string;
+  amountMinor: number;
+  categoryId?: number | null;
+  kind?: TransactionKind;
+  cardNetwork?: string | null;
+  cardLast4?: string | null;
+  source: string;
+  messageId: string;
+  rawExcerpt?: string | null;
+  status?: "confirmed" | "pending";
+}): { inserted: boolean } {
+  migrate();
+  const result = getDb()
+    .prepare(`
+      INSERT INTO transactions (
+        user_id, txn_date, description, currency_code, amount_minor, category_id,
+        card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, message_id) DO NOTHING
+    `)
+    .run(
+      LOCAL_USER_ID,
+      input.txnDate,
+      input.description,
+      input.currencyCode,
+      input.amountMinor,
+      input.categoryId ?? (input.kind === "transfer_out" || input.kind === "transfer_in" ? null : automaticImportCategory(input.description)),
+      input.cardNetwork ?? null,
+      input.cardLast4 ?? null,
+      input.source,
+      input.messageId,
+      input.rawExcerpt ?? null,
+      input.status ?? "confirmed",
+      nowIso(),
+      input.kind ?? "purchase"
+    );
+
+  return { inserted: result.changes > 0 };
+}
+
+export function listTransactions(limit = 200): Transaction[] {
+  migrate();
+  const rows = getDb()
+    .prepare(`
+      SELECT t.id, t.user_id, t.txn_date, t.description, t.currency_code, t.amount_minor, t.category_id,
+        t.card_network, t.card_last4, t.source, t.message_id, t.raw_excerpt, t.kind,
+        COALESCE(r.decision, t.status) AS status, t.created_at
+      FROM transactions t
+      LEFT JOIN transaction_reviews r ON r.transaction_id = t.id
+      WHERE t.user_id = ?
+      ORDER BY t.txn_date DESC, t.id DESC
+      LIMIT ?
+    `)
+    .all(LOCAL_USER_ID, limit) as Array<{
+    id: number;
+    user_id: string;
+    txn_date: string;
+    description: string;
+    currency_code: string;
+    amount_minor: number;
+    category_id: number | null;
+    kind: TransactionKind;
+    card_network: string | null;
+    card_last4: string | null;
+    source: string;
+    message_id: string | null;
+    raw_excerpt: string | null;
+    status: TransactionStatus;
+    created_at: string;
+  }>;
+
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    txnDate: row.txn_date,
+    description: row.description,
+    currencyCode: row.currency_code,
+    amountMinor: row.amount_minor,
+    categoryId: row.category_id,
+    kind: row.kind,
+    cardNetwork: row.card_network,
+    cardLast4: row.card_last4,
+    source: row.source,
+    messageId: row.message_id,
+    rawExcerpt: row.raw_excerpt,
+    status: row.status,
+    createdAt: row.created_at
+  }));
+}
+
+/** Keep review decisions without deleting the original import or its idempotency key. */
+export function reviewImportedTransaction(id: number, decision: "confirmed" | "discarded") {
+  if (!Number.isSafeInteger(id) || id <= 0 || !["confirmed", "discarded"].includes(decision)) {
+    throw new Error("Invalid review decision.");
+  }
+  migrate();
+  const result = getDb().prepare(`
+    INSERT INTO transaction_reviews (transaction_id, decision, reviewed_at)
+    SELECT id, ?, ? FROM transactions WHERE id = ? AND user_id = ?
+    ON CONFLICT(transaction_id) DO UPDATE SET decision = excluded.decision, reviewed_at = excluded.reviewed_at
+  `).run(decision, nowIso(), id, LOCAL_USER_ID);
+  if (result.changes !== 1) throw new Error("Transaction not found.");
+}
+
+/** Records the outcome of an ingest run for observability and the staleness watchdog. */
+export function recordIngestRun(input: {
+  source: string;
+  startedAt: string;
+  messagesSeen: number;
+  inserted: number;
+  skipped: number;
+  status: "ok" | "error";
+  error?: string | null;
+}) {
+  migrate();
+  getDb()
+    .prepare(`
+      INSERT INTO ingest_runs (
+        source, started_at, finished_at, messages_seen, inserted, skipped, status, error
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      input.source,
+      input.startedAt,
+      nowIso(),
+      input.messagesSeen,
+      input.inserted,
+      input.skipped,
+      input.status,
+      input.error ?? null
+    );
+}
+
+export function getIngestCursor(mailboxKey: string): { uidValidity: string; lastUid: number } | null {
+  migrate();
+  const row = getDb().prepare("SELECT uid_validity, last_uid FROM ingest_cursors WHERE mailbox_key = ?").get(mailboxKey) as { uid_validity: string; last_uid: number } | undefined;
+  return row ? { uidValidity: row.uid_validity, lastUid: row.last_uid } : null;
+}
+
+export function saveIngestCursor(mailboxKey: string, uidValidity: string, lastUid: number): void {
+  if (!Number.isSafeInteger(lastUid) || lastUid < 0) throw new Error("Invalid ingest cursor.");
+  migrate();
+  getDb().prepare(`INSERT INTO ingest_cursors (mailbox_key, uid_validity, last_uid) VALUES (?, ?, ?)
+    ON CONFLICT(mailbox_key) DO UPDATE SET uid_validity = excluded.uid_validity, last_uid = excluded.last_uid`).run(mailboxKey, uidValidity, lastUid);
+}
+
+export function latestItauIngestRun(): { finishedAt: string | null; status: string; messagesSeen: number; inserted: number; skipped: number } | null {
+  migrate();
+  const row = getDb().prepare("SELECT finished_at, status, messages_seen, inserted, skipped FROM ingest_runs WHERE source IN (?, ?) ORDER BY id DESC LIMIT 1").get("itau_email", "gmail_api") as { finished_at: string | null; status: string; messages_seen: number; inserted: number; skipped: number } | undefined;
+  return row ? { finishedAt: row.finished_at, status: row.status, messagesSeen: row.messages_seen, inserted: row.inserted, skipped: row.skipped } : null;
 }

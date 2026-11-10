@@ -13,7 +13,7 @@ export default function SetupPage() {
         <div>
           <span className="eyebrow">Configuration</span>
           <h1>Setup</h1>
-          <p className="muted">Configure the base currency used for dashboard metrics and manual FX conversion.</p>
+          <p className="muted">Manage currencies and preferences.</p>
         </div>
       </section>
 
@@ -21,7 +21,7 @@ export default function SetupPage() {
         <div className="panel-header span-full">
           <div>
             <h2>Currency settings</h2>
-            <p className="muted">The base currency drives projections. Amounts can be clicked to cycle display currencies.</p>
+            <p className="muted">Choose your base currency or add another.</p>
           </div>
         </div>
         <div className="field span-2">
@@ -62,7 +62,7 @@ export default function SetupPage() {
             <p className="muted">Currencies available in forms and display stacks.</p>
           </div>
         </div>
-        <table className="table">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table className="table">
           <thead>
             <tr>
               <th>Code</th>
@@ -85,21 +85,9 @@ export default function SetupPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
-      <section className="section-title">
-        <div>
-          <h2>Auth roadmap</h2>
-          <p className="muted">Local password login is enabled for mdaneri. 2FA remains a future feature.</p>
-        </div>
-      </section>
-      <div className="panel">
-        <p className="muted">
-          The current database records are owned by the mdaneri user. Sessions use an HTTP-only signed cookie. TOTP and
-          backup-code 2FA are still intentionally deferred.
-        </p>
-      </div>
     </>
   );
 }

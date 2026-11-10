@@ -100,3 +100,14 @@ Fase 3 · CI · Reproducibilidad del build · Resuelto · 2026-06-22 · `public/
 - **Esperado:** el build de CI = el local; el Dockerfile asume que `public/` existe (Next sirve assets estáticos desde ahí).
 - **Resolución:** mover `favicon.svg` a `public/` (contenido real + su lugar correcto para una app web) + un `.gitkeep` como red de seguridad para versionar la carpeta aunque quede vacía.
 - **Lección:** git no versiona carpetas vacías → un `COPY` de una carpeta potencialmente vacía rompe solo en CI. "Anda local, falla en CI" casi siempre = diferencia entre tu working tree (disco) y lo que git versiona; verificar con `git ls-files`, no con `ls`. El CI buildea desde git, no desde tu disco: si git no lo tiene, no existe para el pipeline.
+
+## OBS-010 — Navegación móvil y edición dentro de tablas anchas
+Interfaz · Móvil · Resuelto en copia de prueba · 2026-11-08 · `app/globals.css`, `app/components/MobileNav.tsx`
+
+- **Contexto:** el menú recibió ocho secciones y las filas de ingresos y gastos se editan dentro de una tabla.
+- **Síntoma:** la navegación ocupaba dos filas y el formulario de edición quedaba en una tabla que requería desplazamiento horizontal. En páginas cortas había un espacio vacío entre cabecera y contenido.
+- **Evidencia:** revisión visual en un viewport de celular con datos sintéticos y medición del alto de las filas del grid. El formulario de gasto se guardó después de cambiar a tarjetas.
+- **Causa raíz:** el menú móvil dependía de una estructura dimensionada para menos secciones; las tablas conservaban un ancho mínimo y el grid distribuía el espacio libre entre filas automáticas.
+- **Esperado:** navegación accesible en una fila, edición legible y contenido alineado debajo de la cabecera.
+- **Resolución:** cuatro accesos principales y menú adicional; registros recurrentes como tarjetas y formularios de ancho móvil; filas del shell `auto 1fr`. Las tablas mantienen su presentación en escritorio.
+- **Lección:** verificar con datos y formularios abiertos, no solo con pantallas vacías; medir cada región ayuda a distinguir desbordamiento de distribución del grid.

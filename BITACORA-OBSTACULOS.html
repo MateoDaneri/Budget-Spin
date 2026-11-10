@@ -653,6 +653,15 @@ failed to calculate checksum of ref ...: "/app/public": not found</pre>
       </div>
     </article>
 
+    <article class="entry" id="obs-010">
+      <div class="entry-head"><div class="meta"><span class="id">OBS-010</span><span class="tag phase">Interfaz · Móvil</span><span class="tag ok">Resuelto en copia de prueba</span></div><h2>Navegación móvil y edición dentro de tablas anchas</h2><p>2026-11-08 · <code class="inline">app/globals.css</code>, <code class="inline">app/components/MobileNav.tsx</code></p></div>
+      <section class="block"><h3>Contexto y síntoma</h3><p>El menú recibió ocho secciones. En celular ocupaba dos filas y los formularios de ingresos y gastos quedaban dentro de tablas anchas. En páginas cortas aparecía un espacio vacío bajo la cabecera.</p></section>
+      <div class="callout evidence"><h4>Evidencia</h4><p>La revisión visual con datos sintéticos mostró los tres problemas. La medición de las filas del grid explicó el espacio; después del cambio se guardó una edición de gasto.</p></div>
+      <div class="callout root"><h4>Causa raíz</h4><p>El menú se había dimensionado para menos secciones, las tablas tenían un ancho mínimo y las filas automáticas del grid repartían el espacio libre.</p></div>
+      <section class="block"><h3>Comportamiento esperado</h3><p>Navegación accesible en una fila, edición legible y contenido alineado debajo de la cabecera.</p></section>
+      <div class="callout lesson"><h4>Resolución y lección</h4><p>Cuatro accesos principales y un menú adicional; tarjetas para registros recurrentes y formularios adaptados; filas del shell <code class="inline">auto 1fr</code>. En escritorio se conservan las tablas. Probar con datos y formularios abiertos, y medir las regiones, permite detectar problemas que las pantallas vacías ocultan.</p></div>
+    </article>
+
   </main>
 
   <footer>

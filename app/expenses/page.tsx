@@ -55,12 +55,18 @@ export default async function ExpensesPage({ searchParams }: Props) {
           <span className="eyebrow">Money out</span>
           <h1>Expenses</h1>
           <p className="muted">
-            Separate committed recurring expenses from optional scenarios, then compare both on the dashboard.
+            Track recurring and optional expenses.
           </p>
         </div>
       </section>
 
       {params.error ? <div className="alert">{params.error}</div> : null}
+
+      <section className="collection-summary" aria-label="Recurring expenses overview">
+        <div><span className="collection-mark" aria-hidden="true">↘</span><div><span>Recurring expenses</span><strong>{expenses.length}</strong><small>Active records</small></div></div>
+        <div><span>Committed</span><strong>{expenses.filter((expense) => !expense.isOptional).length}</strong><small>Included in base scenario</small></div>
+        <div><span>Optional</span><strong>{expenses.filter((expense) => expense.isOptional).length}</strong><small>Included in optional scenario</small></div>
+      </section>
 
       <details className="create-panel">
         <summary className="button">Add expense</summary>
@@ -183,7 +189,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
         </div>
       </details>
 
-      <div className="panel">
+      <div className="panel collection-list">
         <div className="panel-header">
           <div>
             <h2>Current recurring expenses</h2>
@@ -228,7 +234,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
         {expenses.length === 0 ? (
           <p className="muted">No recurring expenses yet.</p>
         ) : (
-          <table className="table">
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table className="table record-table expense-records">
             <thead>
               <tr>
                 <th>{renderSortLink("Description", "description", sortKey, sortDirection, params)}</th>
@@ -271,7 +277,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
                     />
                   )}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </>
@@ -316,16 +322,16 @@ function FragmentRows({
         return (
           <Fragment key={expense.id}>
             <tr key={expense.id}>
-              <td>{expense.description}</td>
-              <td>{expense.categoryName}</td>
-              <td>{expense.groupName}</td>
-              <td>{formatRecurrence(expense)}</td>
-              <td>
+              <td data-label="Description">{expense.description}</td>
+              <td data-label="Category">{expense.categoryName}</td>
+              <td data-label="Family">{expense.groupName}</td>
+              <td data-label="Frequency">{formatRecurrence(expense)}</td>
+              <td data-label="Type">
                 <span className={`status-pill ${expense.isOptional ? "status-optional" : "status-committed"}`}>
                   {expense.isOptional ? "Optional" : "Committed"}
                 </span>
               </td>
-              <td>
+              <td data-label="Amount">
                 <MoneyStack
                   values={formatDisplayMoney({
                     amountMinor: expense.amountMinor,
@@ -335,11 +341,11 @@ function FragmentRows({
                   })}
                 />
               </td>
-              <td>
+              <td data-label="Active dates">
                 {expense.startDate}
                 {expense.endDate ? ` to ${expense.endDate}` : " no end date"}
               </td>
-              <td>
+              <td data-label="Actions">
                 <div className="actions-row">
                   <Link
                     className="button button-secondary"

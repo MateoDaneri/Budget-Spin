@@ -84,6 +84,48 @@ export const recurringExpenses = sqliteTable("recurring_expenses", {
   updatedAt: text("updated_at").notNull()
 });
 
+export const transactions = sqliteTable(
+  "transactions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id").notNull().references(() => users.id),
+    txnDate: text("txn_date").notNull(),
+    description: text("description").notNull(),
+    currencyCode: text("currency_code").notNull().references(() => currencies.code),
+    amountMinor: integer("amount_minor").notNull(),
+    categoryId: integer("category_id").references(() => categories.id),
+    kind: text("kind", { enum: ["purchase", "transfer_out", "transfer_in"] }).notNull().default("purchase"),
+    cardNetwork: text("card_network"),
+    cardLast4: text("card_last4"),
+    source: text("source").notNull().default("itau_email"),
+    messageId: text("message_id"),
+    rawExcerpt: text("raw_excerpt"),
+    status: text("status", { enum: ["confirmed", "pending"] }).notNull().default("confirmed"),
+    createdAt: text("created_at").notNull()
+  },
+  (table) => ({
+    userMessage: uniqueIndex("transactions_user_message_idx").on(table.userId, table.messageId)
+  })
+);
+
+export const transactionReviews = sqliteTable("transaction_reviews", {
+  transactionId: integer("transaction_id").primaryKey().references(() => transactions.id),
+  decision: text("decision", { enum: ["confirmed", "discarded"] }).notNull(),
+  reviewedAt: text("reviewed_at").notNull()
+});
+
+export const ingestRuns = sqliteTable("ingest_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  source: text("source").notNull(),
+  startedAt: text("started_at").notNull(),
+  finishedAt: text("finished_at"),
+  messagesSeen: integer("messages_seen").notNull().default(0),
+  inserted: integer("inserted").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  status: text("status", { enum: ["ok", "error"] }).notNull(),
+  error: text("error")
+});
+
 export const monthlySnapshots = sqliteTable(
   "monthly_snapshots",
   {

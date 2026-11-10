@@ -1,25 +1,42 @@
 import Link from "next/link";
 import { MoneyStack } from "@/app/components/MoneyStack";
-import { getBaseCurrency, listCurrencies, listIncomeItems, listRecurringExpenses } from "@/src/db/repository";
+import { getBaseCurrency, listCurrencies, listIncomeItems, listRecurringExpenses, listTransactions } from "@/src/db/repository";
 import { addMonths, currentMonthKey, formatMonthLabel, trailingMonths } from "@/src/finance/dates";
 import { formatDisplayMoneyFromUyu, getDisplayMoneyContext } from "@/src/finance/display-money";
 import { calculateMonthMetrics } from "@/src/finance/metrics";
+import { calculateActualMonth } from "@/src/finance/actual-spending";
+import { listPairExclusions, listSplitwiseImports } from "@/src/splitwise/store";
+import { setPairExclusionAction } from "@/src/actions/reconciliation";
+import { formatMoney } from "@/src/finance/money";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams?: { month?: string } | Promise<{ month?: string }>;
+  searchParams?: { month?: string; reconciliation?: string } | Promise<{ month?: string; reconciliation?: string }>;
 };
 
 export default async function DashboardPage({ searchParams }: Props) {
   const params = searchParams ? await searchParams : {};
-  const month = params.month ?? currentMonthKey();
+  const month = params.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(params.month) ? params.month : currentMonthKey();
   const currencies = listCurrencies();
   const baseCurrency = getBaseCurrency();
   const displayMoneyContext = await getDisplayMoneyContext(currencies);
   const incomes = listIncomeItems();
   const expenses = listRecurringExpenses();
   const metrics = calculateMonthMetrics({ month, incomes, expenses, currencies, baseCurrency });
+  const transactions = listTransactions(Number.MAX_SAFE_INTEGER);
+  const shared = listSplitwiseImports(Number.MAX_SAFE_INTEGER).expenses;
+  const exclusions = listPairExclusions();
+  const actual = calculateActualMonth(month, transactions, shared, exclusions);
+  const rejectedPairs = exclusions.flatMap((entry) => {
+    const transaction = transactions.find((item) => item.id === entry.bankId && item.txnDate.startsWith(month));
+    const expense = shared.find((item) => item.id === entry.splitwiseId);
+    return transaction && expense ? [{ transaction, expense }] : [];
+  });
+  const showAmount = (currency: string, amountMinor: number) => {
+    const unit = currencies.find((item) => item.code === currency);
+    return unit ? formatMoney(amountMinor, unit) : `${currency} ${amountMinor} minor units`;
+  };
   const trend = trailingMonths(month, 6).map((trendMonth) =>
     calculateMonthMetrics({ month: trendMonth, incomes, expenses, currencies, baseCurrency })
   );
@@ -55,59 +72,45 @@ export default async function DashboardPage({ searchParams }: Props) {
 
   return (
     <>
-      <section className="page-hero">
-        <div>
-          <span className="eyebrow">Overview</span>
-          <h1>{formatMonthLabel(month)}</h1>
-          <p className="muted">
-            Projected monthly view. Amounts are normalized to {baseCurrency.code}; click amounts to cycle currencies.
-          </p>
+      <section className="overview-heading">
+        <div><span className="eyebrow">Your monthly outlook</span><h1>{formatMonthLabel(month)}</h1><p className="muted">A projection based on your recurring income and expenses · {baseCurrency.code}</p></div>
+        <nav className="month-picker" aria-label="Choose month">
+          <Link href={`/?month=${addMonths(month, -1)}`} aria-label="Previous month">←</Link>
+          <Link href={`/?month=${currentMonthKey()}`}>Today</Link>
+          <Link href={`/?month=${addMonths(month, 1)}`} aria-label="Next month">→</Link>
+        </nav>
+      </section>
+      <section className="outlook" aria-label="Monthly projection">
+        <div className="outlook-main">
+          <span className="outlook-kicker">Projected net · including optional</span>
+          <div className="outlook-amount"><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.netWithOptionalBaseMinor, context: displayMoneyContext })} /></div>
+          <p>After committed and optional expenses</p>
+          <div className="outlook-base"><span>Net before optional</span><strong><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.netBaseMinor, context: displayMoneyContext })} /></strong></div>
         </div>
-        <div className="nav">
-          <Link href={`/?month=${addMonths(month, -1)}`}>Previous</Link>
-          <Link href={`/?month=${currentMonthKey()}`}>Current</Link>
-          <Link href={`/?month=${addMonths(month, 1)}`}>Next</Link>
+        <div className="outlook-breakdown">
+          <div className="outlook-row income-row"><span className="outlook-symbol" aria-hidden="true">↗</span><div><span>Planned income</span><strong><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.incomeBaseMinor, context: displayMoneyContext })} /></strong></div></div>
+          <div className="outlook-row expense-row"><span className="outlook-symbol" aria-hidden="true">↘</span><div><span>Committed expenses</span><strong><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.expenseBaseMinor, context: displayMoneyContext })} /></strong></div></div>
+          <div className="outlook-row optional-row"><span className="outlook-symbol" aria-hidden="true">◌</span><div><span>Optional expenses</span><strong><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.optionalExpenseBaseMinor, context: displayMoneyContext })} /></strong></div></div>
         </div>
       </section>
-
-      <section className="grid grid-4">
-        <div className="panel metric-card metric-card-income">
-          <span className="metric-label">Income planned</span>
-          <strong className="metric-value">
-            <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.incomeBaseMinor, context: displayMoneyContext })} />
-          </strong>
-          <p className="scenario-note">Income occurrences active in this month.</p>
-        </div>
-        <div className="panel metric-card metric-card-expense">
-          <span className="metric-label">Committed spend</span>
-          <strong className="metric-value">
-            <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.expenseBaseMinor, context: displayMoneyContext })} />
-          </strong>
-          <p className="scenario-note">Recurring expenses marked committed.</p>
-        </div>
-        <div className="panel metric-card metric-card-optional">
-          <span className="metric-label">Optional scenario</span>
-          <strong className="metric-value">
-            <MoneyStack
-              values={formatDisplayMoneyFromUyu({ amountMinor: metrics.optionalExpenseBaseMinor, context: displayMoneyContext })}
-            />
-          </strong>
-          <p className="scenario-note">Extra planned expenses if you apply them.</p>
-        </div>
-        <div className="panel metric-card metric-card-net">
-          <span className="metric-label">Net after optional</span>
-          <strong className="metric-value">
-            <MoneyStack
-              values={formatDisplayMoneyFromUyu({ amountMinor: metrics.netWithOptionalBaseMinor, context: displayMoneyContext })}
-            />
-          </strong>
-          <p className="scenario-note">
-            Committed-only net:{" "}
-            <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.netBaseMinor, context: displayMoneyContext })} />
-          </p>
-        </div>
+      <section className="panel actual-spending" id="actual-spending" aria-labelledby="actual-spending-title">
+        {params.reconciliation === "error" && <p className="alert" role="alert">Could not save that choice. Try again.</p>}
+        <div className="panel-header"><div><h2 id="actual-spending-title">Observed spending</h2><p className="muted">An estimate for this month, separate from the recurring plan above. Pending bank notices are included until discarded.</p></div></div>
+        {actual.totals.length === 0 ? <p className="muted">No included spending found for this month.</p> : <ul className="actual-totals">{actual.totals.map((item) => <li key={item.currency}><span>{item.currency}</span><strong>{showAmount(item.currency, item.amountMinor)}</strong></li>)}</ul>}
+        <p className="muted">{actual.pending} pending bank notices · {actual.matched} possible matches · {actual.ambiguous} shared expenses need a clear match · {actual.omitted} unavailable or unsupported amounts.</p>
+        <details className="actual-method"><summary>How this estimate works</summary><p className="muted">Possible matches require the same date, exact merchant, currency and amount paid, with one candidate on each side. We use your Splitwise share instead of the bank amount. You can undo a match below. Unmatched shared expenses you paid are excluded to avoid double counting. Payments, transfers and deleted entries are excluded. Amounts stay in their original currency.</p></details>
+        {(actual.pairs.length > 0 || rejectedPairs.length > 0) && <details className="actual-pairs"><summary>Review possible matches</summary>
+          <ul>{actual.pairs.map((pair) => <li key={`${pair.bankId}:${pair.splitwiseId}`}><div><strong>{pair.description}</strong><span>Bank {showAmount(pair.currency, pair.paidMinor)} · your share {showAmount(pair.currency, pair.owedMinor)}</span></div><form action={setPairExclusionAction}><input type="hidden" name="bank" value={pair.bankId}/><input type="hidden" name="shared" value={pair.splitwiseId}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="yes" type="submit">Not the same expense</button></form></li>)}
+          {rejectedPairs.map(({ transaction, expense }) => <li key={`excluded:${transaction.id}:${expense.id}`}><div><strong>{transaction.description}</strong><span>Not matched · {expense.description}</span></div><form action={setPairExclusionAction}><input type="hidden" name="bank" value={transaction.id}/><input type="hidden" name="shared" value={expense.id}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="no" type="submit">Allow matching again</button></form></li>)}</ul>
+        </details>}
+        <p><Link href="/transactions">Review bank notices</Link> · <Link href="/splitwise">Review shared expenses and categories</Link></p>
       </section>
-
+      <section className="overview-shortcuts" aria-label="Explore your finances">
+        <Link href="/transactions"><span className="shortcut-icon">↔</span><span><strong>Imported activity</strong><small>Review transactions</small></span><b aria-hidden="true">↗</b></Link>
+        <Link href="/splitwise"><span className="shortcut-icon">◎</span><span><strong>Splitwise</strong><small>View shared expenses</small></span><b aria-hidden="true">↗</b></Link>
+        <Link href="/expenses"><span className="shortcut-icon">◫</span><span><strong>Recurring expenses</strong><small>Manage your plan</small></span><b aria-hidden="true">↗</b></Link>
+      </section>
+      <div className="section-heading"><div><span className="eyebrow">See the bigger picture</span><h2>How your plan evolves</h2></div><span>Last six months</span></div>
       <section className="grid grid-2">
         <div className="panel chart-card">
           <div className="panel-header">
@@ -123,7 +126,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             <svg className="line-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Net trend chart">
               <line className="chart-zero-line" x1="0" x2="100" y1={lineY(0, netRange)} y2={lineY(0, netRange)} />
               <polyline className="chart-line chart-line-committed" points={committedNetPoints} />
-              <polyline className="chart-line chart-line-optional" points={optionalNetPoints} />
+              <polyline strokeDasharray="3 2" className="chart-line chart-line-optional" points={optionalNetPoints} />
               {trend.map((item, index) => (
                 <g key={item.month}>
                   <circle className="chart-dot chart-dot-committed" cx={lineX(index, trend.length)} cy={lineY(item.netBaseMinor, netRange)} r="1.6" />
@@ -195,6 +198,8 @@ export default async function DashboardPage({ searchParams }: Props) {
         </div>
       </section>
 
+      <details className="overview-details" open>
+        <summary><span><span className="eyebrow">Explore the numbers</span><strong>Spending breakdown</strong></span><span className="details-indicator" aria-hidden="true">⌄</span></summary>
       <section className="grid grid-2">
         <DonutPanel
           title="Spend mix by category"
@@ -345,7 +350,7 @@ export default async function DashboardPage({ searchParams }: Props) {
                 <p className="muted">Income, committed spend, optional spend, and net outcomes by month.</p>
               </div>
             </div>
-            <table className="table trend-table">
+            <div className="table-scroll" role="region" aria-label="Six-month projection" tabIndex={0}><table className="table trend-table">
               <thead>
                 <tr>
                   <th>Month</th>
@@ -382,10 +387,11 @@ export default async function DashboardPage({ searchParams }: Props) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         </div>
       </section>
+      </details>
     </>
   );
 }

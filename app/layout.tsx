@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Breadcrumb } from "@/app/components/Breadcrumb";
 import { NavLinks } from "@/app/components/NavLinks";
+import { MobileNav } from "@/app/components/MobileNav";
 import { ThemeToggle } from "@/app/components/ThemeToggle";
 import { logoutAction } from "@/src/actions/auth";
 import { getCurrentSession } from "@/src/auth/session";
@@ -53,6 +54,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               </form>
             </div>
           </aside>
+          <div className="mobile-navigation"><MobileNav /></div>
           <main className="app-content">
             <div className="content-inner">
               <Breadcrumb />

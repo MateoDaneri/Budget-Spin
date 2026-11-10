@@ -12,7 +12,7 @@ export default function CategoriesPage() {
         <div>
           <span className="eyebrow">Organization</span>
           <h1>Categories</h1>
-          <p className="muted">Use categories to make dashboard breakdowns and trends readable at a glance.</p>
+          <p className="muted">Organize income and spending.</p>
         </div>
       </section>
 
@@ -22,7 +22,7 @@ export default function CategoriesPage() {
           <div className="panel-header span-full">
             <div>
               <h2>Add category</h2>
-              <p className="muted">Income categories appear on income rows. Expense categories power breakdown charts.</p>
+
             </div>
           </div>
           <div className="field span-3">
@@ -45,12 +45,19 @@ export default function CategoriesPage() {
       <section className="section-title">
         <div>
           <h2>Existing categories</h2>
-          <p className="muted">Inactive categories stay available for historical references.</p>
+
         </div>
       </section>
-      <div className="grid">
+      <div className="grid category-grid">
         {categories.map((category) => (
-          <form action={saveCategoryAction} className="panel form-grid" key={category.id}>
+          <details className="category-card panel" key={category.id}>
+            <summary className="category-summary">
+              <span className="category-name">{category.name}</span>
+              <span className={`status-pill ${category.type === "income" ? "status-income" : "status-expense"}`}>{category.type}</span>
+              {!category.isActive ? <span className="status-pill status-inactive">Inactive</span> : null}
+              <span className="category-edit" aria-hidden="true">Edit &#8250;</span>
+            </summary>
+          <form action={saveCategoryAction} className="form-grid category-form">
             <input type="hidden" name="id" value={category.id} />
             <div className="field span-3">
               <label htmlFor={`name-${category.id}`}>Name</label>
@@ -79,14 +86,13 @@ export default function CategoriesPage() {
               <button
                 className="button button-danger"
                 formAction={deactivateCategoryAction}
-                name="id"
-                value={category.id}
                 type="submit"
               >
                 Deactivate
               </button>
             ) : null}
           </form>
+          </details>
         ))}
       </div>
     </>
