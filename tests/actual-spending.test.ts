@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { calculateActualMonth } from "@/src/finance/actual-spending";
 const bank = (id: number, values = {}) => ({ id, txnDate: "2026-11-05T12:00:00Z", description: "Café Example", currencyCode: "UYU", amountMinor: 10000, kind: "purchase" as const, status: "pending" as const, ...values });
 const shared = (id: number, values = {}) => ({ id, date: "2026-11-05T09:00:00Z", description: "café example", currency: "UYU", total: "100.00", paid: "100.00", owed: "40.00", payment: false, deleted: false, ...values });
-const compute = (b: ReturnType<typeof bank>[], s: ReturnType<typeof shared>[]) => calculateActualMonth("2026-11", b, s);
+const units = new Map([["UYU", 2], ["USD", 2]]);
+const compute = (b: ReturnType<typeof bank>[], s: ReturnType<typeof shared>[], minorUnits: ReadonlyMap<string, number> = units) => calculateActualMonth("2026-11", b, s, minorUnits);
 describe("actual spending reconciliation", () => {
   it("uses personal share for a unique exact match", () => expect(compute([bank(1)], [shared(2)])).toMatchObject({ totals: [{ currency: "UYU", amountMinor: 4000 }], matched: 1, pending: 1 }));
   it("does not silently pair repeated purchases or installments", () => expect(compute([bank(1), bank(2)], [shared(1)])).toMatchObject({ totals: [{ currency: "UYU", amountMinor: 20000 }], matched: 0, ambiguous: 1 }));
@@ -13,8 +14,23 @@ describe("actual spending reconciliation", () => {
     expect(compute([bank(1)], [shared(2, { paid: "0.00" })])).toMatchObject({ totals: [{ currency: "UYU", amountMinor: 10000 }], ambiguous: 1 });
   });
   it("allows a user to reject an otherwise unique pair", () => {
-    const result = calculateActualMonth("2026-11", [bank(1)], [shared(2)], [{ bankId: 1, splitwiseId: 2 }]);
+    const result = calculateActualMonth("2026-11", [bank(1)], [shared(2)], units, [{ bankId: 1, splitwiseId: 2 }]);
     expect(result).toMatchObject({ totals: [{ currency: "UYU", amountMinor: 10000 }], matched: 0, ambiguous: 1 });
+  });
+  it("converts a 2-decimal currency with its configured minor unit", () => expect(compute([], [shared(1, { paid: "0.00", owed: "12.34", total: "50.5" })])).toMatchObject({ totals: [{ currency: "UYU", amountMinor: 1234 }], omitted: 0 }));
+  it("converts a 0-decimal currency on the same scale as its bank amounts", () => {
+    const yen = new Map([["JPY", 0]]);
+    const result = compute([bank(1, { currencyCode: "JPY", amountMinor: 1500, description: "Other shop" })], [shared(2, { currency: "JPY", paid: "0", owed: "600", total: "1500.00" })], yen);
+    expect(result).toMatchObject({ totals: [{ currency: "JPY", amountMinor: 2100 }], omitted: 0 });
+  });
+  it("matches a 0-decimal bank notice using the configured minor unit", () => {
+    const yen = new Map([["JPY", 0]]);
+    const result = compute([bank(1, { currencyCode: "JPY", amountMinor: 1500 })], [shared(2, { currency: "JPY", paid: "1500", owed: "600", total: "1500" })], yen);
+    expect(result).toMatchObject({ totals: [{ currency: "JPY", amountMinor: 600 }], matched: 1 });
+  });
+  it("omits amounts with more decimals than the currency allows instead of rounding", () => {
+    expect(compute([], [shared(1, { currency: "JPY", paid: "0", owed: "600.5", total: "1500" })], new Map([["JPY", 0]]))).toMatchObject({ totals: [], omitted: 1 });
+    expect(compute([], [shared(1, { paid: "0.00", owed: "12.345", total: "50.00" })])).toMatchObject({ totals: [], omitted: 1 });
   });
   it("responds to changed shared amounts without retaining a stale match", () => expect(compute([bank(1)], [shared(1, { paid: "90.00" })])).toMatchObject({ totals: [{ currency: "UYU", amountMinor: 10000 }], matched: 0, ambiguous: 1 }));
 });

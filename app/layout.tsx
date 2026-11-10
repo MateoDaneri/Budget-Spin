@@ -38,6 +38,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        <a className="skip-link" href="#main-content">Skip to main content</a>
         <div className="app-layout">
           <aside className="sidebar">
             <Link className="brand-block sidebar-brand" href="/">
@@ -55,7 +56,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             </div>
           </aside>
           <div className="mobile-navigation"><MobileNav /></div>
-          <main className="app-content">
+          <main className="app-content" id="main-content" tabIndex={-1}>
             <div className="content-inner">
               <Breadcrumb />
               {children}

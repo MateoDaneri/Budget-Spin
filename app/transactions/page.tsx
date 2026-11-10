@@ -7,12 +7,27 @@ export const dynamic = "force-dynamic";
 
 type Props = { searchParams?: Promise<{ error?: string }> };
 
+// Only fixed text is shown: the query value selects a message, it is never rendered itself.
+const ERROR_MESSAGES: Record<string, string> = {
+  "Invalid review decision.": "That review could not be applied. Please try again.",
+  "Could not save the review.": "Could not save the review. Please try again.",
+  "Invalid category.": "That category could not be applied. Please try again.",
+  "Could not save category.": "Could not save the category. Please try again."
+};
+const GENERIC_ERROR = "Something went wrong. Please try again.";
+
+function errorMessage(code?: string) {
+  if (!code) return null;
+  return Object.hasOwn(ERROR_MESSAGES, code) ? ERROR_MESSAGES[code] : GENERIC_ERROR;
+}
+
 export default async function TransactionsPage({ searchParams }: Props) {
   const params = searchParams ? await searchParams : {};
   const transactions = listTransactions();
   const latestRun = latestItauIngestRun();
   const categories = listCategories("expense");
   const currencies = new Map(listCurrencies().map((currency) => [currency.code, currency]));
+  const error = errorMessage(params.error);
 
   return (
     <>
@@ -23,7 +38,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
           <p className="muted">Imported notifications, dated by email. Purchases appear in observed spending; they do not change the recurring plan.</p>
         </div>
       </section>
-      {params.error ? <div className="alert" role="alert">{params.error}</div> : null}
+      {error ? <div className="alert" role="alert">{error}</div> : null}
       <section className="activity-overview" aria-label="Import overview">
         <div><span className="activity-icon" aria-hidden="true">↔</span><span><small>Import status</small><strong>{latestRun ? latestRun.status === "ok" ? "Last check completed" : "Last check failed" : "No checks yet"}</strong><small>{latestRun ? `${latestRun.finishedAt ?? "—"} · ${latestRun.inserted} imported` : "Transactions will appear here after a check."}</small></span></div>
         <div><span><small>Recent imports</small><strong>{transactions.length}</strong><small>Up to 200 notifications</small></span></div>

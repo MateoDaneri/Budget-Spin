@@ -371,9 +371,7 @@ export default async function PlansPage({ searchParams }: Props) {
                                   <form action={deletePlanItemAction}>
                                     <input type="hidden" name="planId" value={plan.id} />
                                     <input type="hidden" name="id" value={item.id} />
-                                    <button className="button button-danger" type="submit">
-                                      Delete
-                                    </button>
+                                    <details className="confirm-action"><summary className="button button-danger">Delete</summary><div><p>Remove this item?</p><button className="button button-danger" type="submit">Confirm delete</button></div></details>
                                   </form>
                                 </div>
                               </td>
@@ -425,7 +423,7 @@ export default async function PlansPage({ searchParams }: Props) {
                 </form>
                   <form action={deletePlanAction}>
                     <input type="hidden" name="id" value={plan.id} />
-                    <button className="button button-danger" type="submit">Delete plan</button>
+                    <details className="confirm-action"><summary className="button button-danger">Delete plan</summary><div><p>Remove this plan?</p><button className="button button-danger" type="submit">Confirm delete plan</button></div></details>
                   </form>
                 </details>
               </article>

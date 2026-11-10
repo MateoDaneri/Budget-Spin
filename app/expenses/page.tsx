@@ -177,9 +177,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
                   {group.isActive && group.name !== "General" ? (
                     <form action={deactivateExpenseGroupAction}>
                       <input type="hidden" name="id" value={group.id} />
-                      <button className="button button-danger" type="submit">
-                        Deactivate
-                      </button>
+                      <details className="confirm-action"><summary className="button button-danger">Deactivate</summary><div><p>Deactivate this family?</p><button className="button button-danger" type="submit">Confirm deactivation</button></div></details>
                     </form>
                   ) : null}
                 </div>
@@ -218,17 +216,16 @@ export default async function ExpensesPage({ searchParams }: Props) {
                   groupSort: nextGroupSort(groupSort)
                 })}
               >
-                Category groups
-                {groupSort === "asc" ? " ↑" : groupSort === "desc" ? " ↓" : ""}
+                Category groups: {groupSort === "manual" ? "Manual" : groupSort === "asc" ? "A–Z" : "Z–A"}
               </Link>
-              <span className="muted">Drag to set manual order</span>
+              {groupSort === "manual" ? <span className="muted">Drag or use the arrow buttons to set manual order</span> : <Link href={buildExpensesQuery({ params, groupSort: "manual" })}>Switch to manual order</Link>}
             </div>
-            <ExpenseCategoryGroupOrder
+            {groupSort === "manual" ? <ExpenseCategoryGroupOrder
               categories={groupedExpenses.map((group) => ({
                 id: group.categoryId,
                 name: group.categoryName
               }))}
-            />
+            /> : null}
           </div>
         ) : null}
         {expenses.length === 0 ? (
@@ -355,9 +352,7 @@ function FragmentRows({
                   </Link>
                   <form action={deleteExpenseAction}>
                     <input type="hidden" name="id" value={expense.id} />
-                    <button className="button button-danger" type="submit">
-                      Delete
-                    </button>
+                    <details className="confirm-action"><summary className="button button-danger">Delete</summary><div><p>Remove this item?</p><button className="button button-danger" type="submit">Confirm delete</button></div></details>
                   </form>
                 </div>
               </td>

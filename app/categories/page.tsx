@@ -83,13 +83,7 @@ export default function CategoriesPage() {
               Save
             </button>
             {category.isActive ? (
-              <button
-                className="button button-danger"
-                formAction={deactivateCategoryAction}
-                type="submit"
-              >
-                Deactivate
-              </button>
+              <details className="confirm-action"><summary className="button button-danger">Deactivate</summary><div><p>Deactivate this category?</p><button className="button button-danger" formAction={deactivateCategoryAction} type="submit">Confirm deactivation</button></div></details>
             ) : null}
           </form>
           </details>

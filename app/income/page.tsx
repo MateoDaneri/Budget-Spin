@@ -145,9 +145,7 @@ export default async function IncomePage({ searchParams }: Props) {
                           </Link>
                           <form action={deleteIncomeAction}>
                             <input type="hidden" name="id" value={item.id} />
-                            <button className="button button-danger" type="submit">
-                              Delete
-                            </button>
+                            <details className="confirm-action"><summary className="button button-danger">Delete</summary><div><p>Remove this item?</p><button className="button button-danger" type="submit">Confirm delete</button></div></details>
                           </form>
                         </div>
                       </td>

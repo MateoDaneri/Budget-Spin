@@ -1656,6 +1656,41 @@ section.panel + section.panel { margin-top: 16px; }
 @media(max-width:700px) { .outlook { grid-template-columns:minmax(0,1fr); }.outlook-row strong { font-size:15px; } }
 @media(max-width:1200px) { .outlook { grid-template-columns:minmax(0,1fr); }.outlook-amount { font-size:clamp(18px, 4vw, 42px); }.outlook-base { align-items:flex-start; flex-direction:column; gap:6px; }.outlook-base strong { text-align:left; font-size:15px; } }
 @media(max-width:700px) { .outlook-amount { font-size:clamp(17px, 5vw, 34px); } }
+/* Keyboard navigation and direct access to chart values. */
+.skip-link { position:fixed; top:8px; left:8px; z-index:100; padding:12px 16px; border-radius:10px; background:var(--foreground); color:var(--background); transform:translateY(-160%); }
+.skip-link:focus { transform:translateY(0); outline:2px solid var(--accent); outline-offset:2px; }
+.chart-data { margin:0 0 26px; }
+.chart-data summary { cursor:pointer; color:var(--accent); font-weight:700; padding:3px 0; }
+.chart-data[open] summary { margin-bottom:12px; }
+.chart-data .table-scroll { margin-top:12px; }
+.group-order-item { display:flex; align-items:center; gap:4px; padding:4px 5px 4px 12px; border:1px solid var(--line); border-radius:12px; background:var(--panel-soft); min-width:0; }
+.group-order-name { min-width:0; overflow-wrap:anywhere; margin-right:4px; font-weight:650; }
+.order-button { display:grid; place-items:center; width:44px; height:44px; flex:none; border:0; border-radius:8px; background:var(--panel); color:var(--foreground); cursor:pointer; }
+.order-button:hover:not(:disabled) { background:var(--accent-soft); }
+.order-button:disabled { opacity:.38; cursor:not-allowed; }
+.order-status { margin:6px 0 0; color:var(--muted); font-size:13px; }
+.order-status:empty { display:none; }
+
+@media(max-width:700px) { .outlook-amount .money-stack { font-size:clamp(23px,6vw,30px); }.outlook-amount .money-stack[data-compact] { font-size:clamp(17px,5vw,24px); } }
+
+.confirm-action { position:relative; }
+.confirm-action > summary { list-style:none; cursor:pointer; }
+.confirm-action > summary::-webkit-details-marker { display:none; }
+.confirm-action > div { margin-top:8px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+.confirm-action p { margin:0 0 10px; }
+
+/* Keep the monthly summary visible above the mobile navigation. */
+@media (max-width:700px) {
+  .overview-heading { gap: 10px; }
+  .overview-heading h1 { font-size: 30px; }
+  .overview-heading p { margin: 4px 0 0; }
+  .outlook-main { padding: 20px; }
+  .outlook-amount { margin: 12px 0 4px; }
+  .outlook-base { margin-top: 16px; padding-top: 12px; }
+  .outlook-breakdown { padding: 0 20px; }
+  .outlook-row { padding: 10px 0; }
+  .outlook-symbol { width: 36px; height: 36px; }
+}
 
 .actual-spending { margin-block: 1.5rem; }
 .actual-totals { display: flex; flex-wrap: wrap; gap: 1.5rem; list-style: none; margin: 1rem 0; padding: 0; }

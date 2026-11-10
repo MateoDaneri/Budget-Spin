@@ -16,7 +16,7 @@ export function MoneyStack({ values }: Props) {
   }
 
   if (values.length === 1) {
-    return <span className="money-stack">{selectedValue.value}</span>;
+    return <span className="money-stack" data-compact={selectedValue.value.length > 13 || undefined}>{selectedValue.value}</span>;
   }
 
   function showNextCurrency() {
@@ -25,8 +25,9 @@ export function MoneyStack({ values }: Props) {
 
   return (
     <button
-      aria-label={`Amount shown in ${selectedValue.currencyCode}. Click to show ${values[(selectedIndex + 1) % values.length].currencyCode}.`}
+      aria-label={`${selectedValue.value}. Shown in ${selectedValue.currencyCode}; activate to show ${values[(selectedIndex + 1) % values.length].currencyCode}.`}
       className="money-stack money-cycle"
+      data-compact={selectedValue.value.length > 13 || undefined}
       onClick={showNextCurrency}
       title="Click to cycle currency"
       type="button"

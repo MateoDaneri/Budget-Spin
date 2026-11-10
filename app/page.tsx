@@ -27,7 +27,8 @@ export default async function DashboardPage({ searchParams }: Props) {
   const transactions = listTransactions(Number.MAX_SAFE_INTEGER);
   const shared = listSplitwiseImports(Number.MAX_SAFE_INTEGER).expenses;
   const exclusions = listPairExclusions();
-  const actual = calculateActualMonth(month, transactions, shared, exclusions);
+  const minorUnits = new Map(currencies.map((currency) => [currency.code, currency.minorUnit]));
+  const actual = calculateActualMonth(month, transactions, shared, minorUnits, exclusions);
   const rejectedPairs = exclusions.flatMap((entry) => {
     const transaction = transactions.find((item) => item.id === entry.bankId && item.txnDate.startsWith(month));
     const expense = shared.find((item) => item.id === entry.splitwiseId);
@@ -73,7 +74,7 @@ export default async function DashboardPage({ searchParams }: Props) {
   return (
     <>
       <section className="overview-heading">
-        <div><span className="eyebrow">Your monthly outlook</span><h1>{formatMonthLabel(month)}</h1><p className="muted">A projection based on your recurring income and expenses · {baseCurrency.code}</p></div>
+        <div><h1>{formatMonthLabel(month)}</h1><p className="muted">Monthly projection · {baseCurrency.code}</p></div>
         <nav className="month-picker" aria-label="Choose month">
           <Link href={`/?month=${addMonths(month, -1)}`} aria-label="Previous month">←</Link>
           <Link href={`/?month=${currentMonthKey()}`}>Today</Link>
@@ -106,11 +107,11 @@ export default async function DashboardPage({ searchParams }: Props) {
         <p><Link href="/transactions">Review bank notices</Link> · <Link href="/splitwise">Review shared expenses and categories</Link></p>
       </section>
       <section className="overview-shortcuts" aria-label="Explore your finances">
-        <Link href="/transactions"><span className="shortcut-icon">↔</span><span><strong>Imported activity</strong><small>Review transactions</small></span><b aria-hidden="true">↗</b></Link>
-        <Link href="/splitwise"><span className="shortcut-icon">◎</span><span><strong>Splitwise</strong><small>View shared expenses</small></span><b aria-hidden="true">↗</b></Link>
+        <Link href="/transactions"><span className="shortcut-icon" aria-hidden="true">↔</span><span><strong>Imported activity</strong><small>Review transactions</small></span><b aria-hidden="true">↗</b></Link>
+        <Link href="/splitwise"><span className="shortcut-icon" aria-hidden="true">◎</span><span><strong>Splitwise</strong><small>View shared expenses</small></span><b aria-hidden="true">↗</b></Link>
         <Link href="/expenses"><span className="shortcut-icon">◫</span><span><strong>Recurring expenses</strong><small>Manage your plan</small></span><b aria-hidden="true">↗</b></Link>
       </section>
-      <div className="section-heading"><div><span className="eyebrow">See the bigger picture</span><h2>How your plan evolves</h2></div><span>Last six months</span></div>
+      <div className="section-heading"><div><h2>How your plan evolves</h2></div><span>Last six months</span></div>
       <section className="grid grid-2">
         <div className="panel chart-card">
           <div className="panel-header">
@@ -123,7 +124,7 @@ export default async function DashboardPage({ searchParams }: Props) {
             <div className="chart-axis-label chart-axis-label-top">
               <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: netRange.max, context: displayMoneyContext })} />
             </div>
-            <svg className="line-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Net trend chart">
+            <svg className="line-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Net trend chart. Exact values are available in the six-month projection table below.">
               <line className="chart-zero-line" x1="0" x2="100" y1={lineY(0, netRange)} y2={lineY(0, netRange)} />
               <polyline className="chart-line chart-line-committed" points={committedNetPoints} />
               <polyline strokeDasharray="3 2" className="chart-line chart-line-optional" points={optionalNetPoints} />
@@ -165,7 +166,7 @@ export default async function DashboardPage({ searchParams }: Props) {
               <p className="muted">Monthly income compared with committed and optional spend.</p>
             </div>
           </div>
-          <div className="cashflow-chart">
+          <div className="cashflow-chart" aria-hidden="true">
             {trend.map((item) => {
               const committedHeight = barHeight(item.expenseBaseMinor, maxCashflow);
               const optionalHeight = barHeight(item.optionalExpenseBaseMinor, maxCashflow);
@@ -198,8 +199,51 @@ export default async function DashboardPage({ searchParams }: Props) {
         </div>
       </section>
 
+      <details className="chart-data panel">
+        <summary>View six-month projection values</summary>
+        <p className="muted">Income, committed spend, optional spend, and net outcomes by month.</p>
+            <div className="table-scroll" role="region" aria-label="Six-month projection" tabIndex={0}><table className="table trend-table">
+              <thead>
+                <tr>
+                  <th scope="col">Month</th>
+                  <th scope="col">Income</th>
+                  <th scope="col">Committed</th>
+                  <th scope="col">Optional</th>
+                  <th scope="col">Net Base</th>
+                  <th scope="col">Net With Optional</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trend.map((item) => (
+                  <tr key={item.month}>
+                    <td>{formatMonthLabel(item.month)}</td>
+                    <td>
+                      <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: item.incomeBaseMinor, context: displayMoneyContext })} />
+                    </td>
+                    <td>
+                      <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: item.expenseBaseMinor, context: displayMoneyContext })} />
+                    </td>
+                    <td>
+                      <MoneyStack
+                        values={formatDisplayMoneyFromUyu({ amountMinor: item.optionalExpenseBaseMinor, context: displayMoneyContext })}
+                      />
+                    </td>
+                    <td>
+                      <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: item.netBaseMinor, context: displayMoneyContext })} />
+                    </td>
+                    <td>
+                      <MoneyStack
+                        values={formatDisplayMoneyFromUyu({ amountMinor: item.netWithOptionalBaseMinor, context: displayMoneyContext })}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+      </details>
+
       <details className="overview-details" open>
-        <summary><span><span className="eyebrow">Explore the numbers</span><strong>Spending breakdown</strong></span><span className="details-indicator" aria-hidden="true">⌄</span></summary>
+        <summary><span><strong>Spending breakdown</strong></span><span className="details-indicator" aria-hidden="true">⌄</span></summary>
       <section className="grid grid-2">
         <DonutPanel
           title="Spend mix by category"
@@ -341,56 +385,7 @@ export default async function DashboardPage({ searchParams }: Props) {
         </div>
       </section>
 
-      <section>
-        <div>
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Six-month projection</h2>
-                <p className="muted">Income, committed spend, optional spend, and net outcomes by month.</p>
-              </div>
-            </div>
-            <div className="table-scroll" role="region" aria-label="Six-month projection" tabIndex={0}><table className="table trend-table">
-              <thead>
-                <tr>
-                  <th>Month</th>
-                  <th>Income</th>
-                  <th>Committed</th>
-                  <th>Optional</th>
-                  <th>Net Base</th>
-                  <th>Net With Optional</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trend.map((item) => (
-                  <tr key={item.month}>
-                    <td>{formatMonthLabel(item.month)}</td>
-                    <td>
-                      <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: item.incomeBaseMinor, context: displayMoneyContext })} />
-                    </td>
-                    <td>
-                      <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: item.expenseBaseMinor, context: displayMoneyContext })} />
-                    </td>
-                    <td>
-                      <MoneyStack
-                        values={formatDisplayMoneyFromUyu({ amountMinor: item.optionalExpenseBaseMinor, context: displayMoneyContext })}
-                      />
-                    </td>
-                    <td>
-                      <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: item.netBaseMinor, context: displayMoneyContext })} />
-                    </td>
-                    <td>
-                      <MoneyStack
-                        values={formatDisplayMoneyFromUyu({ amountMinor: item.netWithOptionalBaseMinor, context: displayMoneyContext })}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-          </div>
-        </div>
-      </section>
+
       </details>
     </>
   );
