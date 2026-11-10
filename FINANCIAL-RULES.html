@@ -1,5 +1,402 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Financial rules for imported activity</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:72ch;margin:2rem auto;padding:0 1rem;color:#17231c}h1,h2{line-height:1.2}p{margin:1em 0}</style></head><body><main><h1>Financial rules for imported activity</h1>
-<p>The recurring budget is a projection; observed spending is a separate, incomplete estimate and is not subtracted from the recurring projection. The app never adds a payment between people or a bank transfer as a new expense. A bank payment is cash outflow, a Splitwise paid share is what the user fronted, and an owed share is their own consumption; a settlement changes a debt, not the expense again. Splitwise balances are displayed as supplied because their sign has not been independently established.</p>
-<p>Bank purchase notices that are pending or confirmed are included provisionally; discarded notices, zero amounts and transfers are excluded. Splitwise deleted records and payments are excluded. An unpaid personal share can be included when there is no same-day, same-merchant bank notice suggesting overlap. An unmatched expense that the user paid is excluded and counted as ambiguous, because adding both sources could double-count. Amounts with missing shares, negative values (including refunds), unsupported precision or unsupported Splitwise currency are omitted and counted; they are not guessed. A changed or deleted Splitwise record is recalculated on the next snapshot, and missing provider rows are retained rather than inferred deleted.</p>
-<p>An automatic possible pair requires equal calendar date as stored, normalized exact merchant, equal currency and bank amount equal to the user's Splitwise paid share, with a unique candidate on each side. UYU and USD are supported for Splitwise matching. For that tentative pair the bank amount is replaced by the owed share, without claiming independent confirmation. The dashboard exposes each match and allows rejecting it; rejected pairs can be restored and are persisted across syncs. Duplicate amounts or merchants, installments, ambiguous pairs, late dates, currency conversions, unsupported values and partial payments that do not meet the rule are not guessed. The estimate can be incomplete and requires review when ambiguity is reported.</p>
-<p>Totals are shown separately in original currency; no exchange rate is invented. Calendar matching and month selection use the stored ISO timestamp's date prefix, which can differ from local time around midnight. Classification uses saved merchant rules and remains editable on the source screens. An edited category never changes the monetary match. These rules do not establish whether a bank notice is authentic or a payment settled.</p></main></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>BudgetSpin · Financial rules</title>
+  <link rel="icon" type="image/svg+xml" href="public/favicon.svg" />
+  <style>
+    :root {
+      --bg: #f5f7f4; --surface: #ffffff; --surface-soft: #f0f4f1; --ink: #18221d;
+      --muted: #4f5c55; --line: #cfd9d2; --accent: #1b6650; --accent-ink: #ffffff;
+      --good-bg: #e2f2e8; --good-line: #2f8a5a; --good-ink: #145236;
+      --full-bg: #e6eef8; --full-line: #3d6ea8; --full-ink: #1d3f66;
+      --warn-bg: #fff1d2; --warn-line: #b07a12; --warn-ink: #6a4504;
+      --drop-bg: #f9e4e1; --drop-line: #b0473c; --drop-ink: #7d241b;
+      --plain-bg: #eceeec; --plain-line: #8a958f; --plain-ink: #33403a;
+      --code-bg: #e9efeb;
+      --shadow: 0 14px 40px rgba(20, 50, 35, .10);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0f1512; --surface: #17201b; --surface-soft: #1d2822; --ink: #e5ece8;
+        --muted: #a9b7af; --line: #2f3d35; --accent: #77d1b0; --accent-ink: #0d1a14;
+        --good-bg: #163526; --good-line: #5cc48c; --good-ink: #a8ecc6;
+        --full-bg: #172a40; --full-line: #6f9fd8; --full-ink: #c4dcf7;
+        --warn-bg: #3a2c0d; --warn-line: #d9a640; --warn-ink: #f6d58e;
+        --drop-bg: #3c1c18; --drop-line: #e07b6f; --drop-ink: #f7bdb4;
+        --plain-bg: #232b27; --plain-line: #7d8a83; --plain-ink: #d3dbd6;
+        --code-bg: #212c26;
+        --shadow: 0 14px 40px rgba(0, 0, 0, .35);
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0f1512; --surface: #17201b; --surface-soft: #1d2822; --ink: #e5ece8;
+      --muted: #a9b7af; --line: #2f3d35; --accent: #77d1b0; --accent-ink: #0d1a14;
+      --good-bg: #163526; --good-line: #5cc48c; --good-ink: #a8ecc6;
+      --full-bg: #172a40; --full-line: #6f9fd8; --full-ink: #c4dcf7;
+      --warn-bg: #3a2c0d; --warn-line: #d9a640; --warn-ink: #f6d58e;
+      --drop-bg: #3c1c18; --drop-line: #e07b6f; --drop-ink: #f7bdb4;
+      --plain-bg: #232b27; --plain-line: #7d8a83; --plain-ink: #d3dbd6;
+      --code-bg: #212c26;
+      --shadow: 0 14px 40px rgba(0, 0, 0, .35);
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink); line-height: 1.6;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px;
+    }
+    a { color: var(--accent); }
+    a:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em;
+      background: var(--code-bg); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+    .skip { position: absolute; left: -999px; top: 8px; background: var(--surface); color: var(--ink); padding: 8px 12px; border-radius: 8px; z-index: 2; }
+    .skip:focus { left: 16px; }
+
+    header.top { border-bottom: 1px solid var(--line); background: var(--surface); }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+    header.top .wrap { padding-top: 32px; padding-bottom: 24px; }
+    .kicker { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+    h1 { margin: 6px 0 8px; font-size: clamp(24px, 4.5vw, 32px); line-height: 1.2; letter-spacing: -.02em; }
+    .lede { margin: 0; color: var(--muted); max-width: 66ch; }
+    nav.toc { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+    nav.toc a { font-size: 13px; font-weight: 700; text-decoration: none; padding: 4px 10px;
+      border: 1px solid var(--line); border-radius: 999px; background: var(--surface-soft); }
+
+    main { padding-top: 24px; padding-bottom: 56px; }
+    section.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      box-shadow: var(--shadow); padding: 20px 20px 14px; margin-bottom: 20px; }
+    @media (min-width: 640px) { section.card { padding: 24px 28px 18px; } }
+    h2 { margin: 0 0 10px; font-size: 20px; letter-spacing: -.01em; }
+    h3 { margin: 18px 0 6px; font-size: 15px; }
+    p, li { max-width: 72ch; }
+    ul, ol { padding-left: 22px; } li { margin-bottom: 6px; }
+
+    .status { border-left: 4px solid var(--warn-line); background: var(--warn-bg); color: var(--warn-ink);
+      border-radius: 10px; padding: 12px 14px; margin: 0 0 20px; }
+    .status strong { color: inherit; }
+
+    .table-wrap { overflow-x: auto; margin: 8px 0 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 480px; }
+    th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--surface-soft); font-size: 13px; }
+
+    .flows { display: grid; grid-template-columns: 1fr; gap: 18px; margin: 12px 0; }
+    @media (min-width: 820px) { .flows { grid-template-columns: 1fr 1fr; } }
+    figure.flow { margin: 0; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--surface-soft); }
+    figure.flow h3 { margin: 0 0 8px; }
+    figure.flow svg { display: block; width: 100%; height: auto; max-width: 420px; margin: 0 auto; }
+    .tag-conceptual { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--plain-ink); background: var(--plain-bg); border: 1px solid var(--plain-line); border-radius: 999px; padding: 2px 10px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 13.5px; margin: 10px 0 4px; padding: 0; list-style: none; }
+    .legend li { display: flex; align-items: center; gap: 6px; margin: 0; }
+    .sw { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; display: inline-block; }
+    .sw.good { background: var(--good-bg); border-color: var(--good-line); }
+    .sw.full { background: var(--full-bg); border-color: var(--full-line); }
+    .sw.warn { background: var(--warn-bg); border-color: var(--warn-line); }
+    .sw.drop { background: var(--drop-bg); border-color: var(--drop-line); }
+    .sw.plain { background: var(--plain-bg); border-color: var(--plain-line); }
+
+    /* SVG diagram styling: shapes inherit the page tokens, so both themes work. */
+    .fd-dec { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+    .fd-good { fill: var(--good-bg); stroke: var(--good-line); stroke-width: 2; }
+    .fd-full { fill: var(--full-bg); stroke: var(--full-line); stroke-width: 2; }
+    .fd-warn { fill: var(--warn-bg); stroke: var(--warn-line); stroke-width: 2; }
+    .fd-drop { fill: var(--drop-bg); stroke: var(--drop-line); stroke-width: 2; }
+    .fd-plain { fill: var(--plain-bg); stroke: var(--plain-line); stroke-width: 2; }
+    .fd-t { fill: var(--ink); font: 12px ui-sans-serif, system-ui, sans-serif; }
+    .fd-h { fill: var(--ink); font: 700 13px ui-sans-serif, system-ui, sans-serif; }
+    .fd-o { font: 700 12.5px ui-sans-serif, system-ui, sans-serif; }
+    .fd-o.good { fill: var(--good-ink); } .fd-o.full { fill: var(--full-ink); } .fd-o.warn { fill: var(--warn-ink); }
+    .fd-o.drop { fill: var(--drop-ink); } .fd-o.plain { fill: var(--plain-ink); }
+    .fd-l { fill: var(--muted); font: 700 11px ui-sans-serif, system-ui, sans-serif; }
+    .fd-a { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+    .fd-m { fill: var(--muted); }
+
+    details.alt { margin: 10px 0 4px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); }
+    details.alt summary { cursor: pointer; font-weight: 700; }
+    .note { color: var(--muted); font-size: 14.5px; }
+    .limits li strong { color: var(--ink); }
+    footer { color: var(--muted); font-size: 13px; padding-bottom: 40px; }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <header class="top">
+    <div class="wrap">
+      <span class="kicker">BudgetSpin · Financial rules</span>
+      <h1>How observed spending is estimated</h1>
+      <p class="lede">The dashboard's “Observed spending” panel combines imported bank purchase notices and Splitwise expenses into one estimate per month, without counting the same money twice. This page states the rules exactly as the code applies them.</p>
+      <nav class="toc" aria-label="Sections">
+        <a href="#what">What it is</a>
+        <a href="#inputs">Inputs</a>
+        <a href="#flow">Decision flow</a>
+        <a href="#pairing">Pairing</a>
+        <a href="#conversion">Amounts</a>
+        <a href="#dashboard">Dashboard figures</a>
+        <a href="#review">Reviewing pairs</a>
+        <a href="#limits">Limitations</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="content" class="wrap">
+    <p class="status" role="note"><strong>Status:</strong> this logic lives on an unmerged branch. It has not been run against real bank or Splitwise data, and no test, lint, typecheck or build has run on the branch yet. Everything below describes what the code says (<code>src/finance/actual-spending.ts</code>, used by <code>app/page.tsx</code>), not observed results.</p>
+
+    <section class="card" id="what" aria-labelledby="what-h">
+      <h2 id="what-h">1. What observed spending is — and is not</h2>
+      <ul>
+        <li>The recurring budget is a <strong>projection</strong>. Observed spending is a separate, <strong>incomplete estimate</strong> for one month, shown next to the plan and never subtracted from it.</li>
+        <li>It is not a bank statement and not a cash balance. An e-mail notice does not prove that a payment settled, and these rules do not check whether a notice is authentic.</li>
+        <li>Totals are kept <strong>per original currency</strong>. No exchange rate is applied or invented.</li>
+        <li>What each amount means: a bank purchase is cash that left the account; a Splitwise <em>paid share</em> is what the user fronted; an <em>owed share</em> is the user's own consumption. A settlement between people changes a debt, not the expense, so it is never counted again as spending.</li>
+        <li>Splitwise balances are shown as the provider returns them; their sign has not been independently established and they do not enter the estimate.</li>
+      </ul>
+    </section>
+
+    <section class="card" id="inputs" aria-labelledby="inputs-h">
+      <h2 id="inputs-h">2. Which records enter the calculation</h2>
+      <p>Both sources are filtered to the selected month by the <strong>first seven characters</strong> (<code>YYYY-MM</code>) of the stored timestamp.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Source</th><th scope="col">Included</th><th scope="col">Excluded before any matching</th></tr></thead>
+          <tbody>
+            <tr><td>Bank notices (<code>transactions</code>)</td><td><code>kind = purchase</code>, amount &gt; 0, status <code>pending</code> or <code>confirmed</code></td><td>transfers (<code>transfer_out</code>/<code>transfer_in</code>), notices reviewed as <code>discarded</code>, zero amounts</td></tr>
+            <tr><td>Splitwise (<code>splitwise_imports</code>, current account only)</td><td>expenses that are not payments and not deleted</td><td>payments (settlements) and deleted records</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Pending notices count.</strong> A bank notice is imported as <code>pending</code> and stays in the estimate until someone discards it on <a href="#review">/transactions</a>.</p>
+    </section>
+
+    <section class="card" id="flow" aria-labelledby="flow-h">
+      <h2 id="flow-h">3. Decision flow</h2>
+      <p><span class="tag-conceptual">Conceptual diagram</span> These flowcharts restate the branching in <code>calculateActualMonth</code>. They are drawn from the code, not from measured data or real transactions.</p>
+      <ul class="legend" aria-label="Legend">
+        <li><span class="sw good" aria-hidden="true"></span>owed share counted</li>
+        <li><span class="sw full" aria-hidden="true"></span>bank amount counted</li>
+        <li><span class="sw warn" aria-hidden="true"></span>ambiguous, left out</li>
+        <li><span class="sw drop" aria-hidden="true"></span>not counted / omitted</li>
+        <li><span class="sw plain" aria-hidden="true"></span>nothing further</li>
+      </ul>
+      <div class="flows">
+        <figure class="flow">
+          <h3 id="flow-bank-t">One bank purchase</h3>
+          <svg viewBox="0 0 360 400" role="img" aria-labelledby="flow-bank-t flow-bank-d">
+            <desc id="flow-bank-d">Flowchart. A notice that is not a purchase, not positive, discarded or outside the month is not in the estimate. Otherwise, if there is not exactly one unrejected Splitwise candidate with the same day, normalised description, currency and a paid share equal to the bank amount, the full bank amount counts. If there is one, but its shares are not usable or it fits more than one purchase, the full bank amount counts. Otherwise the pair counts the user's owed share.</desc>
+            <defs>
+              <marker id="arrow-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="fd-m" d="M0 0 L10 5 L0 10 z" /></marker>
+            </defs>
+            <!-- D1 -->
+            <rect class="fd-dec" x="10" y="10" width="220" height="64" rx="10" />
+            <text class="fd-h" x="120" y="32" text-anchor="middle">Purchase in this month?</text>
+            <text class="fd-t" x="120" y="50" text-anchor="middle">kind purchase · amount &gt; 0 ·</text>
+            <text class="fd-t" x="120" y="65" text-anchor="middle">not discarded (pending counts)</text>
+            <line class="fd-a" x1="230" y1="42" x2="248" y2="42" marker-end="url(#arrow-b)" />
+            <text class="fd-l" x="239" y="35" text-anchor="middle">no</text>
+            <rect class="fd-drop" x="250" y="18" width="102" height="48" rx="10" />
+            <text class="fd-o drop" x="301" y="38" text-anchor="middle">Not in the</text>
+            <text class="fd-o drop" x="301" y="54" text-anchor="middle">estimate</text>
+            <line class="fd-a" x1="120" y1="74" x2="120" y2="102" marker-end="url(#arrow-b)" />
+            <text class="fd-l" x="128" y="92">yes</text>
+            <!-- D2 -->
+            <rect class="fd-dec" x="10" y="104" width="220" height="100" rx="10" />
+            <text class="fd-h" x="120" y="125" text-anchor="middle">Exactly one candidate?</text>
+            <text class="fd-t" x="120" y="143" text-anchor="middle">Splitwise expense with same day,</text>
+            <text class="fd-t" x="120" y="159" text-anchor="middle">same normalised description,</text>
+            <text class="fd-t" x="120" y="175" text-anchor="middle">same currency, paid share equal</text>
+            <text class="fd-t" x="120" y="191" text-anchor="middle">to bank amount; not rejected</text>
+            <line class="fd-a" x1="230" y1="154" x2="248" y2="154" marker-end="url(#arrow-b)" />
+            <text class="fd-l" x="239" y="147" text-anchor="middle">no</text>
+            <rect class="fd-full" x="250" y="130" width="102" height="48" rx="10" />
+            <text class="fd-o full" x="301" y="150" text-anchor="middle">Full bank</text>
+            <text class="fd-o full" x="301" y="166" text-anchor="middle">amount</text>
+            <line class="fd-a" x1="120" y1="204" x2="120" y2="232" marker-end="url(#arrow-b)" />
+            <text class="fd-l" x="128" y="222">yes</text>
+            <!-- D3 -->
+            <rect class="fd-dec" x="10" y="234" width="220" height="80" rx="10" />
+            <text class="fd-h" x="120" y="255" text-anchor="middle">Shares usable and unique?</text>
+            <text class="fd-t" x="120" y="273" text-anchor="middle">owed ≤ total · bank ≤ total ·</text>
+            <text class="fd-t" x="120" y="289" text-anchor="middle">candidate fits only this</text>
+            <text class="fd-t" x="120" y="305" text-anchor="middle">bank purchase</text>
+            <line class="fd-a" x1="230" y1="274" x2="248" y2="274" marker-end="url(#arrow-b)" />
+            <text class="fd-l" x="239" y="267" text-anchor="middle">no</text>
+            <rect class="fd-full" x="250" y="250" width="102" height="48" rx="10" />
+            <text class="fd-o full" x="301" y="270" text-anchor="middle">Full bank</text>
+            <text class="fd-o full" x="301" y="286" text-anchor="middle">amount</text>
+            <line class="fd-a" x1="120" y1="314" x2="120" y2="342" marker-end="url(#arrow-b)" />
+            <text class="fd-l" x="128" y="332">yes</text>
+            <!-- Outcome -->
+            <rect class="fd-good" x="10" y="344" width="220" height="46" rx="10" />
+            <text class="fd-o good" x="120" y="363" text-anchor="middle">Paired: count your</text>
+            <text class="fd-o good" x="120" y="380" text-anchor="middle">owed share</text>
+          </svg>
+        </figure>
+
+        <figure class="flow">
+          <h3 id="flow-sw-t">One Splitwise expense</h3>
+          <svg viewBox="0 0 360 530" role="img" aria-labelledby="flow-sw-t flow-sw-d">
+            <desc id="flow-sw-d">Flowchart. A payment or deleted record is never an expense. An expense already paired with a bank purchase is counted through that pair. If its shares cannot be converted to the currency's minor unit, or a share exceeds the total, it is omitted. If the user paid nothing and no bank purchase has the same day, description and currency, the owed share counts. Otherwise, if the user paid or owes anything, it is ambiguous and left out; if both shares are zero nothing is counted.</desc>
+            <defs>
+              <marker id="arrow-s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="fd-m" d="M0 0 L10 5 L0 10 z" /></marker>
+            </defs>
+            <!-- D1 -->
+            <rect class="fd-dec" x="10" y="10" width="220" height="52" rx="10" />
+            <text class="fd-h" x="120" y="31" text-anchor="middle">Payment or deleted?</text>
+            <text class="fd-t" x="120" y="49" text-anchor="middle">settlement or removed record</text>
+            <line class="fd-a" x1="230" y1="36" x2="248" y2="36" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="239" y="29" text-anchor="middle">yes</text>
+            <rect class="fd-drop" x="250" y="12" width="102" height="48" rx="10" />
+            <text class="fd-o drop" x="301" y="32" text-anchor="middle">Never an</text>
+            <text class="fd-o drop" x="301" y="48" text-anchor="middle">expense</text>
+            <line class="fd-a" x1="120" y1="62" x2="120" y2="88" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="128" y="80">no</text>
+            <!-- D2 -->
+            <rect class="fd-dec" x="10" y="90" width="220" height="52" rx="10" />
+            <text class="fd-h" x="120" y="111" text-anchor="middle">Already paired?</text>
+            <text class="fd-t" x="120" y="129" text-anchor="middle">with one bank purchase</text>
+            <line class="fd-a" x1="230" y1="116" x2="248" y2="116" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="239" y="109" text-anchor="middle">yes</text>
+            <rect class="fd-plain" x="250" y="92" width="102" height="48" rx="10" />
+            <text class="fd-o plain" x="301" y="112" text-anchor="middle">Counted via</text>
+            <text class="fd-o plain" x="301" y="128" text-anchor="middle">the pair</text>
+            <line class="fd-a" x1="120" y1="142" x2="120" y2="168" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="128" y="160">no</text>
+            <!-- D3 -->
+            <rect class="fd-dec" x="10" y="170" width="220" height="86" rx="10" />
+            <text class="fd-h" x="120" y="191" text-anchor="middle">Amounts usable?</text>
+            <text class="fd-t" x="120" y="209" text-anchor="middle">you take part · each amount</text>
+            <text class="fd-t" x="120" y="225" text-anchor="middle">fits the currency's minor unit ·</text>
+            <text class="fd-t" x="120" y="241" text-anchor="middle">owed ≤ total · paid ≤ total</text>
+            <line class="fd-a" x1="230" y1="213" x2="248" y2="213" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="239" y="206" text-anchor="middle">no</text>
+            <rect class="fd-drop" x="250" y="189" width="102" height="48" rx="10" />
+            <text class="fd-o drop" x="301" y="209" text-anchor="middle">Omitted</text>
+            <text class="fd-o drop" x="301" y="225" text-anchor="middle">(unsupported)</text>
+            <line class="fd-a" x1="120" y1="256" x2="120" y2="282" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="128" y="274">yes</text>
+            <!-- D4 -->
+            <rect class="fd-dec" x="10" y="284" width="220" height="86" rx="10" />
+            <text class="fd-h" x="120" y="305" text-anchor="middle">Paid share is zero, and…</text>
+            <text class="fd-t" x="120" y="323" text-anchor="middle">no bank purchase has the same</text>
+            <text class="fd-t" x="120" y="339" text-anchor="middle">day, description and currency?</text>
+            <text class="fd-t" x="120" y="355" text-anchor="middle">(amount is not compared)</text>
+            <line class="fd-a" x1="230" y1="327" x2="248" y2="327" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="239" y="320" text-anchor="middle">yes</text>
+            <rect class="fd-good" x="250" y="303" width="102" height="48" rx="10" />
+            <text class="fd-o good" x="301" y="323" text-anchor="middle">Count your</text>
+            <text class="fd-o good" x="301" y="339" text-anchor="middle">owed share</text>
+            <line class="fd-a" x1="120" y1="370" x2="120" y2="396" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="128" y="388">no</text>
+            <!-- D5 -->
+            <rect class="fd-dec" x="10" y="398" width="220" height="52" rx="10" />
+            <text class="fd-h" x="120" y="419" text-anchor="middle">Paid or owe anything?</text>
+            <text class="fd-t" x="120" y="437" text-anchor="middle">paid &gt; 0 or owed &gt; 0</text>
+            <line class="fd-a" x1="230" y1="424" x2="248" y2="424" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="239" y="417" text-anchor="middle">yes</text>
+            <rect class="fd-warn" x="250" y="400" width="102" height="48" rx="10" />
+            <text class="fd-o warn" x="301" y="420" text-anchor="middle">Ambiguous:</text>
+            <text class="fd-o warn" x="301" y="436" text-anchor="middle">left out</text>
+            <line class="fd-a" x1="120" y1="450" x2="120" y2="476" marker-end="url(#arrow-s)" />
+            <text class="fd-l" x="128" y="468">no</text>
+            <rect class="fd-plain" x="10" y="478" width="220" height="40" rx="10" />
+            <text class="fd-o plain" x="120" y="503" text-anchor="middle">Nothing to count</text>
+          </svg>
+        </figure>
+      </div>
+
+      <details class="alt">
+        <summary>Text version of both flowcharts</summary>
+        <h3>One bank purchase (already inside the included set of section 2)</h3>
+        <ol>
+          <li>Is there <strong>exactly one</strong> Splitwise expense that meets every <a href="#pairing">pairing condition</a>, with the pair not rejected? No → count the <strong>full bank amount</strong>.</li>
+          <li>Are the candidate's shares usable — owed share and total convertible, owed ≤ total, bank amount ≤ total — and does that Splitwise expense match <strong>only this</strong> bank purchase? No → count the <strong>full bank amount</strong>. Yes → <strong>paired</strong>: count the user's <strong>owed share</strong> instead (in the bank purchase's currency).</li>
+        </ol>
+        <h3>One Splitwise expense</h3>
+        <ol>
+          <li>Payment (settlement) or deleted? → <strong>never an expense</strong>.</li>
+          <li>Already paired with a bank purchase? → counted through that pair; nothing more.</li>
+          <li>Are the amounts usable? Paid share, owed share and total must all convert to the currency's minor unit, with owed ≤ total and paid ≤ total. If the user does not take part, the shares are empty and the expense fails here. No → <strong>omitted</strong>.</li>
+          <li>Did the user pay <strong>nothing</strong>, and is there <strong>no</strong> bank purchase with the same day, same normalised description and same currency (amount not compared)? Yes → count the user's <strong>owed share</strong>.</li>
+          <li>Otherwise, if the user paid or owes anything → <strong>ambiguous, left out</strong>. If both shares are zero, nothing is counted or flagged.</li>
+        </ol>
+      </details>
+
+      <h3>Consequences worth knowing</h3>
+      <ul>
+        <li>An unpaired Splitwise expense that the user paid is left out as ambiguous, because the same money may already be in a bank purchase.</li>
+        <li>When a pair is rejected, the bank purchase goes back to its full amount and the Splitwise expense (whose paid share is above zero) becomes ambiguous.</li>
+        <li>If two bank purchases fit the same Splitwise expense, neither pairs: both count at full amount and the Splitwise expense becomes ambiguous.</li>
+      </ul>
+    </section>
+
+    <section class="card" id="pairing" aria-labelledby="pairing-h">
+      <h2 id="pairing-h">4. Pairing conditions (all required)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Condition</th><th scope="col">How the code checks it</th></tr></thead>
+          <tbody>
+            <tr><td>Same day</td><td>The first ten characters of both stored timestamps are equal. The bank's is the e-mail <code>Date</code> header converted to UTC; Splitwise's is stored as the provider returns it.</td></tr>
+            <tr><td>Same description</td><td>After Unicode NFKC normalisation, trimming, collapsing whitespace and lower-casing, both texts are identical and not empty.</td></tr>
+            <tr><td>Same currency</td><td>Identical ISO code.</td></tr>
+            <tr><td>Same amount</td><td>The user's Splitwise paid share, converted to minor units, equals the bank amount and is above zero.</td></tr>
+            <tr><td>Not rejected</td><td>The pair is not in <code>import_pair_exclusions</code>.</td></tr>
+            <tr><td>Unique on both sides</td><td>One candidate for the bank purchase, and that candidate fits only one bank purchase.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="conversion" aria-labelledby="conversion-h">
+      <h2 id="conversion-h">5. Converting Splitwise amounts</h2>
+      <p>Splitwise amounts are decimal strings. They are converted to integer minor units with the <strong>minor unit configured for that currency</strong> in the <code>currencies</code> table — the same scale the bank amounts use — without floating-point arithmetic.</p>
+      <ul>
+        <li>A currency that is not configured, or whose minor unit is outside 0–6, cannot be converted.</li>
+        <li>Digits beyond the currency's minor unit are accepted only when they are zeros (<code>1500.00</code> in a 0-decimal currency). Anything finer is <strong>not rounded</strong>: the value is unusable and the expense is omitted.</li>
+        <li>Negative values (including refunds) are not converted and are omitted.</li>
+      </ul>
+    </section>
+
+    <section class="card" id="dashboard" aria-labelledby="dashboard-h">
+      <h2 id="dashboard-h">6. What the dashboard shows</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Figure</th><th scope="col">Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>Totals per currency</td><td>Sum of full bank amounts, paired owed shares and unpaid owed shares.</td></tr>
+            <tr><td>Pending bank notices</td><td>Included purchases still in <code>pending</code> status.</td></tr>
+            <tr><td>Possible matches</td><td>Pairs where the owed share replaced the bank amount.</td></tr>
+            <tr><td>Need a clear match</td><td>Splitwise expenses left out as ambiguous.</td></tr>
+            <tr><td>Unavailable or unsupported</td><td>Splitwise expenses omitted because the amounts could not be used.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="review" aria-labelledby="review-h">
+      <h2 id="review-h">7. Reviewing pairs</h2>
+      <p>Each pair is listed under “Review possible matches” with a <strong>“Not the same expense”</strong> button, which stores a rejection in <code>import_pair_exclusions</code> (keyed by bank transaction, Splitwise account and expense). Rejections persist across Splitwise syncs and can be undone with <strong>“Allow matching again”</strong> (the pair returns only if it still meets every condition).</p>
+      <p>There is <strong>no manual confirmation</strong> of a pair and no way to pair two records by hand: a pair only exists when the automatic rule finds it. Bank notices are reviewed separately on <code>/transactions</code> (confirm or discard).</p>
+    </section>
+
+    <section class="card" id="limits" aria-labelledby="limits-h">
+      <h2 id="limits-h">8. Limitations (true in the current code)</h2>
+      <ul class="limits">
+        <li><strong>Exact matching only.</strong> A different spelling of the merchant, or a Splitwise date that falls on another day than the bank's UTC date (for example near midnight in local time), prevents a pair. Duplicate amounts, installments, partial payments and currency conversions are not inferred.</li>
+        <li><strong>Month and day boundaries use the stored timestamps' text</strong>, not local time. A purchase made late in the evening locally can land in the next UTC day or month.</li>
+        <li><strong>No manual pair confirmation</strong>, only rejection.</li>
+        <li><strong>Totals are an estimate.</strong> They can be incomplete and need review whenever the ambiguous or omitted counts are not zero.</li>
+        <li><strong>Amounts finer than the currency's minor unit are omitted</strong>, not rounded.</li>
+        <li><strong>Pending imports are counted.</strong> A notice that was never reviewed — including one that is not genuine — is in the total until discarded. Bank e-mails are accepted by sender address and subject only; there is no sender authentication (see <a href="HANDOFF.html">HANDOFF</a>).</li>
+        <li>Categories (saved per normalised description and editable on the source screens) never change the monetary calculation.</li>
+        <li>A changed or deleted Splitwise record is recalculated after the next successful snapshot; records missing from a provider response are kept, not assumed deleted.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="wrap">BudgetSpin financial rules. Agent-readable mirror: <code>FINANCIAL-RULES.md</code> — keep both in sync.</footer>
+</body>
+</html>
