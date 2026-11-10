@@ -3,7 +3,7 @@
 # ───────────────────────── Stage 1: builder ─────────────────────────
 # Toolchain completa (devDeps incluidas) para compilar. Se descarta entero:
 # nada de este stage llega a la imagen final salvo lo que copiemos explícito.
-FROM node:24-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f1069c5a2f71d53c6482e99a2fc AS builder
+FROM node:24-slim@sha256:39a4259b6f744868a8228742ad45aa3026f97302e5eec2fa4a38b30ca0a66e12 AS builder
 WORKDIR /app
 
 # Manifiestos primero: la capa de npm ci se cachea mientras no cambien las
@@ -24,7 +24,7 @@ RUN npm run build \
 # ───────────────────────── Stage 2: runtime ─────────────────────────
 # Arranca limpio desde la misma base pinneada: sin toolchain, sin devDeps,
 # sin código fuente. Solo el artefacto compilado.
-FROM node:24-slim@sha256:b31e7a42fdf8b8aa5f5ed477c72d694301273f1069c5a2f71d53c6482e99a2fc
+FROM node:24-slim@sha256:39a4259b6f744868a8228742ad45aa3026f97302e5eec2fa4a38b30ca0a66e12
 WORKDIR /app
 
 # Modo producción + binding explícito en 0.0.0.0 (server.js lee HOSTNAME/PORT;
