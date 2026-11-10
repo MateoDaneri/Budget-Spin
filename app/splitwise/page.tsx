@@ -9,8 +9,12 @@ import { listSplitwiseImports } from "@/src/splitwise/store";
 
 export const dynamic = "force-dynamic";
 
-export default async function SplitwisePage() {
+type Props = { searchParams?: Promise<{ error?: string }> };
+
+export default async function SplitwisePage({ searchParams }: Props) {
   if (!await getCurrentSession()) redirect("/login");
+  // The query value only signals that saving failed; its text is never rendered.
+  const saveFailed = Boolean((searchParams ? await searchParams : {}).error);
   const { expenses, syncedAt } = listSplitwiseImports();
   const categories = listCategories("expense");
   let balances: SplitwiseBalance[] = [];
@@ -24,6 +28,7 @@ export default async function SplitwisePage() {
   return (
     <>
       <section className="page-hero"><div><span className="eyebrow">Shared spending</span><h1>Splitwise</h1><p className="muted">Recent shared expenses and balances, separate from your recurring plan.</p></div></section>
+      {saveFailed ? <div className="alert" role="alert">Could not save the category. Please try again.</div> : null}
       {error ? <div className="alert" role="alert">{error}</div> : (
         <section className="panel shared-balances">
           <h2>Balances by person and currency</h2>
