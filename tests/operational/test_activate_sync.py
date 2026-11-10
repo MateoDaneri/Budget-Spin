@@ -37,6 +37,11 @@ class ActivationTests(unittest.TestCase):
                 self.assertEqual(a.TOKEN.stat().st_mode & 0o777, 0o600)
                 self.assertEqual(sum(args[0] == 'run' for args, _ in calls), 1)
                 for args, _ in calls: self.assertNotIn(token.decode(), repr(args))
+                # Inside the container the header is fed to curl on stdin, never as an argument.
+                shell = [args for args, _ in calls if args[:1] == ('run',)][0][-1]
+                self.assertIn('| curl -K - ', shell)
+                self.assertNotIn(' -H ', shell)
+                self.assertIn('http://app:3000/api/ingest/itau', shell)
                 install = [kw for args, kw in calls if args[:2] == ('exec', '-i')]
                 self.assertEqual(install[0]['data'], token)
 

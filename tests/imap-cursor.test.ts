@@ -47,13 +47,20 @@ describe("IMAP cursor batches", () => {
     expect(state.ranges).toEqual(["1:9"]);
   });
 
-  it("fails the batch on excessive or incomplete source without returning a cursor", async () => {
-    state.uidNext = 2;
-    state.records = [{ uid: 1, size: MAX_MESSAGE_BYTES + 1, source }];
-    await expect(fetchRecentMail(config, null)).rejects.toThrow("size limit");
-    state.records = [{ uid: 1, size: source.length + 1, source }];
-    await expect(fetchRecentMail(config, null)).rejects.toThrow("incomplete");
-    expect(state.logout).toBe(2);
+  it("reports oversized or incomplete candidates for quarantine and still returns the window and later messages", async () => {
+    state.uidNext = 4;
+    const later = Buffer.from("From: test@itau.com.uy\r\nSubject: Aviso de consumo\r\nMessage-ID: <later@example.com>\r\n\r\nHello");
+    state.records = [
+      { uid: 1, size: MAX_MESSAGE_BYTES + 1, source },
+      { uid: 2, size: source.length + 1, source },
+      { uid: 3, size: later.length, source: later }
+    ];
+    const batch = await fetchRecentMail(config, null);
+    expect(batch.rejected).toEqual([{ uid: 1, reason: "oversized" }, { uid: 2, reason: "incomplete" }]);
+    expect(batch.messages.map((message) => message.messageId)).toEqual(["<later@example.com>"]);
+    expect(batch.cursor).toEqual({ uidValidity: "42", lastUid: 3 });
+    expect(JSON.stringify(batch.rejected)).not.toContain("Hello");
+    expect(state.logout).toBe(1);
   });
 
   it("does not retrieve bodies of unrelated messages, even when large", async () => {

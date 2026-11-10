@@ -108,7 +108,12 @@ def main():
     try:
         schedules = {"gmail": (NAMES[0], "itau", "900"), "splitwise": (NAMES[1], "splitwise", "3600")}
         for name, endpoint, interval in (schedules[kind],):
-            shell = 'while true; do token=$(cat /run/ingest-token); curl -fsS -o /dev/null -X POST -H "Authorization: Bearer $token" --connect-timeout 10 --max-time 600 http://app:3000/api/ingest/' + endpoint + ' || echo "sync trigger failed" >&2; sleep ' + interval + '; done'
+            # The header reaches curl as config on stdin from the printf builtin, so
+            # the token is never in any process argument list inside the container.
+            shell = ('while true; do token=$(cat /run/ingest-token); '
+                     'printf \'header = "Authorization: Bearer %s"\\n\' "$token" | '
+                     'curl -K - -fsS -o /dev/null -X POST --connect-timeout 10 --max-time 600 http://app:3000/api/ingest/' + endpoint +
+                     ' || echo "sync trigger failed" >&2; sleep ' + interval + '; done')
             docker("run", "-d", "--name", name, "--restart", "unless-stopped", "--network", NETWORK,
                    "--user", "1000:1000", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                    "--pids-limit", "64", "--mount", f"type=bind,src={TOKEN},dst=/run/ingest-token,readonly",

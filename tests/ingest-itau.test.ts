@@ -48,6 +48,10 @@ function aviso(overrides: Partial<ItauEmailInput> = {}): ItauEmailInput {
   };
 }
 
+function readQuarantine(key: string): unknown {
+  return JSON.parse(fs.readFileSync(path.join(process.env.ITAU_IMAP_STATE_DIR!, `imap-quarantine-${key}.json`), "utf8"));
+}
+
 function batch(messages: ItauEmailInput[]) {
   return { messages, cursor: { uidValidity: "42", lastUid: 50 }, hasMore: false };
 }
@@ -106,13 +110,53 @@ describe("runItauIngest", () => {
     expect(listTransactions()).toHaveLength(2);
   });
 
-  it("stops on an unparseable candidate without advancing, then recovers after correction", async () => {
+  it("quarantines an unparseable candidate, advances the cursor and imports later notices in the same pass", async () => {
     const key = mailboxCursorKey(readImapConfigFromEnv()!);
-    await expect(runItauIngest({ fetcher: async () => batch([aviso({ html: "unknown format" })]) })).rejects.toThrow("could not be parsed");
-    expect(getIngestCursor(key)).toBeNull();
-    await runItauIngest({ fetcher: async () => batch([aviso()]) });
-    expect(listTransactions()).toHaveLength(1);
+    const result = await runItauIngest({ fetcher: async () => batch([
+      aviso({ uid: 1, html: "unknown format" }),
+      aviso({ uid: 2, messageId: "<after-unparseable@example.test>" })
+    ]) });
+    expect(result).toEqual({ messagesSeen: 2, inserted: 1, skipped: 1 });
     expect(getIngestCursor(key)?.lastUid).toBe(50);
+    expect(readQuarantine(key)).toEqual([{ uidValidity: "42", uid: 1, reason: "unrecognized" }]);
+  });
+
+  it("quarantines an unsupported amount format and continues with later notices", async () => {
+    const key = mailboxCursorKey(readImapConfigFromEnv()!);
+    const result = await runItauIngest({ fetcher: async () => batch([
+      aviso({ uid: 1, messageId: "<bad-amount@example.test>", html: html.replace("199.0", "1.2.3") }),
+      aviso({ uid: 2, messageId: "<bad-precision@example.test>", html: html.replace("199.0", "199.001") }),
+      aviso({ uid: 3, messageId: "<after-amount@example.test>" })
+    ]) });
+    expect(result).toEqual({ messagesSeen: 3, inserted: 1, skipped: 2 });
+    expect(getIngestCursor(key)?.lastUid).toBe(50);
+    expect(listTransactions()).toHaveLength(1);
+    expect(readQuarantine(key)).toEqual([
+      { uidValidity: "42", uid: 1, reason: "invalid_amount" },
+      { uidValidity: "42", uid: 2, reason: "unsupported_precision" }
+    ]);
+  });
+
+  it("quarantines a notice in an unconfigured currency and continues with later notices", async () => {
+    const key = mailboxCursorKey(readImapConfigFromEnv()!);
+    const result = await runItauIngest({ fetcher: async () => batch([
+      aviso({ uid: 1, messageId: "<unknown-currency@example.test>", html: html.replace(">UYU<", ">XYZ<") }),
+      aviso({ uid: 2, messageId: "<after-currency@example.test>" })
+    ]) });
+    expect(result).toEqual({ messagesSeen: 2, inserted: 1, skipped: 1 });
+    expect(getIngestCursor(key)?.lastUid).toBe(50);
+    expect(readQuarantine(key)).toEqual([{ uidValidity: "42", uid: 1, reason: "unconfigured_currency" }]);
+  });
+
+  it("quarantines an oversized candidate reported by the fetcher and imports the rest of the window", async () => {
+    const key = mailboxCursorKey(readImapConfigFromEnv()!);
+    const result = await runItauIngest({ fetcher: async () => ({
+      ...batch([aviso({ uid: 2, messageId: "<after-oversized@example.test>" })]),
+      rejected: [{ uid: 1, reason: "oversized" as const }]
+    }) });
+    expect(result).toEqual({ messagesSeen: 2, inserted: 1, skipped: 1 });
+    expect(getIngestCursor(key)?.lastUid).toBe(50);
+    expect(readQuarantine(key)).toEqual([{ uidValidity: "42", uid: 1, reason: "oversized" }]);
   });
 
   it("quarantines an unknown notice before advancing and imports later notices", async () => {
@@ -124,7 +168,7 @@ describe("runItauIngest", () => {
     expect(result).toEqual({ messagesSeen: 2, inserted: 1, skipped: 1 });
     expect(getIngestCursor(key)?.lastUid).toBe(50);
     const stored = fs.readFileSync(path.join(process.env.ITAU_IMAP_STATE_DIR!, `imap-quarantine-${key}.json`), "utf8");
-    expect(JSON.parse(stored)).toEqual([{ uidValidity: "42", uid: 1 }]);
+    expect(JSON.parse(stored)).toEqual([{ uidValidity: "42", uid: 1, reason: "unrecognized" }]);
     expect(stored).not.toContain("unknown secret body");
   });
 
@@ -134,8 +178,7 @@ describe("runItauIngest", () => {
     const result = await runItauIngest({ fetcher: async () => batch([zero, aviso({ uid: 2, messageId: "<positive@example.test>" })]) });
     expect(result).toEqual({ messagesSeen: 2, inserted: 1, skipped: 1 });
     expect(listTransactions()).toHaveLength(1);
-    const stored = JSON.parse(fs.readFileSync(path.join(process.env.ITAU_IMAP_STATE_DIR!, `imap-quarantine-${key}.json`), "utf8"));
-    expect(stored).toEqual([{ uidValidity: "42", uid: 1 }]);
+    expect(readQuarantine(key)).toEqual([{ uidValidity: "42", uid: 1, reason: "non_positive_amount" }]);
   });
 
   it("retries retained notices without losing missing messages", async () => {
@@ -149,8 +192,7 @@ describe("runItauIngest", () => {
       }
     });
     expect(result.inserted).toBe(1);
-    const stored = JSON.parse(fs.readFileSync(path.join(process.env.ITAU_IMAP_STATE_DIR!, `imap-quarantine-${key}.json`), "utf8"));
-    expect(stored).toEqual([{ uidValidity: "42", uid: 2 }]);
+    expect(readQuarantine(key)).toEqual([{ uidValidity: "42", uid: 2, reason: "unrecognized" }]);
   });
 
   it("catches up at most ten windows and passes each committed checkpoint to the next fetch", async () => {

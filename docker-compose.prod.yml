@@ -60,8 +60,10 @@ services:
       - |
         if [ -z "$$INGEST_TOKEN" ]; then echo "INGEST_TOKEN is required" >&2; exit 1; fi
         while true; do
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $$INGEST_TOKEN" \
+          # Header goes through curl's config on stdin (printf is a shell builtin),
+          # so the token never appears in any process argument list.
+          printf 'header = "Authorization: Bearer %s"\n' "$$INGEST_TOKEN" \
+            | curl -K - -fsS -X POST \
             --connect-timeout 10 http://app:3000/api/ingest/itau \
             || echo "[ingest] trigger failed" >&2
           sleep "$${INGEST_INTERVAL:-900}"
@@ -85,7 +87,9 @@ services:
       - |
         if [ -z "$$INGEST_TOKEN" ]; then echo "INGEST_TOKEN is required" >&2; exit 1; fi
         while true; do
-          curl -fsS -o /dev/null -X POST -H "Authorization: Bearer $$INGEST_TOKEN" \
+          # Token via curl config on stdin, never in argv (see the ingest service).
+          printf 'header = "Authorization: Bearer %s"\n' "$$INGEST_TOKEN" \
+            | curl -K - -fsS -o /dev/null -X POST \
             --connect-timeout 10 --max-time 600 http://app:3000/api/ingest/splitwise \
             || echo "[splitwise-ingest] trigger failed" >&2
           sleep "$${SPLITWISE_INGEST_INTERVAL:-3600}"

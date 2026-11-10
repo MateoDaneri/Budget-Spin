@@ -67,6 +67,19 @@ describe("parseItauAviso", () => {
     expect(parsed?.merchant).toBe("COMERCIO MONTE");
   });
 
+  it("parses the normal card line with bounded patterns", () => {
+    const parsed = parseItauAviso(baseInput({ html: html.replace("<b>VISA</b> nro. ***<b>1234</b>", "<b>MASTER</b> nro. ****<b>9876</b>") }));
+    expect(parsed).toMatchObject({ cardNetwork: "MASTER", cardLast4: "9876", amountRaw: "199.0", currencyCode: "UYU" });
+  });
+
+  it("returns quickly on a large adversarial letters-only body", () => {
+    const adversarial = `Importe: 199.0 UYU<br>Comercio: TEST<br>${"a".repeat(200_000)}<${"<".repeat(1000)}`;
+    const started = performance.now();
+    const parsed = parseItauAviso(baseInput({ html: adversarial }));
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(parsed).toMatchObject({ amountRaw: "199.0", cardNetwork: null, cardLast4: null });
+  });
+
   it("normalizes Uruguayan thousands notation defensively (unused by Itaú, kept as a safety net)", () => {
     const big = html.replace("199.0", "1.234,56");
     const parsed = parseItauAviso(baseInput({ html: big }));

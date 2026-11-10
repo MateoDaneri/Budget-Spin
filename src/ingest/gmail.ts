@@ -3,12 +3,14 @@ import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { simpleParser } from "mailparser";
-import { isItauAviso, UnrecognizedNoticeError, type ItauEmailInput } from "./itau-parser";
+import { isItauAviso, isQuarantineReason, UnrecognizedNoticeError, type ItauEmailInput, type QuarantineReason } from "./itau-parser";
 import { isItauTransfer } from "./itau-transfer";
 
 const API = "https://gmail.googleapis.com/gmail/v1/users/me";
 const MAX_BYTES = 1024 * 1024;
-type State = { account: string; mode: "full" | "history"; historyId: string; pageToken?: string; quarantined?: string[] };
+// quarantineReasons maps a retained message ID to a fixed reason code; never content.
+type State = { account: string; mode: "full" | "history"; historyId: string; pageToken?: string; quarantined?: string[]; quarantineReasons?: Record<string, QuarantineReason> };
+type Outcome = "processed" | "irrelevant" | "unavailable" | { quarantined: QuarantineReason };
 type Credentials = { clientId: string; clientSecret: string; refreshToken: string };
 type Fetch = typeof fetch;
 type GmailResponse = {
@@ -94,36 +96,46 @@ export async function syncGmail(options: {
   }
   if (state.account !== account || !["full", "history"].includes(state.mode) || !/^\d+$/.test(state.historyId)) throw new Error("Gmail checkpoint does not match the account or is invalid.");
   if (state.quarantined !== undefined && (!Array.isArray(state.quarantined) || state.quarantined.length > 1000 || state.quarantined.some((id) => typeof id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(id)))) throw new Error("Gmail quarantine invalid.");
-  const processId = async (id: string): Promise<"processed" | "irrelevant" | "quarantined" | "unavailable"> => {
+  const storedReasons: unknown = state.quarantineReasons;
+  if (storedReasons !== undefined && (typeof storedReasons !== "object" || storedReasons === null || Array.isArray(storedReasons) || Object.entries(storedReasons).some(([id, reason]) => !/^[a-zA-Z0-9_-]+$/.test(id) || !isQuarantineReason(reason)))) throw new Error("Gmail quarantine invalid.");
+  // A Map avoids prototype-sensitive keys; only reasons of retained IDs are written back.
+  const reasons = new Map<string, QuarantineReason>(Object.entries(state.quarantineReasons ?? {}));
+  const reasonsFor = (ids: string[]): Record<string, QuarantineReason> =>
+    Object.fromEntries(ids.flatMap((id) => { const reason = reasons.get(id); return reason ? [[id, reason] as const] : []; }));
+  const processId = async (id: string): Promise<Outcome> => {
       // Inspect only the two headers needed for matching before downloading a body.
       const metadata = await get(`${API}/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
       if (!Array.isArray(metadata.labelIds) || !metadata.labelIds.includes("INBOX")) return "unavailable";
       if (!Array.isArray(metadata.payload?.headers)) throw new Error("Gmail metadata response incomplete.");
       const headers = metadata.payload.headers.filter((header) => /^(from|subject)$/i.test(header.name ?? ""))
         .map((header) => ({ ...header, value: typeof header.value === "string" ? header.value.replace(/[\r\n]+[ \t]*/g, " ") : header.value }));
-      if (headers.some((header) => typeof header.value !== "string" || /[\r\n]/.test(header.value))) return "quarantined";
+      if (headers.some((header) => typeof header.value !== "string" || /[\r\n]/.test(header.value))) return { quarantined: "incomplete" };
       const parsedHeaders = await simpleParser(headers.map((header) => `${header.name}: ${header.value}`).join("\r\n") + "\r\n\r\n");
       const candidate: ItauEmailInput = { subject: parsedHeaders.subject ?? "", from: parsedHeaders.from?.value.length === 1 ? (parsedHeaders.from.value[0].address ?? "") : "", date: new Date(NaN), messageId: "", html: "" };
       if (!isItauAviso(candidate) && !isItauTransfer(candidate)) return "irrelevant";
       const message = await get(`${API}/messages/${id}?format=raw`);
       if (!Array.isArray(message.labelIds) || !message.labelIds.includes("INBOX")) return "unavailable";
-      if (typeof message.raw !== "string" || typeof message.sizeEstimate !== "number" || message.sizeEstimate > MAX_BYTES || message.raw.length > Math.ceil(MAX_BYTES * 4 / 3) + 4) throw new Error("Gmail message exceeds size limit or is incomplete.");
+      // Oversized or incomplete candidates are a property of one message: retain the ID, keep the page going.
+      if (typeof message.raw !== "string" || typeof message.sizeEstimate !== "number") return { quarantined: "incomplete" };
+      if (message.sizeEstimate > MAX_BYTES || message.raw.length > Math.ceil(MAX_BYTES * 4 / 3) + 4) return { quarantined: "oversized" };
       const source = Buffer.from(message.raw, "base64url");
-      if (source.length > MAX_BYTES) throw new Error("Gmail message exceeds size limit.");
+      if (source.length > MAX_BYTES) return { quarantined: "oversized" };
       const parsed = await simpleParser(source);
-      try { await options.process({ subject: parsed.subject ?? "", from: parsed.from?.value.length === 1 ? (parsed.from.value[0].address ?? "") : "", date: parsed.date ?? new Date(NaN), messageId: parsed.messageId ?? "", html: typeof parsed.html === "string" ? parsed.html : (parsed.textAsHtml ?? "") }); } catch (error) { if (error instanceof UnrecognizedNoticeError) return "quarantined"; throw error; }
+      try { await options.process({ subject: parsed.subject ?? "", from: parsed.from?.value.length === 1 ? (parsed.from.value[0].address ?? "") : "", date: parsed.date ?? new Date(NaN), messageId: parsed.messageId ?? "", html: typeof parsed.html === "string" ? parsed.html : (parsed.textAsHtml ?? "") }); } catch (error) { if (error instanceof UnrecognizedNoticeError) return { quarantined: error.reason }; throw error; }
       return "processed";
   };
   // Retry a bounded rotating batch; archived or missing items remain available for review.
   if (state.quarantined?.length) {
     const retry = state.quarantined.slice(0, 50), remaining = state.quarantined.slice(50);
     for (const id of retry) {
-      let result: "processed" | "irrelevant" | "quarantined" | "unavailable";
+      let result: Outcome;
       try { result = await processId(id); }
       catch (error) { if (error instanceof GmailError && error.status === 404) { remaining.push(id); continue; } throw error; }
-      if (result === "quarantined" || result === "unavailable") remaining.push(id);
+      if (typeof result === "object") { reasons.set(id, result.quarantined); remaining.push(id); }
+      else if (result === "unavailable") remaining.push(id);
+      else reasons.delete(id);
     }
-    state = { ...state, quarantined: remaining };
+    state = { ...state, quarantined: remaining, quarantineReasons: reasonsFor(remaining) };
     await saveState(options.statePath, state);
   }
   for (let page = 0; page < 2; page++) {
@@ -136,7 +148,7 @@ export async function syncGmail(options: {
     try { result = await get(url.toString()); }
     catch (error) {
       if (state.mode === "history" && error instanceof GmailError && error.status === 404) {
-        state = { account, mode: "full", historyId: profile.historyId, quarantined: state.quarantined };
+        state = { account, mode: "full", historyId: profile.historyId, quarantined: state.quarantined, quarantineReasons: state.quarantineReasons };
         await saveState(options.statePath, state);
         continue;
       }
@@ -148,17 +160,23 @@ export async function syncGmail(options: {
     const quarantined = new Set(state.quarantined ?? []);
     for (const id of new Set(ids)) {
       if (typeof id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error("Invalid Gmail message ID.");
-      const outcome = await processId(id);
-      if (outcome === "quarantined") quarantined.add(id);
-      else if (outcome === "processed" || outcome === "irrelevant") quarantined.delete(id);
+      let outcome: Outcome;
+      try { outcome = await processId(id); }
+      catch (error) {
+        // Deleted after it appeared in the listing/history: skip it, as the retry loop does.
+        if (error instanceof GmailError && error.status === 404) outcome = "unavailable";
+        else throw error;
+      }
+      if (typeof outcome === "object") { quarantined.add(id); reasons.set(id, outcome.quarantined); }
+      else if (outcome === "processed" || outcome === "irrelevant") { quarantined.delete(id); reasons.delete(id); }
       if (quarantined.size > 1000) throw new Error("Gmail quarantine limit exceeded.");
     }
-    state = { ...state, quarantined: [...quarantined] };
+    state = { ...state, quarantined: [...quarantined], quarantineReasons: reasonsFor([...quarantined]) };
     if (result.nextPageToken) state = { ...state, pageToken: result.nextPageToken };
-    else if (state.mode === "full") state = { account, mode: "history", historyId: state.historyId, quarantined: state.quarantined };
+    else if (state.mode === "full") state = { account, mode: "history", historyId: state.historyId, quarantined: state.quarantined, quarantineReasons: state.quarantineReasons };
     else {
       if (typeof result.historyId !== "string" || !/^\d+$/.test(result.historyId)) throw new Error("Gmail history response invalid.");
-      await saveState(options.statePath, { account, mode: "history", historyId: result.historyId, quarantined: state.quarantined });
+      await saveState(options.statePath, { account, mode: "history", historyId: result.historyId, quarantined: state.quarantined, quarantineReasons: state.quarantineReasons });
       return { quarantined: state.quarantined?.length ?? 0 };
     }
     await saveState(options.statePath, state);

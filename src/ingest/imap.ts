@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import { isItauAviso, type ItauEmailInput } from "./itau-parser";
+import { isItauAviso, type ItauEmailInput, type QuarantineReason } from "./itau-parser";
 import { isItauTransfer } from "./itau-transfer";
 
 export type ImapConfig = {
@@ -16,7 +16,9 @@ export type ImapConfig = {
 };
 
 export type IngestCursor = { uidValidity: string; lastUid: number };
-export type MailBatch = { messages: ItauEmailInput[]; cursor: IngestCursor; hasMore: boolean };
+/** A candidate that could not be downloaded safely; only its locator and a fixed reason. */
+export type RejectedCandidate = { uid: number; reason: Extract<QuarantineReason, "oversized" | "incomplete"> };
+export type MailBatch = { messages: ItauEmailInput[]; cursor: IngestCursor; hasMore: boolean; rejected?: RejectedCandidate[] };
 export const UID_WINDOW = 500;
 export const MAX_MESSAGE_BYTES = 1024 * 1024;
 
@@ -61,6 +63,7 @@ export async function fetchRecentMail(config: ImapConfig, previous: IngestCursor
     if (!Number.isSafeInteger(lastUid) || lastUid < 0 || lastUid >= nextUid) throw new Error("IMAP cursor is inconsistent with mailbox.");
     const endUid = Math.min(lastUid + UID_WINDOW, nextUid - 1);
     const messages: ItauEmailInput[] = [];
+    const rejected: RejectedCandidate[] = [];
     if (endUid > lastUid) {
       // Complete the metadata fetch before asking for message bodies: IMAPFlow
       // cannot run another command while a fetch iterator is still active.
@@ -81,8 +84,15 @@ export async function fetchRecentMail(config: ImapConfig, previous: IngestCursor
         const message = await client.fetchOne(String(uid), {
           uid: true, size: true, source: { start: 0, maxLength: MAX_MESSAGE_BYTES + 1 }
         }, { uid: true });
-        if (!message || !message.source || message.size === undefined || message.size > MAX_MESSAGE_BYTES || message.source.length !== message.size) {
-          throw new Error(`IMAP UID ${uid} missing, incomplete or exceeds size limit.`);
+        // A bad candidate is a property of that one message: report its UID for
+        // quarantine instead of failing the window, so the cursor can advance.
+        if (message && message.size !== undefined && message.size > MAX_MESSAGE_BYTES) {
+          rejected.push({ uid, reason: "oversized" });
+          continue;
+        }
+        if (!message || !message.source || message.size === undefined || message.source.length !== message.size) {
+          rejected.push({ uid, reason: "incomplete" });
+          continue;
         }
         const parsed = await simpleParser(message.source);
         messages.push({
@@ -95,7 +105,7 @@ export async function fetchRecentMail(config: ImapConfig, previous: IngestCursor
         });
       }
     }
-    return { messages, cursor: { uidValidity, lastUid: endUid }, hasMore: endUid < nextUid - 1 };
+    return { messages, rejected, cursor: { uidValidity, lastUid: endUid }, hasMore: endUid < nextUid - 1 };
   } finally {
     await client.logout();
   }
@@ -113,7 +123,8 @@ export async function fetchQuarantinedMail(config: ImapConfig, uidValidity: stri
     for (const uid of uids) {
       const message = await client.fetchOne(String(uid), { uid: true, size: true, source: { start: 0, maxLength: MAX_MESSAGE_BYTES + 1 } }, { uid: true });
       if (!message) continue; // Archived or deleted messages remain in quarantine.
-      if (!message.source || message.size === undefined || message.size > MAX_MESSAGE_BYTES || message.source.length !== message.size) throw new Error("Retained IMAP notice is incomplete or too large.");
+      // Still too large or incomplete: leave it retained and keep retrying the others.
+      if (!message.source || message.size === undefined || message.size > MAX_MESSAGE_BYTES || message.source.length !== message.size) continue;
       const parsed = await simpleParser(message.source);
       result.push({ uid: message.uid, subject: parsed.subject ?? "", from: parsed.from?.value.length === 1 ? (parsed.from.value[0].address ?? "") : "", date: parsed.date ?? new Date(NaN), messageId: parsed.messageId ?? "", html: typeof parsed.html === "string" ? parsed.html : (parsed.textAsHtml ?? "") });
     }

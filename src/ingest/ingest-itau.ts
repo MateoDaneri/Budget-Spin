@@ -68,6 +68,12 @@ export async function runItauIngest(options?: {
     for (let window = 0; window < 10; window++) {
       const previous = getIngestCursor(cursorKey);
       const batch = await fetcher(config, previous);
+      // Candidates the fetcher could not download safely (oversized/incomplete).
+      for (const rejected of batch.rejected ?? []) {
+        messagesSeen += 1;
+        await quarantine.add(batch.cursor.uidValidity, rejected.uid, rejected.reason);
+        skipped += 1;
+      }
       for (const message of batch.messages) {
         messagesSeen += 1;
         try {
@@ -76,8 +82,8 @@ export async function runItauIngest(options?: {
           else skipped += 1;
         } catch (error) {
           if (!(error instanceof UnrecognizedNoticeError) || message.uid === undefined) throw error;
-          // Persist the locator before advancing the cursor; no mail bodies are saved.
-          await quarantine.add(batch.cursor.uidValidity, message.uid);
+          // Persist the locator and reason code before advancing the cursor; no mail bodies are saved.
+          await quarantine.add(batch.cursor.uidValidity, message.uid, error.reason);
           skipped += 1;
         }
       }
@@ -103,14 +109,16 @@ function processMessage(message: ItauEmailInput, minorUnits: Map<string, number>
   const aviso = transfer ? parseItauTransfer(message) : parseItauAviso(message);
   if (!aviso || !aviso.messageId) throw new UnrecognizedNoticeError(`${candidateLabel} could not be parsed or has no Message-ID.`);
   const minorUnit = minorUnits.get(aviso.currencyCode);
-  if (minorUnit === undefined) throw new Error(`${candidateLabel} has an unconfigured currency.`);
-  if ((aviso.amountRaw.split(".")[1] ?? "").length > minorUnit) throw new Error(`${candidateLabel} has unsupported amount precision.`);
+  // Every failure below is a property of this one message: it is retained with a
+  // fixed reason code so the pass and its checkpoint can continue.
+  if (minorUnit === undefined) throw new UnrecognizedNoticeError(`${candidateLabel} has an unconfigured currency.`, "unconfigured_currency");
+  if ((aviso.amountRaw.split(".")[1] ?? "").length > minorUnit) throw new UnrecognizedNoticeError(`${candidateLabel} has unsupported amount precision.`, "unsupported_precision");
   let amountMinor: number;
   try {
     amountMinor = parseMoneyToMinor(aviso.amountRaw, minorUnit);
     if (!Number.isSafeInteger(amountMinor)) throw new Error();
-  } catch { throw new Error(`${candidateLabel} has an invalid amount.`); }
-  if (amountMinor <= 0) throw new UnrecognizedNoticeError(`${candidateLabel} has a non-positive amount and requires review.`);
+  } catch { throw new UnrecognizedNoticeError(`${candidateLabel} has an invalid amount.`, "invalid_amount"); }
+  if (amountMinor <= 0) throw new UnrecognizedNoticeError(`${candidateLabel} has a non-positive amount and requires review.`, "non_positive_amount");
   return insertImportedTransaction({
     txnDate: aviso.txnDateIso, description: aviso.merchant, currencyCode: aviso.currencyCode,
     amountMinor, cardNetwork: aviso.cardNetwork, cardLast4: aviso.cardLast4,
@@ -135,8 +143,11 @@ async function runGmailIngest(): Promise<IngestSummary> {
     recordIngestRun({ source: "gmail_api", startedAt, messagesSeen, inserted, skipped, status: sync.quarantined ? "error" : "ok", ...(sync.quarantined ? { error: "Unrecognized notices retained for review." } : {}) });
     return { messagesSeen, inserted, skipped };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown ingest error.";
-    recordIngestRun({ source: "gmail_api", startedAt, messagesSeen, inserted, skipped, status: "error", error: message });
+    // Provider exceptions can carry server-supplied text; persist only a fixed description.
+    // Status read structurally (GmailError carries it) so module mocks of ./gmail stay valid.
+    const status = (error as { status?: unknown } | null)?.status;
+    const description = typeof status === "number" && Number.isInteger(status) ? `Gmail synchronization failed (HTTP ${status}).` : "Gmail synchronization failed.";
+    recordIngestRun({ source: "gmail_api", startedAt, messagesSeen, inserted, skipped, status: "error", error: description });
     throw error;
   }
 }

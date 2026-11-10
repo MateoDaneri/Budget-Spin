@@ -10,8 +10,8 @@ export function parseItauTransfer(input: ItauEmailInput) {
   if (!isItauTransfer(input) || !Number.isFinite(input.date.getTime()) || !input.messageId) return null;
   const text = htmlToText(input.html);
   if (!/transferencia realizada desde la cuenta/i.test(text)) return null;
-  // eslint-disable-next-line security/detect-unsafe-regex -- fixed decimal suffix separated by a literal dot; no overlapping repetition.
-  const match = text.match(/importe:\s*([0-9]+(?:\.[0-9]{1,2})?)\s+(URGP|US\.D|UYU|USD)\b/i);
+  // eslint-disable-next-line security/detect-unsafe-regex -- fixed decimal suffix separated by a literal dot; quantifiers bounded so long digit runs cannot backtrack.
+  const match = text.match(/importe:\s{0,3}([0-9]{1,15}(?:\.[0-9]{1,2})?)\s{1,3}(URGP|US\.D|UYU|USD)\b/i);
   if (!match) return null;
   const codes: Record<string, string> = { URGP: "UYU", "US.D": "USD", UYU: "UYU", USD: "USD" };
   const currencyCode = codes[match[2].toUpperCase()];

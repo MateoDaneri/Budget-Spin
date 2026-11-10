@@ -19,8 +19,24 @@ export type ItauEmailInput = {
   html: string;
 };
 
-/** A recognized notice cannot be interpreted safely with the supported formats. */
-export class UnrecognizedNoticeError extends Error {}
+/** Fixed, non-sensitive reasons a single notice is retained for review; never message content. */
+export const QUARANTINE_REASONS = [
+  "unrecognized", "non_positive_amount", "unconfigured_currency", "unsupported_precision",
+  "invalid_amount", "oversized", "incomplete"
+] as const;
+export type QuarantineReason = (typeof QUARANTINE_REASONS)[number];
+
+export function isQuarantineReason(value: unknown): value is QuarantineReason {
+  return typeof value === "string" && (QUARANTINE_REASONS as readonly string[]).includes(value);
+}
+
+/**
+ * A candidate notice cannot be imported safely. It is a property of that one
+ * message: callers retain its locator with the reason code and keep going.
+ */
+export class UnrecognizedNoticeError extends Error {
+  constructor(message?: string, readonly reason: QuarantineReason = "unrecognized") { super(message); }
+}
 
 export type ParsedItauAviso = {
   messageId: string;
@@ -43,8 +59,11 @@ const AVISO_SUBJECT_HINT = "aviso de consumo";
 /**
  * Returns the parsed transaction, or null when the message is not an Itaú
  * "aviso de consumo" (wrong sender/subject, or the body shape we don't know).
- * Returning null — never throwing — lets the ingest loop skip unrelated mail
- * without aborting the whole run.
+ * This function never throws for unknown content. The ingest loop only calls it
+ * for sender/subject candidates, so a null result there means a recognized
+ * notice it cannot read: the loop retains that message's locator (IMAP UID or
+ * Gmail ID) in quarantine with a reason code, advances the checkpoint and
+ * continues with the rest of the pass.
  */
 export function parseItauAviso(input: ItauEmailInput): ParsedItauAviso | null {
   if (!isItauAviso(input) || !Number.isFinite(input.date.getTime())) {
@@ -105,7 +124,9 @@ export function htmlToText(html: string): string {
   return html
     .replace(/<\s*br\s*\/?\s*>/gi, "\n")
     .replace(/<\/(p|h[1-6]|tr|td|div|table)\s*>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
+    // Excluding "<" stops each attempt at the next tag start, keeping a body of
+    // unclosed "<" linear instead of rescanning to the end from every position.
+    .replace(/<[^<>]+>/g, "")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&aacute;/gi, "á")
@@ -122,7 +143,8 @@ export function htmlToText(html: string): string {
 
 function matchAmount(text: string): { amountRaw: string; currencyCode: string } | null {
   // "Importe: 199.0 UYU"  (notification format observed: dot-decimal, no thousands sep)
-  const match = text.match(/Importe:\s*([\d.,]+)\s*([A-Za-z]{3})\b/i);
+  // Bounded quantifiers: bodies reach 1 MiB and this runs in the web process.
+  const match = text.match(/Importe:\s{0,3}([\d.,]{1,20})\s{0,3}([A-Za-z]{3})\b/i);
   if (!match) {
     return null;
   }
@@ -158,8 +180,9 @@ function matchMerchant(text: string): string | null {
 }
 
 function matchCard(text: string): { network: string; last4: string } | null {
-  // "VISA nro. ***1234"
-  const match = text.match(/([A-Za-z]+)\s+nro\.?\s*\*+\s*(\d{4})/i);
+  // "VISA nro. ***1234". Word-anchored, bounded quantifiers: an unbounded letter
+  // run before a required separator backtracks quadratically on long letter-only bodies.
+  const match = text.match(/\b([A-Za-z]{1,20})\s{1,3}nro\.?\s{0,3}\*{1,8}\s{0,3}(\d{4})/i);
   if (!match) {
     return null;
   }

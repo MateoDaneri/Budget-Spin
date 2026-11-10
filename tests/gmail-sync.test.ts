@@ -97,6 +97,44 @@ describe("Gmail sync", () => {
     expect(JSON.parse(await fs.readFile(statePath, "utf8")).quarantined).toEqual([]);
   });
 
+  it("skips a message deleted after listing (404) and still saves the checkpoint", async () => {
+    const seen: string[] = [];
+    const fetcher: typeof fetch = async (url) => {
+      const address = String(url);
+      if (address.includes("oauth2.googleapis")) return response({ access_token: "test" });
+      if (address.endsWith("/profile")) return response({ emailAddress: "test@example.com", historyId: "123" });
+      if (address.includes("/messages?")) return response({ messages: [{ id: "gone" }, { id: "good" }] });
+      if (address.includes("/messages/gone")) return response({ error: { code: 404 } }, 404);
+      if (address.includes("format=metadata")) return response(candidate);
+      if (address.includes("format=raw")) { seen.push("good"); return response({ raw, sizeEstimate: 100, labelIds: ["INBOX"] }); }
+      return response({ historyId: "124" });
+    };
+    const statePath = path.join(dir, "state");
+    expect(await syncGmail({ credentialsPath: path.join(dir, "token"), statePath, fetcher, process: () => {} })).toEqual({ quarantined: 0 });
+    expect(seen).toEqual(["good"]);
+    expect(JSON.parse(await fs.readFile(statePath, "utf8"))).toMatchObject({ mode: "history", historyId: "124", quarantined: [] });
+  });
+
+  it("quarantines an oversized candidate with a reason code and imports a later message", async () => {
+    let processed = 0;
+    const fetcher: typeof fetch = async (url) => {
+      const address = String(url);
+      if (address.includes("oauth2.googleapis")) return response({ access_token: "test" });
+      if (address.endsWith("/profile")) return response({ emailAddress: "test@example.com", historyId: "123" });
+      if (address.includes("/messages?")) return response({ messages: [{ id: "huge" }, { id: "good" }] });
+      if (address.includes("format=metadata")) return response(candidate);
+      if (address.includes("/messages/huge")) return response({ raw, sizeEstimate: 2 * 1024 * 1024, labelIds: ["INBOX"] });
+      if (address.includes("format=raw")) return response({ raw, sizeEstimate: 100, labelIds: ["INBOX"] });
+      return response({ historyId: "124" });
+    };
+    const statePath = path.join(dir, "state");
+    expect(await syncGmail({ credentialsPath: path.join(dir, "token"), statePath, fetcher, process: () => { processed++; } })).toEqual({ quarantined: 1 });
+    expect(processed).toBe(1);
+    const stored = JSON.parse(await fs.readFile(statePath, "utf8"));
+    expect(stored).toMatchObject({ mode: "history", quarantined: ["huge"], quarantineReasons: { huge: "oversized" } });
+    expect(JSON.stringify(stored)).not.toContain(raw);
+  });
+
   it("reports only recognized provider failure reasons", async () => {
     const fetcher: typeof fetch = async (url) => {
       const address = String(url);

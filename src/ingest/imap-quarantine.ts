@@ -2,8 +2,11 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { isQuarantineReason, type QuarantineReason } from "./itau-parser";
 
-type Item = { uidValidity: string; uid: number };
+// Only a locator and a fixed reason code are retained; never bodies or header values.
+// `reason` is optional so files written before reason codes existed remain valid.
+type Item = { uidValidity: string; uid: number; reason?: QuarantineReason };
 const MAX_ITEMS = 1000;
 export class ImapQuarantine {
   private constructor(private readonly file: string, private items: Item[]) {}
@@ -16,7 +19,7 @@ export class ImapQuarantine {
       const stat = await fs.stat(file);
       if (!stat.isFile() || (stat.mode & 0o077)) throw new Error("Invalid IMAP quarantine permissions.");
       const value: unknown = JSON.parse(await fs.readFile(file, "utf8"));
-      if (!Array.isArray(value) || value.length > MAX_ITEMS || value.some((x) => !x || typeof x.uidValidity !== "string" || !/^\d+$/.test(x.uidValidity) || !Number.isSafeInteger(x.uid) || x.uid < 1)) throw new Error("Invalid IMAP quarantine.");
+      if (!Array.isArray(value) || value.length > MAX_ITEMS || value.some((x) => !x || typeof x.uidValidity !== "string" || !/^\d+$/.test(x.uidValidity) || !Number.isSafeInteger(x.uid) || x.uid < 1 || (x.reason !== undefined && !isQuarantineReason(x.reason)))) throw new Error("Invalid IMAP quarantine.");
       items = value as Item[];
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     return new ImapQuarantine(file, items);
@@ -35,11 +38,11 @@ export class ImapQuarantine {
     try { await fs.writeFile(temp, JSON.stringify(this.items), { mode: 0o600, flag: "wx" }); await fs.rename(temp, this.file); }
     finally { await fs.unlink(temp).catch(() => {}); }
   }
-  async add(uidValidity: string, uid: number): Promise<void> {
-    if (!/^\d+$/.test(uidValidity) || !Number.isSafeInteger(uid) || uid < 1) throw new Error("Cannot retain candidate without a valid UID.");
+  async add(uidValidity: string, uid: number, reason: QuarantineReason = "unrecognized"): Promise<void> {
+    if (!/^\d+$/.test(uidValidity) || !Number.isSafeInteger(uid) || uid < 1 || !isQuarantineReason(reason)) throw new Error("Cannot retain candidate without a valid UID.");
     if (this.items.some((item) => item.uidValidity === uidValidity && item.uid === uid)) return;
     if (this.items.length >= MAX_ITEMS) throw new Error("IMAP quarantine limit reached.");
-    this.items.push({ uidValidity, uid });
+    this.items.push({ uidValidity, uid, reason });
     await this.save();
   }
 }
