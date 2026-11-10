@@ -133,6 +133,115 @@
       </ul>
     </section>
 
+    <section class="card" id="finance-integrations">
+      <h2>Finance integrations — branch <code class="inline">claude/feature-conciliacion</code></h2>
+      <div class="callout note">
+        <h4>State</h4>
+        <strong>Unmerged.</strong> Deployment status: see the operator. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit <code class="inline">b71b5de</code>; the logic has not been checked against real bank or Splitwise data. Everything below describes the code as written, not observed behavior. Not a roadmap phase; roadmap state stays in <a href="DEPLOY-ROADMAP.html">DEPLOY-ROADMAP</a>.
+      </div>
+      <p>The branch adds three things on top of the budget plan: importing bank purchase/transfer notices from e-mail, persisting Splitwise expenses, and an <em>observed spending</em> view on the dashboard that combines both. It also carries the refined UI (eight navigation entries, including <code class="inline">/transactions</code> and <code class="inline">/splitwise</code>). The monetary rules of observed spending are in <a href="FINANCIAL-RULES.html">FINANCIAL-RULES</a>; they are not repeated here.</p>
+
+      <h3>Data flow (conceptual diagram, not measured data)</h3>
+      <figure style="margin:8px 0;">
+        <svg viewBox="0 0 860 300" width="100%" role="img" aria-labelledby="flow-title flow-desc" style="max-width:100%; height:auto; font-family:ui-sans-serif, system-ui, sans-serif;">
+          <title id="flow-title">Import and reconciliation data flow</title>
+          <desc id="flow-desc">Top row: the mailbox is read over IMAP or the Gmail API; messages pass a From and Subject filter, then the Itaú parser; parsed notices are stored in the transactions table as pending, or their locator goes to quarantine. The /transactions screen confirms or discards them. Bottom row: the Splitwise API is read into splitwise_imports. Both feed observed spending on the dashboard, where pairs can be rejected into import_pair_exclusions. A red dashed line marks the trust boundary at the From and Subject filter: no sender authentication.</desc>
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#183153"/></marker>
+          </defs>
+          <g font-size="12.5" fill="#15202b">
+            <rect x="10" y="30" width="120" height="54" rx="10" fill="#e7eef8" stroke="#183153"/>
+            <text x="70" y="53" text-anchor="middle" font-weight="700">Mailbox</text>
+            <text x="70" y="71" text-anchor="middle">IMAP or Gmail API</text>
+
+            <rect x="165" y="30" width="130" height="54" rx="10" fill="#fde6e2" stroke="#a83a31"/>
+            <text x="230" y="53" text-anchor="middle" font-weight="700">From + Subject</text>
+            <text x="230" y="71" text-anchor="middle">candidate filter</text>
+
+            <rect x="330" y="30" width="120" height="54" rx="10" fill="#e7eef8" stroke="#183153"/>
+            <text x="390" y="53" text-anchor="middle" font-weight="700">Itaú parser</text>
+            <text x="390" y="71" text-anchor="middle">purchase / transfer</text>
+
+            <rect x="485" y="30" width="150" height="54" rx="10" fill="#fff1ce" stroke="#97640f"/>
+            <text x="560" y="53" text-anchor="middle" font-weight="700">transactions</text>
+            <text x="560" y="71" text-anchor="middle">status = pending</text>
+
+            <rect x="670" y="30" width="170" height="54" rx="10" fill="#e1f2e6" stroke="#207447"/>
+            <text x="755" y="53" text-anchor="middle" font-weight="700">/transactions</text>
+            <text x="755" y="71" text-anchor="middle">confirm or discard</text>
+
+            <rect x="330" y="120" width="120" height="44" rx="10" fill="#f6f8fc" stroke="#5d6b7a" stroke-dasharray="4 3"/>
+            <text x="390" y="140" text-anchor="middle" font-weight="700">quarantine</text>
+            <text x="390" y="156" text-anchor="middle">locator + reason</text>
+
+            <rect x="10" y="220" width="120" height="54" rx="10" fill="#e7eef8" stroke="#183153"/>
+            <text x="70" y="243" text-anchor="middle" font-weight="700">Splitwise API</text>
+            <text x="70" y="261" text-anchor="middle">bearer API key</text>
+
+            <rect x="330" y="220" width="150" height="54" rx="10" fill="#fff1ce" stroke="#97640f"/>
+            <text x="405" y="243" text-anchor="middle" font-weight="700">splitwise_imports</text>
+            <text x="405" y="261" text-anchor="middle">full snapshot / run</text>
+
+            <rect x="560" y="200" width="200" height="74" rx="10" fill="#e1f2e6" stroke="#207447"/>
+            <text x="660" y="225" text-anchor="middle" font-weight="700">Observed spending</text>
+            <text x="660" y="243" text-anchor="middle">dashboard /</text>
+            <text x="660" y="261" text-anchor="middle">rejections → pair exclusions</text>
+          </g>
+          <g stroke="#183153" stroke-width="1.6" fill="none" marker-end="url(#arr)">
+            <line x1="130" y1="57" x2="163" y2="57"/>
+            <line x1="295" y1="57" x2="328" y2="57"/>
+            <line x1="450" y1="57" x2="483" y2="57"/>
+            <line x1="635" y1="57" x2="668" y2="57"/>
+            <line x1="390" y1="84" x2="390" y2="118"/>
+            <line x1="130" y1="247" x2="328" y2="247"/>
+            <line x1="480" y1="247" x2="558" y2="247"/>
+            <path d="M560 84 C 560 140, 620 160, 640 198"/>
+          </g>
+          <line x1="150" y1="14" x2="150" y2="186" stroke="#a83a31" stroke-width="2" stroke-dasharray="6 4"/>
+          <text x="156" y="200" font-size="11.5" fill="#a83a31" font-weight="700">trust boundary: no sender authentication</text>
+        </svg>
+        <figcaption style="font-size:13px; color:var(--muted);">Conceptual. Pending notices count in observed spending until discarded; transfers are imported but only purchases enter the calculation.</figcaption>
+      </figure>
+
+      <h3>New modules</h3>
+      <table>
+        <tr><th>Path</th><th>Role</th></tr>
+        <tr><td><code class="inline">src/ingest/ingest-itau.ts</code></td><td>One ingest pass: selects the provider (IMAP by default, Gmail if <code class="inline">ITAU_INGEST_PROVIDER=gmail</code>, the private selector file, or a Gmail credential file is present), processes candidates, inserts as <code class="inline">pending</code> (dedup by Message-ID), writes an <code class="inline">ingest_runs</code> row.</td></tr>
+        <tr><td><code class="inline">src/ingest/imap.ts</code>, <code class="inline">imap-quarantine.ts</code></td><td>Read-only IMAP by UID window (500 UIDs, 1 MiB per message, up to 10 windows per pass); cursor = <code class="inline">UIDVALIDITY</code> + last UID in <code class="inline">ingest_cursors</code>; private JSON quarantine (UID + reason, max 1000).</td></tr>
+        <tr><td><code class="inline">src/ingest/gmail.ts</code></td><td>Gmail API alternative (<code class="inline">gmail.readonly</code>, refresh token obtained with PKCE by <code class="inline">scripts/gmail-oauth-bootstrap.mjs</code>): full scan, then history; state + quarantine in a private state file.</td></tr>
+        <tr><td><code class="inline">src/ingest/itau-parser.ts</code>, <code class="inline">itau-transfer.ts</code></td><td>Pure parsers. Candidate = sender address in the bank's domain + subject pattern. Defines the fixed quarantine reasons.</td></tr>
+        <tr><td><code class="inline">src/ingest/trigger-token.ts</code></td><td>Bearer token for the trigger routes, from <code class="inline">INGEST_TOKEN</code> or the private file <code class="inline">/app/data/ingest-token</code>; invalid or placeholder value → routes answer 503.</td></tr>
+        <tr><td><code class="inline">src/splitwise/*</code></td><td>Client (bounded pagination), credential (env or private file), snapshot store, activity/balance store, <code class="inline">syncSplitwise()</code>.</td></tr>
+        <tr><td><code class="inline">src/finance/actual-spending.ts</code>, <code class="inline">src/actions/reconciliation.ts</code></td><td>Observed spending and pair rejection (see FINANCIAL-RULES).</td></tr>
+        <tr><td><code class="inline">app/api/ingest/itau</code>, <code class="inline">app/api/ingest/splitwise</code></td><td>POST trigger routes: 503 not configured, 401 bad token (constant-time compare), 409 already running (per process), 500 generic failure.</td></tr>
+        <tr><td><code class="inline">app/transactions</code>, <code class="inline">app/splitwise</code></td><td>Review screen (confirm/discard, category) and Splitwise page (stored expenses, live balances, activity).</td></tr>
+      </table>
+
+      <h3>New tables</h3>
+      <table>
+        <tr><th>Table</th><th>Holds</th></tr>
+        <tr><td><code class="inline">transactions</code></td><td>Imported notices; <code class="inline">kind</code> purchase / transfer_out / transfer_in; unique per user + Message-ID.</td></tr>
+        <tr><td><code class="inline">transaction_reviews</code></td><td>Confirm/discard decision per transaction; the original import row is kept, the effective status is the decision if any.</td></tr>
+        <tr><td><code class="inline">ingest_cursors</code>, <code class="inline">ingest_runs</code></td><td>IMAP cursor per mailbox identity hash; one row per ingest pass (counts, <code class="inline">ok</code>/<code class="inline">error</code>, fixed error text).</td></tr>
+        <tr><td><code class="inline">splitwise_sync_account</code>, <code class="inline">splitwise_imports</code></td><td>Pinned Splitwise account + last sync time; expenses by account and expense ID (shares as decimal strings).</td></tr>
+        <tr><td><code class="inline">splitwise_activity_events</code>, <code class="inline">splitwise_activity_sync</code>, <code class="inline">splitwise_balance_observations</code></td><td>Bounded activity feed and balance observations.</td></tr>
+        <tr><td><code class="inline">import_category_rules</code></td><td>Remembered category per normalized description.</td></tr>
+        <tr><td><code class="inline">import_pair_exclusions</code></td><td>Rejected bank ↔ Splitwise pairs.</td></tr>
+      </table>
+
+      <h3>Activation</h3>
+      <p>Two mutually exclusive ways to schedule the trigger routes: the Compose profiles <code class="inline">ingest</code> / <code class="inline">splitwise-ingest</code> (token in <code class="inline">INGEST_TOKEN</code>), or <code class="inline">scripts/activate-sync.py</code> (token file, containers outside Compose; it refuses to run if the app has <code class="inline">INGEST_TOKEN</code> set). Pick one. Procedures in <a href="RUNBOOK.html">RUNBOOK</a>; unifying them is <a href="MEJORAS-APP.html#mej-005">MEJ-005</a>.</p>
+
+      <div class="callout sec" id="trust-boundary">
+        <h4>Trust boundary — bank e-mails are not authenticated</h4>
+        A notice is accepted as a bank notice when its single <code class="inline">From</code> address is in the bank's domain and its subject matches a known pattern (<code class="inline">isItauAviso</code>, <code class="inline">isItauTransfer</code>). There is <strong>no DKIM, DMARC or <code class="inline">Authentication-Results</code> check</strong> anywhere in <code class="inline">src/</code>. Anyone able to deliver mail to the mailbox can forge such a notice; it would be imported as <code class="inline">pending</code> and <strong>counted in observed spending until someone discards it</strong> on <code class="inline">/transactions</code>. Gmail OAuth does not change this: it authenticates access to the mailbox, not the sender. Compensating control today: review pending notices before relying on the totals. Fix tracked as <a href="MEJORAS-APP.html#mej-002">MEJ-002</a>.
+      </div>
+      <ul>
+        <li>Other boundaries in the code: the trigger token can only start a pass (it never reads data); provider error text is not persisted (fixed strings in <code class="inline">ingest_runs</code>); quarantine stores locators and reason codes, never bodies; credential files must be owner-only or they are rejected.</li>
+        <li>Open: <code class="inline">/api/fx-rate</code> answers without a session because the proxy matcher skips every <code class="inline">api*</code> path (<a href="MEJORAS-APP.html#mej-006">MEJ-006</a>).</li>
+      </ul>
+    </section>
+
     <section class="card">
       <h2>Data ownership &amp; volumes</h2>
       <table>

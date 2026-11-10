@@ -165,6 +165,291 @@
       </section>
     </article>
 
+    <div class="howto">
+      <strong>MEJ-002 a MEJ-007</strong> surgen de la rama <code class="inline">claude/feature-conciliacion</code> (importación de avisos Itaú, Splitwise y gasto observado). Esa rama <strong>no está mergeada</strong> (estado de despliegue: consultar al operador), ; lint, typecheck, la suite de tests (126) y el build de producción pasaron con Node 24 el 2026-11-10 sobre el commit <code class="inline">b71b5de</code>; no se comprobó contra datos reales del banco ni de Splitwise: cada entrada describe el código tal como está escrito, no un comportamiento verificado en ejecución.
+    </div>
+
+    <!-- ====================== MEJORA #2 ====================== -->
+    <article class="item" id="mej-002">
+      <div class="item-head">
+        <div class="meta">
+          <span class="id">MEJ-002</span>
+          <span class="tag area">Importación · autenticidad del origen</span>
+          <span class="tag prio-med">Prioridad media</span>
+          <span class="tag when">Antes de activar la importación</span>
+        </div>
+        <h2>Autenticar el remitente de los avisos del banco</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/ingest/itau-parser.ts</code> (<code class="inline">isItauAviso</code>), <code class="inline">src/ingest/itau-transfer.ts</code> (<code class="inline">isItauTransfer</code>), <code class="inline">src/ingest/imap.ts</code>, <code class="inline">src/ingest/gmail.ts</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Qué</h3>
+        <p>Antes de importar un aviso, exigir que el correo esté autenticado por el proveedor de correo que lo recibió: resultado <code class="inline">dkim=pass</code> (y/o <code class="inline">dmarc=pass</code>) alineado con el dominio del banco, leído del encabezado <code class="inline">Authentication-Results</code> que agrega el propio buzón. Hoy un aviso se acepta solo porque la dirección de <code class="inline">From</code> termina en el dominio del banco y el asunto coincide con un patrón.</p>
+      </section>
+
+      <div class="callout benefit">
+        <h4>Por qué</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>El <code class="inline">From</code> se puede falsificar.</strong> Cualquiera que pueda mandar un correo al buzón puede escribir ese remitente y ese asunto. El código no consulta DKIM ni <code class="inline">Authentication-Results</code> (no aparecen en <code class="inline">src/</code>).</li>
+          <li><strong>Un aviso falso cuenta en el gasto observado.</strong> Se importa como <code class="inline">pending</code> y, según <a href="FINANCIAL-RULES.html">FINANCIAL-RULES</a>, los pendientes entran en el total hasta que alguien los descarta en <code class="inline">/transactions</code>.</li>
+          <li>OAuth de Gmail tampoco lo resuelve: autentica el acceso al buzón, no al remitente de cada mensaje.</li>
+        </ul>
+      </div>
+
+      <section class="block">
+        <h3>Cómo (enfoque — verificar al implementar)</h3>
+        <ul>
+          <li>Pedir el encabezado <code class="inline">Authentication-Results</code> junto con <code class="inline">From</code> y <code class="inline">Subject</code> (IMAP ya descarga el mensaje completo de los candidatos; Gmail con <code class="inline">format=raw</code> también lo trae).</li>
+          <li>Confiar solo en el encabezado que agrega el servidor propio (identificado por su <code class="inline">authserv-id</code>), nunca en uno que venga dentro del mensaje original.</li>
+          <li>Empezar en modo observación: registrar el resultado sin bloquear, comprobar con avisos reales que el banco firma con un dominio alineado (no está verificado) y recién después enviar a cuarentena los que fallen, con un motivo nuevo (p. ej. <code class="inline">unauthenticated</code>).</li>
+        </ul>
+      </section>
+
+      <div class="callout risk">
+        <h4>Alcance y riesgo</h4>
+        <p style="margin:0;">Toca el parser y los dos proveedores. Si el banco no firma, o firma con otro dominio, un control estricto dejaría todos los avisos en cuarentena: por eso primero observar. Mientras no exista, el control compensatorio es revisar los pendientes antes de confiar en el total (ver HANDOFF, límite de confianza).</p>
+      </div>
+
+      <section class="block">
+        <h3>Cuándo</h3>
+        <p>Antes de activar el scheduler de importación con un buzón real. Es la mejora de este grupo con más impacto en la integridad de los datos.</p>
+      </section>
+    </article>
+
+    <!-- ====================== MEJORA #3 ====================== -->
+    <article class="item" id="mej-003">
+      <div class="item-head">
+        <div class="meta">
+          <span class="id">MEJ-003</span>
+          <span class="tag area">Conciliación · gasto observado</span>
+          <span class="tag prio-low">Prioridad baja</span>
+          <span class="tag when">Al final del proyecto</span>
+        </div>
+        <h2>Emparejamiento más flexible y confirmación manual de pares</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/finance/actual-spending.ts</code>, <code class="inline">src/actions/reconciliation.ts</code>, tabla <code class="inline">import_pair_exclusions</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Qué</h3>
+        <p>Permitir que un aviso del banco y un gasto de Splitwise se emparejen aunque no coincidan exactamente (otro día cercano, descripción escrita distinto), y agregar una acción "son el mismo gasto" para confirmar un par a mano. Hoy solo se puede <em>rechazar</em> un par que la regla automática encontró.</p>
+      </section>
+
+      <div class="callout benefit">
+        <h4>Por qué</h4>
+        <ul style="margin-bottom:0;">
+          <li>La regla actual exige mismo día UTC, misma descripción normalizada, misma moneda y mismo monto (detalle en <a href="FINANCIAL-RULES.html">FINANCIAL-RULES</a>). Una compra cerca de la medianoche local o un comercio escrito distinto en Splitwise queda sin emparejar y se cuenta entero.</li>
+          <li>No hay forma de resolver a mano un caso "ambiguo"; el total queda marcado como estimación.</li>
+        </ul>
+      </div>
+
+      <section class="block">
+        <h3>Cómo (enfoque — verificar al implementar)</h3>
+        <ul>
+          <li>Tabla de confirmaciones manuales simétrica a <code class="inline">import_pair_exclusions</code>, con prioridad sobre la regla automática.</li>
+          <li>Tolerancia de fecha acotada (p. ej. ±1 día) y comparación de descripción más laxa, mostradas como "posibles" hasta que se confirmen, nunca aplicadas en silencio.</li>
+          <li>Actualizar FINANCIAL-RULES y sus tests en el mismo cambio.</li>
+        </ul>
+      </section>
+
+      <div class="callout risk">
+        <h4>Alcance y riesgo</h4>
+        <p style="margin:0;">Un emparejamiento falso reemplaza el monto del banco por la parte adeudada y <strong>subestima</strong> el gasto sin aviso. Cualquier regla más laxa tiene que requerir confirmación o quedar visible para revisión.</p>
+      </div>
+
+      <section class="block">
+        <h3>Cuándo</h3>
+        <p>Al final del proyecto, después de observar con datos reales cuántos casos quedan ambiguos.</p>
+      </section>
+    </article>
+
+    <!-- ====================== MEJORA #4 ====================== -->
+    <article class="item" id="mej-004">
+      <div class="item-head">
+        <div class="meta">
+          <span class="id">MEJ-004</span>
+          <span class="tag area">Splitwise · sincronización</span>
+          <span class="tag prio-med">Prioridad media</span>
+          <span class="tag when">Al final del proyecto</span>
+        </div>
+        <h2>Sincronización incremental de Splitwise (hoy relee todo y se corta en 2.000 gastos)</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/splitwise/client.ts</code> (<code class="inline">getSplitwiseSnapshot</code>, <code class="inline">EXPENSE_LIMIT</code>), <code class="inline">src/splitwise/store.ts</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Qué</h3>
+        <p>Pasar de una lectura completa en cada corrida a una lectura incremental: pedir solo lo modificado desde la última sincronización exitosa.</p>
+      </section>
+
+      <div class="callout benefit">
+        <h4>Por qué</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Límite duro:</strong> <code class="inline">getSplitwiseSnapshot</code> pide páginas de <code class="inline">EXPENSE_LIMIT = 20</code> y corta en 100 páginas. Si la página 100 llega llena, lanza <code class="inline">SplitwiseError("unavailable")</code>. Con 2.000 gastos o más, toda sincronización falla y la instantánea anterior queda congelada.</li>
+          <li><strong>Costo:</strong> cada corrida (cada 3600 s por defecto) relee todo el historial y reescribe todas las filas en una transacción, aunque no haya cambios. Más pedidos a la API implica más exposición a límites de tasa.</li>
+        </ul>
+      </div>
+
+      <section class="block">
+        <h3>Cómo (enfoque — verificar al implementar)</h3>
+        <ul>
+          <li>Guardar una marca de agua (última fecha de actualización vista) y usar el filtro por fecha de actualización de <code class="inline">get_expenses</code> (verificar nombre y semántica en la documentación de la API de Splitwise).</li>
+          <li>Mantener una lectura completa ocasional para detectar borrados y cambios que el filtro incremental no muestre.</li>
+          <li>Reemplazar el corte silencioso por un error explícito con motivo, o por paginación sin tope fijo pero con límite de tiempo.</li>
+        </ul>
+      </section>
+
+      <div class="callout risk">
+        <h4>Alcance y riesgo</h4>
+        <p style="margin:0;">Cambia cómo se detectan borrados y modificaciones: una marca de agua mal guardada puede perder cambios sin que se note. Requiere tests de borde (zona horaria, gastos editados después de pagados).</p>
+      </div>
+
+      <section class="block">
+        <h3>Cuándo</h3>
+        <p>Al final del proyecto, o antes si la cuenta se acerca a los 2.000 gastos.</p>
+      </section>
+    </article>
+
+    <!-- ====================== MEJORA #5 ====================== -->
+    <article class="item" id="mej-005">
+      <div class="item-head">
+        <div class="meta">
+          <span class="id">MEJ-005</span>
+          <span class="tag area">Operación · schedulers</span>
+          <span class="tag prio-med">Prioridad media</span>
+          <span class="tag when">Al final del proyecto</span>
+        </div>
+        <h2>Un solo camino para activar los schedulers</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">docker-compose.prod.yml</code> (perfiles <code class="inline">ingest</code> y <code class="inline">splitwise-ingest</code>), <code class="inline">scripts/activate-sync.py</code>, <code class="inline">src/ingest/trigger-token.ts</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Qué</h3>
+        <p>Quedarse con un único mecanismo para disparar las sincronizaciones. Hoy hay dos, excluyentes entre sí:</p>
+        <ul>
+          <li><strong>Perfiles de Compose:</strong> sidecars <code class="inline">ingest</code> y <code class="inline">splitwise-ingest</code>, con el token en la variable <code class="inline">INGEST_TOKEN</code>.</li>
+          <li><strong><code class="inline">scripts/activate-sync.py</code>:</strong> contenedores creados con <code class="inline">docker run</code> fuera de Compose, red interna propia y token en el archivo <code class="inline">/app/data/ingest-token</code>. El script se niega a seguir si la app tiene <code class="inline">INGEST_TOKEN</code> u otras variables de proveedor configuradas.</li>
+        </ul>
+      </section>
+
+      <div class="callout benefit">
+        <h4>Por qué</h4>
+        <ul style="margin-bottom:0;">
+          <li>Dos caminos duplican nombres de contenedor, redes, ubicación del token e instrucciones. <code class="inline">triggerToken()</code> prefiere la variable al archivo: si alguien agrega <code class="inline">INGEST_TOKEN</code> después de usar el script, los schedulers del script reciben 401.</li>
+          <li>Los contenedores del script no los ve <code class="inline">docker compose ps</code>: más fácil olvidar uno corriendo.</li>
+        </ul>
+      </div>
+
+      <section class="block">
+        <h3>Cómo (enfoque — verificar al implementar)</h3>
+        <ul>
+          <li>Elegir uno. Compose es declarativo y versionado; el script aplica más endurecimiento (<code class="inline">--read-only</code>, <code class="inline">--cap-drop ALL</code>, <code class="inline">no-new-privileges</code>, límite de PIDs, usuario sin privilegios). Llevar ese endurecimiento a los servicios de Compose y retirar el script parece el camino más simple.</li>
+          <li>Unificar la ubicación del token (archivo privado montado, no variable de entorno visible en <code class="inline">docker inspect</code>).</li>
+        </ul>
+      </section>
+
+      <div class="callout risk">
+        <h4>Alcance y riesgo</h4>
+        <p style="margin:0;">Solo configuración y documentación; no toca datos. Si ya hay una instalación activada con el script, migrarla requiere parar y quitar esos contenedores antes de levantar los perfiles.</p>
+      </div>
+
+      <section class="block">
+        <h3>Cuándo</h3>
+        <p>Antes del primer despliegue de la rama, si es posible; si no, al final del proyecto.</p>
+      </section>
+    </article>
+
+    <!-- ====================== MEJORA #6 ====================== -->
+    <article class="item" id="mej-006">
+      <div class="item-head">
+        <div class="meta">
+          <span class="id">MEJ-006</span>
+          <span class="tag area">Seguridad · rutas API</span>
+          <span class="tag prio-med">Prioridad media</span>
+          <span class="tag when">Al final del proyecto</span>
+        </div>
+        <h2>Autenticar <code>/api/fx-rate</code> y acotar la exclusión <code>api</code> del proxy</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">proxy.ts</code> (<code class="inline">config.matcher</code>), <code class="inline">app/api/fx-rate/route.ts</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Qué</h3>
+        <p>El matcher del proxy es <code class="inline">/((?!_next/static|_next/image|favicon.ico|api).*)</code>: excluye de la verificación de sesión <strong>toda</strong> ruta que empiece con <code class="inline">api</code>, no solo las de importación. <code class="inline">/api/fx-rate</code> no verifica sesión por su cuenta, así que responde sin autenticación.</p>
+      </section>
+
+      <div class="callout benefit">
+        <h4>Por qué</h4>
+        <ul style="margin-bottom:0;">
+          <li>Un cliente sin sesión puede hacer que el servidor consulte al proveedor de cotizaciones para cualquier par configurado y saber qué monedas están configuradas (respuesta 400 vs 200). En caso de error devuelve el mensaje de la excepción (502).</li>
+          <li>Cualquier ruta <code class="inline">api*</code> futura queda pública por defecto si su autor no agrega un control: el default es abierto, no cerrado.</li>
+          <li>Las rutas de importación sí se protegen solas con el token bearer; esta mejora no las afecta.</li>
+        </ul>
+      </div>
+
+      <section class="block">
+        <h3>Cómo (enfoque — verificar al implementar)</h3>
+        <ul>
+          <li>Acotar la exclusión del matcher a <code class="inline">api/ingest/</code> (con barra), de modo que el resto de <code class="inline">/api</code> pase por la sesión.</li>
+          <li>Además, verificar sesión dentro de <code class="inline">/api/fx-rate</code> (defensa en profundidad). El único llamador, <code class="inline">CurrencyFxFields</code>, hace un <code class="inline">fetch</code> del mismo origen y ya envía la cookie.</li>
+          <li>Devolver un mensaje fijo en el 502.</li>
+        </ul>
+      </section>
+
+      <div class="callout risk">
+        <h4>Alcance y riesgo</h4>
+        <p style="margin:0;">Cambio chico. Riesgo: que el proxy redirija a <code class="inline">/login</code> una llamada <code class="inline">fetch</code> (respuesta HTML en lugar de JSON); el componente tiene que tratarlo como error.</p>
+      </div>
+
+      <section class="block">
+        <h3>Cuándo</h3>
+        <p>Al final del proyecto; antes si la app se expone fuera de la red privada.</p>
+      </section>
+    </article>
+
+    <!-- ====================== MEJORA #7 ====================== -->
+    <article class="item" id="mej-007">
+      <div class="item-head">
+        <div class="meta">
+          <span class="id">MEJ-007</span>
+          <span class="tag area">Server actions · mensajes de error</span>
+          <span class="tag prio-low">Prioridad baja</span>
+          <span class="tag when">Al final del proyecto</span>
+        </div>
+        <h2>Códigos de error fijos en lugar de texto libre en <code>?error=</code></h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/actions/forms.ts</code> (<code class="inline">redirectWithError</code>), <code class="inline">src/actions/auth.ts</code>, <code class="inline">app/expenses/page.tsx</code>, <code class="inline">app/income/page.tsx</code>, <code class="inline">app/plans/page.tsx</code>, <code class="inline">app/login/page.tsx</code></p>
+      </div>
+
+      <section class="block">
+        <h3>Qué</h3>
+        <p>Las acciones de gastos, ingresos, planes (y categorías) redirigen con <code class="inline">?error=&lt;error.message&gt;</code>, y login con mensajes propios o el de la excepción. Las páginas de gastos, ingresos, planes y login muestran ese parámetro tal cual. Pasar a códigos fijos que la página traduce a un texto conocido, como ya hacen <code class="inline">/transactions</code> (tabla <code class="inline">ERROR_MESSAGES</code>) y <code class="inline">/splitwise</code>.</p>
+      </section>
+
+      <div class="callout benefit">
+        <h4>Por qué</h4>
+        <ul style="margin-bottom:0;">
+          <li>React escapa el texto, así que no es XSS, pero un enlace armado puede mostrar cualquier frase dentro de la app (inyección de contenido para engaño).</li>
+          <li>Los mensajes de excepciones internas (p. ej. de SQLite) llegan a la URL, al historial del navegador y a logs de proxy.</li>
+          <li>Hoy conviven dos patrones; uno solo es más fácil de revisar.</li>
+        </ul>
+      </div>
+
+      <section class="block">
+        <h3>Cómo (enfoque — verificar al implementar)</h3>
+        <ul>
+          <li>Un mapa compartido código → mensaje; <code class="inline">redirectWithError</code> recibe un código, no un <code class="inline">Error</code>.</li>
+          <li>Los errores de validación propios conservan su texto mediante códigos específicos; lo desconocido cae en un genérico.</li>
+        </ul>
+      </section>
+
+      <div class="callout risk">
+        <h4>Alcance y riesgo</h4>
+        <p style="margin:0;">Toca varias acciones y páginas, pero sin lógica de datos. Riesgo: perder detalle útil de validación si los códigos son demasiado gruesos.</p>
+      </div>
+
+      <section class="block">
+        <h3>Cuándo</h3>
+        <p>Al final del proyecto, junto con MEJ-006.</p>
+      </section>
+    </article>
+
   </main>
 
   <footer>

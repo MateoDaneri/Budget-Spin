@@ -191,11 +191,13 @@ The importer stores IMAP `UIDVALIDITY` and the last processed UID in SQLite,
 keyed by mailbox identity. With no cursor, or when UIDVALIDITY changes, it starts
 at UID 1. Each trigger processes at most ten batches of 500 UID positions, reading
 headers first and downloading only matching candidate bodies, limited to 1 MiB.
-Checkpoints are saved after a complete batch. Unsupported notices and non-positive
-amounts are retained in a private quarantine by UID and UIDVALIDITY, retried in
-bounded batches and surfaced as a sync error for review. Deleted or archived
-notices and locators from an earlier UIDVALIDITY remain pending for manual review.
-Oversized or incomplete candidate messages fail the batch until resolved. Messages
+Checkpoints are saved after a complete batch. A candidate notice that cannot be
+imported (any reason in [Quarantine](#quarantine)) is retained in a private
+quarantine by UID and UIDVALIDITY with a reason code, retried in bounded batches
+and surfaced as a sync error for review; the rest of the batch continues.
+Deleted or archived notices and locators from an earlier UIDVALIDITY remain
+pending for manual review. Oversized (over 1 MiB) or incomplete candidates are
+quarantined too instead of failing the batch. Messages
 removed before processing cannot be recovered. Reprocessing uses Message-ID to
 avoid reinserting the same email, but does not reconcile distinct notices for the
 same purchase. Imported entries start as pending.
@@ -308,8 +310,9 @@ and starts the selected pinned scheduler container. Its first check begins immed
 The token is mounted read-only into the schedulers, without provider credentials.
 The script refuses existing scheduler names and does not replace containers.
 
-Splitwise records are stored separately by account and expense ID, not added to
-budget totals or combined with bank notifications. The authenticated user's paid
+Splitwise records are stored separately by account and expense ID and are not
+added to budget totals. The dashboard's observed-spending view can pair them
+with bank notices; the rules are in `FINANCIAL-RULES`. The authenticated user's paid
 and owed shares are stored as decimal strings. Payments and deletion flags are
 preserved when supplied by Splitwise; records absent from a response are not
 assumed deleted. Each complete pass reads at most 100 pages of 20; failure or an
@@ -333,6 +336,129 @@ Imported purchases receive an editable category. A prior explicit choice is
 reused for the same whitespace-normalized, case-insensitive description; an
 unknown description is assigned `Other`. Payments and transfers are not treated
 as purchases. Categories do not cause imports to be counted in budget totals.
+
+## Import and sync operations
+
+> Branch `claude/feature-conciliacion`: unmerged. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data.
+> Deployment status: see the operator. The commands below follow the code as
+> written and have not been exercised one by one.
+> Architecture and the trust boundary (bank e-mails are not sender-authenticated)
+> are in `HANDOFF`; observed-spending rules in `FINANCIAL-RULES`.
+
+### Environment variables (names only — values live in the untracked `.env.production`)
+| Variable | Read by | Notes |
+|---|---|---|
+| `INGEST_TOKEN` | app + Compose schedulers | Bearer for both trigger routes. 32–256 chars of `[A-Za-z0-9_-]`; anything else, or the old example placeholder, makes the routes answer 503. If unset, the app reads `/app/data/ingest-token` (must be a mode-0600 file). Separate from `BUDGETSPIN_AUTH_SECRET` |
+| `INGEST_INTERVAL` | `ingest` scheduler | Seconds between Itaú passes (default 900) |
+| `SPLITWISE_INGEST_INTERVAL` | `splitwise-ingest` scheduler | Seconds between Splitwise syncs (default 3600) |
+| `ITAU_INGEST_PROVIDER` | app | `imap` or `gmail`. If unset: private file `/app/data/ingest-provider`; else Gmail when `/app/data/gmail-oauth.json` exists; else IMAP |
+| `ITAU_IMAP_HOST`, `ITAU_IMAP_PORT`, `ITAU_IMAP_USER`, `ITAU_IMAP_PASSWORD`, `ITAU_IMAP_MAILBOX` | app (IMAP) | Port defaults to 993, mailbox to `INBOX` |
+| `ITAU_IMAP_CREDENTIALS_PATH` | app (IMAP) | Private JSON `{"user","password"}` used when the user/password variables are unset (default `/app/data/imap-credentials.json`) |
+| `ITAU_IMAP_STATE_DIR` | app (IMAP) | Quarantine directory (default `/app/data/ingest-state`) |
+| `GMAIL_CREDENTIALS_PATH`, `GMAIL_STATE_PATH` | app (Gmail) | Defaults `/app/data/gmail-oauth.json` and `/app/data/ingest-state/gmail-state.json` |
+| `SPLITWISE_API_KEY` | app (Splitwise) | Read by the code but **not listed** in `.env.production.example`. Preferred: the private file `/app/data/splitwise-api-key` |
+
+### Two activation paths — pick one
+| | Compose profiles | `scripts/activate-sync.py` |
+|---|---|---|
+| Schedulers | `ingest`, `splitwise-ingest` services | `budgetspin-gmail-scheduler`, `budgetspin-splitwise-scheduler` containers (`docker run`, outside Compose) |
+| Token | `INGEST_TOKEN` in `.env.production` | generated file on the host, installed as `/app/data/ingest-token`, mounted read-only into the scheduler |
+| Visible in `docker compose ps` | yes | no |
+
+They are **mutually exclusive**: the script stops if the app already has
+`INGEST_TOKEN` (or provider overrides) in its environment, and the app prefers
+`INGEST_TOKEN` over the token file, so adding the variable later makes the
+script's schedulers get 401. Running both would also trigger the same route
+twice (the second call gets 409). The script's "gmail" scheduler calls
+`/api/ingest/itau`, which uses whichever provider is selected. Unifying the
+paths is MEJ-005.
+
+### Trigger a run by hand
+Same curl form as the scheduler: the header goes to curl as config on stdin so
+the token is never in a process argument. Single quotes keep `$INGEST_TOKEN`
+unexpanded on the host; it is read from the scheduler container's environment.
+```sh
+# Compose path (scheduler running)
+docker compose --env-file .env.production -f docker-compose.prod.yml --profile ingest exec ingest \
+  sh -c 'printf "header = \"Authorization: Bearer %s\"\n" "$INGEST_TOKEN" | curl -K - -fsS -X POST --connect-timeout 10 http://app:3000/api/ingest/itau'
+docker compose --env-file .env.production -f docker-compose.prod.yml --profile splitwise-ingest exec splitwise-ingest \
+  sh -c 'printf "header = \"Authorization: Bearer %s\"\n" "$INGEST_TOKEN" | curl -K - -fsS -X POST --connect-timeout 10 --max-time 600 http://app:3000/api/ingest/splitwise'
+
+# Script path: the token is the mounted file
+docker exec budgetspin-gmail-scheduler \
+  sh -c 'printf "header = \"Authorization: Bearer %s\"\n" "$(cat /run/ingest-token)" | curl -K - -fsS -X POST --connect-timeout 10 --max-time 600 http://app:3000/api/ingest/itau'
+```
+An Itaú pass answers `{"ok":true,"messagesSeen":…,"inserted":…,"skipped":…}`;
+Splitwise answers `{"ok":true}`.
+
+### Where to see results
+- **`/transactions`**: last Itaú check (completed/failed, time, imported count),
+  pending count among the latest 200 imports, and Confirm / Discard per notice.
+  Pending notices count in observed spending until discarded.
+- **`ingest_runs`** (one row per Itaú pass, IMAP `itau_email` or Gmail `gmail_api`;
+  errors are fixed strings, never provider text):
+  ```sh
+  docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
+    node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite'); console.table(db.prepare('SELECT id, source, started_at, finished_at, messages_seen, inserted, skipped, status, error FROM ingest_runs ORDER BY id DESC LIMIT 10').all()); db.close();"
+  ```
+- **Splitwise** writes no `ingest_runs` row. `/splitwise` shows the last
+  successful sync (`splitwise_sync_account.synced_at`); the trigger's HTTP status
+  and the scheduler log are the only per-run signal.
+- **Scheduler logs**: a failed trigger prints `[ingest] trigger failed`,
+  `[splitwise-ingest] trigger failed` (Compose) or `sync trigger failed` (script).
+
+### Quarantine
+A message that passed the sender/subject filter but cannot be imported is set
+aside with a fixed reason code; only its locator is stored (IMAP UID +
+UIDVALIDITY in `imap-quarantine-<mailbox-hash>.json` under the state directory,
+or Gmail ID in the Gmail state file), never the body. Each pass first retries up
+to 20 (IMAP) or 50 (Gmail) retained items; one that now imports is removed.
+
+| Reason | Meaning |
+|---|---|
+| `unrecognized` | body format not understood, or no Message-ID |
+| `non_positive_amount` | amount is zero or negative |
+| `unconfigured_currency` | currency not configured in the app (add it, the retry can then import it) |
+| `unsupported_precision` | more decimals than the currency's minor unit |
+| `invalid_amount` | amount could not be converted |
+| `oversized` | message over 1 MiB |
+| `incomplete` | download incomplete or malformed headers |
+
+While anything is retained, the pass is recorded with `status = 'error'` and
+`Unrecognized notices retained for review.`, **but the route still answers
+200 `{"ok":true}`**, so the scheduler logs nothing: check `ingest_runs` or
+`/transactions`. Once 1000 items are retained, a pass that needs to retain one
+more fails. The code has no
+command to remove an entry by hand.
+
+### Enable / disable the schedulers
+```sh
+# Compose path
+docker compose --env-file .env.production -f docker-compose.prod.yml --profile ingest up -d
+docker compose --env-file .env.production -f docker-compose.prod.yml --profile splitwise-ingest up -d
+docker compose --env-file .env.production -f docker-compose.prod.yml stop ingest splitwise-ingest
+docker compose --env-file .env.production -f docker-compose.prod.yml rm -f ingest splitwise-ingest
+
+# Script path (on the Docker host)
+python3 scripts/activate-sync.py gmail --check        # preflight only, starts nothing
+python3 scripts/activate-sync.py gmail                # starts budgetspin-gmail-scheduler; first trigger is immediate
+python3 scripts/activate-sync.py splitwise
+docker stop budgetspin-gmail-scheduler budgetspin-splitwise-scheduler
+docker rm budgetspin-gmail-scheduler budgetspin-splitwise-scheduler
+```
+Stopping a scheduler does not revoke the token: the routes still accept it from
+anything that can reach the app. Remove or rotate the token to fully disable.
+
+### When a run fails
+| Trigger answer | Meaning | Check |
+|---|---|---|
+| 503 `Ingest is not configured.` | no usable token in the app | `INGEST_TOKEN` set and valid (format, not the placeholder); or `/app/data/ingest-token` exists, is a regular file, mode 0600 |
+| 401 `Unauthorized.` | scheduler token ≠ app token | a shell-exported `INGEST_TOKEN` overriding Compose interpolation; both activation paths mixed |
+| 409 `Ingest already running.` | a pass is still running in that process | wait; do not run several app replicas |
+| 500 `Ingest failed.` | the pass threw | latest `ingest_runs` row: `IMAP synchronization failed.` or `Gmail synchronization failed (HTTP n).` → credential, connection or provider; also cursor errors and a full quarantine. **No new row** → it failed before the pass: IMAP not configured, invalid provider selector, or a credential/selector file that is not private. The route does not log the exception |
+| 500 on Splitwise | sync threw | `/splitwise` banner (not configured / rejected credential / rate limited / unavailable); key file private; a changed Splitwise account is refused and the existing imports are kept; 2,000+ expenses make every sync fail (MEJ-004) |
+| 200 but `status = 'error'` | items in quarantine | see Quarantine |
+| 200, `inserted = 0` for days | possibly a changed bank e-mail format | no automatic watchdog exists; compare with the mailbox |
 
 ## Troubleshooting
 ```bash
