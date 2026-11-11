@@ -2,8 +2,24 @@ import { getDb } from "@/src/db/client";
 import { automaticImportCategory, LOCAL_USER_ID, migrate, rememberImportCategory } from "@/src/db/repository";
 import type { SplitwiseExpense } from "./client";
 
-/** Store only a completed snapshot. Missing records are retained, never guessed deleted. */
-export function saveSplitwiseSnapshot(accountId: number, expenses: SplitwiseExpense[]): void {
+export type SplitwiseSyncState = { accountId: number; syncedAt: string; watermark: string | null; fullSyncedAt: string | null };
+
+/** What the last committed passes left behind; null before the first successful sync. */
+export function getSplitwiseSyncState(): SplitwiseSyncState | null {
+  migrate();
+  const row = getDb().prepare(`SELECT account_id AS accountId, synced_at AS syncedAt, updated_watermark AS watermark, full_synced_at AS fullSyncedAt
+    FROM splitwise_sync_account WHERE singleton=1`).get() as SplitwiseSyncState | undefined;
+  return row ?? null;
+}
+
+/** Pass metadata committed together with its rows; omitted, only `synced_at` moves. */
+export type SplitwiseSyncCommit = { mode: "full" | "incremental"; startedAt: string; watermark?: string };
+
+/**
+ * Store only a completed pass. Missing records are retained, never guessed deleted.
+ * The watermark is written in the same transaction as the rows and never moves backwards.
+ */
+export function saveSplitwiseSnapshot(accountId: number, expenses: SplitwiseExpense[], commit?: SplitwiseSyncCommit): void {
   migrate();
   const db = getDb();
   db.exec("BEGIN IMMEDIATE");
@@ -19,8 +35,15 @@ export function saveSplitwiseSnapshot(accountId: number, expenses: SplitwiseExpe
         WHEN splitwise_imports.payment=1 THEN excluded.category_id ELSE splitwise_imports.category_id END,
       payment=excluded.payment, deleted=excluded.deleted`);
     for (const row of expenses) upsert.run(accountId, row.id, row.date, row.description, row.currency, row.total, row.paid, row.owed, Number(row.payment), Number(row.deleted), row.payment ? null : automaticImportCategory(row.description));
-    db.prepare(`INSERT INTO splitwise_sync_account (singleton, account_id, synced_at) VALUES (1, ?, ?)
-      ON CONFLICT(singleton) DO UPDATE SET synced_at=excluded.synced_at`).run(accountId, new Date().toISOString());
+    // ISO strings from toISOString() share one format, so text comparison orders them by time.
+    const watermark = commit?.watermark ? new Date(commit.watermark).toISOString() : null;
+    db.prepare(`INSERT INTO splitwise_sync_account (singleton, account_id, synced_at, updated_watermark, full_synced_at) VALUES (1, ?, ?, ?, ?)
+      ON CONFLICT(singleton) DO UPDATE SET synced_at=excluded.synced_at,
+      updated_watermark=CASE WHEN excluded.updated_watermark IS NULL THEN splitwise_sync_account.updated_watermark
+        WHEN splitwise_sync_account.updated_watermark IS NULL OR excluded.updated_watermark > splitwise_sync_account.updated_watermark
+        THEN excluded.updated_watermark ELSE splitwise_sync_account.updated_watermark END,
+      full_synced_at=COALESCE(excluded.full_synced_at, splitwise_sync_account.full_synced_at)`)
+      .run(accountId, new Date().toISOString(), watermark, commit?.mode === "full" ? commit.startedAt : null);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
