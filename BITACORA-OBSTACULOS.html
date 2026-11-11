@@ -653,6 +653,84 @@ failed to calculate checksum of ref ...: "/app/public": not found</pre>
       </div>
     </article>
 
+    <article class="entry" id="obs-010">
+      <div class="entry-head"><div class="meta"><span class="id">OBS-010</span><span class="tag phase">Interfaz · Móvil</span><span class="tag ok">Resuelto en copia de prueba</span></div><h2>Navegación móvil y edición dentro de tablas anchas</h2><p>2026-11-08 · <code class="inline">app/globals.css</code>, <code class="inline">app/components/MobileNav.tsx</code></p></div>
+      <section class="block"><h3>Contexto y síntoma</h3><p>El menú recibió ocho secciones. En celular ocupaba dos filas y los formularios de ingresos y gastos quedaban dentro de tablas anchas. En páginas cortas aparecía un espacio vacío bajo la cabecera.</p></section>
+      <div class="callout evidence"><h4>Evidencia</h4><p>La revisión visual con datos sintéticos mostró los tres problemas. La medición de las filas del grid explicó el espacio; después del cambio se guardó una edición de gasto.</p></div>
+      <div class="callout root"><h4>Causa raíz</h4><p>El menú se había dimensionado para menos secciones, las tablas tenían un ancho mínimo y las filas automáticas del grid repartían el espacio libre.</p></div>
+      <section class="block"><h3>Comportamiento esperado</h3><p>Navegación accesible en una fila, edición legible y contenido alineado debajo de la cabecera.</p></section>
+      <div class="callout lesson"><h4>Resolución y lección</h4><p>Cuatro accesos principales y un menú adicional; tarjetas para registros recurrentes y formularios adaptados; filas del shell <code class="inline">auto 1fr</code>. En escritorio se conservan las tablas. Probar con datos y formularios abiertos, y medir las regiones, permite detectar problemas que las pantallas vacías ocultan.</p></div>
+    </article>
+
+    <!-- ====================== ENTRADA #11 ====================== -->
+    <article class="entry" id="obs-011">
+      <div class="entry-head">
+        <div class="meta">
+          <span class="id">OBS-011</span>
+          <span class="tag phase">Importación de correo · IMAP/Gmail</span>
+          <span class="tag sec">Disponibilidad · mensaje envenenado</span>
+          <span class="tag wip">Corregido en código · sin verificar</span>
+        </div>
+        <h2>Un solo aviso ilegible bloqueaba el cursor y frenaba todas las importaciones siguientes</h2>
+        <p style="margin:0; color:var(--muted); font-size:14px;">2026-11-10 · <code class="inline">src/ingest/ingest-itau.ts</code>, <code class="inline">src/ingest/imap.ts</code>, <code class="inline">src/ingest/gmail.ts</code> · <code class="inline">8b56d77</code> (rama <code class="inline">claude/feature-conciliacion</code>, sin mergear)</p>
+      </div>
+
+      <section class="block">
+        <h3>Contexto</h3>
+        <p>La importación de avisos Itaú lee el buzón por ventanas de 500 UID y guarda el avance (<code class="inline">UIDVALIDITY</code> + último UID) en <code class="inline">ingest_cursors</code> <strong>solo después</strong> de procesar la ventana completa. Así, una falla a mitad de ventana no pierde mensajes: la corrida siguiente vuelve a empezar desde el último punto guardado.</p>
+      </section>
+
+      <section class="block">
+        <h3>Síntoma</h3>
+        <p>Deducido del código anterior al fix (no hay registro en el repo de una corrida real que lo mostrara): si un aviso candidato tenía una moneda no configurada, más decimales que la moneda, un monto inválido, o pesaba más de 1&nbsp;MiB / llegaba incompleto, la corrida entera fallaba. Como el cursor no avanzaba, cada disparo siguiente releía la misma ventana, volvía a chocar con el mismo mensaje y fallaba otra vez. Ningún aviso posterior se importaba.</p>
+      </section>
+
+      <div class="callout evidence">
+        <h4>Evidencia — el diff del commit</h4>
+        <ul style="margin-bottom:0;">
+          <li>Antes, en <code class="inline">processMessage</code>: <code class="inline">throw new Error(`… has an unconfigured currency.`)</code> (ídem precisión y monto). El <code class="inline">catch</code> del bucle solo absorbía <code class="inline">UnrecognizedNoticeError</code> y relanzaba todo lo demás.</li>
+          <li>Antes, en <code class="inline">fetchRecentMail</code>: <code class="inline">throw new Error(`IMAP UID ${uid} missing, incomplete or exceeds size limit.`)</code> cortaba la ventana completa.</li>
+          <li><code class="inline">saveIngestCursor(...)</code> se ejecuta después del bucle de mensajes, así que una excepción dentro del bucle impide guardarlo.</li>
+          <li>Mensaje del commit <code class="inline">8b56d77</code>: "Quarantine per-message failures … and let the cursor advance; only provider and connection errors abort a pass."</li>
+        </ul>
+      </div>
+
+      <div class="callout root">
+        <h4>Causa raíz</h4>
+        <p style="margin:0;">El código no separaba dos clases de error: los que son <strong>propiedad de un mensaje</strong> (formato, monto, tamaño) y los que son <strong>propiedad de la corrida</strong> (conexión, credencial, proveedor caído). Tratar un error de datos como error de infraestructura convierte un mensaje malo en un bloqueo permanente: el patrón clásico de "mensaje envenenado" en una cola.</p>
+      </div>
+
+      <section class="block">
+        <h3>Comportamiento esperado</h3>
+        <p>Un mensaje que no se puede importar queda apartado, con un motivo legible, y el resto de la ventana sigue. El cursor avanza. Solo una falla del proveedor o de la conexión aborta la corrida.</p>
+      </section>
+
+      <section class="block">
+        <h3>Resolución</h3>
+        <div class="layers">
+          <div class="layer">
+            <div class="lh"><b>Cuarentena por mensaje</b><span class="tag wip">Sin verificar</span></div>
+            <p style="margin:0; font-size:14px;">Las fallas por mensaje pasan a ser <code class="inline">UnrecognizedNoticeError</code> con un motivo fijo (<code class="inline">unconfigured_currency</code>, <code class="inline">unsupported_precision</code>, <code class="inline">invalid_amount</code>, <code class="inline">non_positive_amount</code>, <code class="inline">unrecognized</code>). El fetcher informa <code class="inline">oversized</code> / <code class="inline">incomplete</code> en vez de lanzar. Se guarda solo el UID y el motivo, nunca el cuerpo, y se reintenta en lotes de 20.</p>
+          </div>
+          <div class="layer">
+            <div class="lh"><b>Gmail</b><span class="tag wip">Sin verificar</span></div>
+            <p style="margin:0; font-size:14px;">Un mensaje que devuelve 404 después de listado (borrado entre medio) se salta y el checkpoint de la página igual se guarda. En <code class="inline">ingest_runs</code> se guarda un texto fijo (con el código HTTP), no el mensaje del proveedor.</p>
+          </div>
+        </div>
+        <p>La corrida queda con <code class="inline">status = 'error'</code> y el texto "Unrecognized notices retained for review." mientras haya algo en cuarentena, para que no pase desapercibido.</p>
+      </section>
+
+      <div class="callout lesson">
+        <h4>Lección</h4>
+        <ul style="margin-bottom:0;">
+          <li><strong>Un checkpoint solo puede avanzar más allá de un mensaje si su falla quedó registrada en otro lado.</strong> Cuarentena con localizador + motivo = "dead-letter queue" mínima.</li>
+          <li>Clasificar errores por <em>dueño</em> (este mensaje vs. esta corrida) antes de decidir si abortar.</li>
+          <li>Seguridad: el contenido de un correo es entrada no confiable. Guardar solo códigos fijos (no cuerpos ni texto del proveedor) evita que datos externos terminen en la base o en logs.</li>
+          <li>Estado honesto: la rama no está mergeada (estado de despliegue: consultar al operador) ; lint, typecheck, la suite de tests (126) y el build de producción pasaron con Node 24 el 2026-11-10 sobre el commit <code>b71b5de</code>; no se comprobó contra datos reales del banco ni de Splitwise.</li>
+        </ul>
+      </div>
+    </article>
+
   </main>
 
   <footer>

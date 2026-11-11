@@ -20,6 +20,7 @@ services:
       - budgetspin-prod-data:/app/data
     networks:
       - proxy
+      - ingest-internal
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_DOCKER_NETWORK:-proxy}
@@ -36,11 +37,71 @@ services:
       retries: 5
       start_period: 30s
 
+  # Cron trigger for the Itaú email ingest. Disabled by default — only starts
+  # with `--profile ingest`. Keep it off until the parser is validated against a
+  # real mailbox, so a broken pass doesn't spam errors. It only triggers; the app
+  # is the single SQLite writer (the sidecar never touches the volume). IMAP
+  # credentials live in the app service (.env.production), never here.
+  ingest:
+    image: curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+    profiles:
+      - ingest
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      INGEST_TOKEN: ${INGEST_TOKEN:-}
+      INGEST_INTERVAL: ${INGEST_INTERVAL:-900}
+    networks:
+      - ingest-internal
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ -z "$$INGEST_TOKEN" ]; then echo "INGEST_TOKEN is required" >&2; exit 1; fi
+        while true; do
+          # Header goes through curl's config on stdin (printf is a shell builtin),
+          # so the token never appears in any process argument list.
+          printf 'header = "Authorization: Bearer %s"\n' "$$INGEST_TOKEN" \
+            | curl -K - -fsS -X POST \
+            --connect-timeout 10 http://app:3000/api/ingest/itau \
+            || echo "[ingest] trigger failed" >&2
+          sleep "$${INGEST_INTERVAL:-900}"
+        done
+
+  splitwise-ingest:
+    image: curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+    profiles:
+      - splitwise-ingest
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      INGEST_TOKEN: ${INGEST_TOKEN:-}
+      SPLITWISE_INGEST_INTERVAL: ${SPLITWISE_INGEST_INTERVAL:-3600}
+    networks:
+      - ingest-internal
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ -z "$$INGEST_TOKEN" ]; then echo "INGEST_TOKEN is required" >&2; exit 1; fi
+        while true; do
+          # Token via curl config on stdin, never in argv (see the ingest service).
+          printf 'header = "Authorization: Bearer %s"\n' "$$INGEST_TOKEN" \
+            | curl -K - -fsS -o /dev/null -X POST \
+            --connect-timeout 10 --max-time 600 http://app:3000/api/ingest/splitwise \
+            || echo "[splitwise-ingest] trigger failed" >&2
+          sleep "$${SPLITWISE_INGEST_INTERVAL:-3600}"
+        done
+
 volumes:
   budgetspin-prod-data:
     name: budgetspin-prod-data
 
 networks:
+  ingest-internal:
+    internal: true
   proxy:
     external: true
     name: ${TRAEFIK_DOCKER_NETWORK:-proxy}

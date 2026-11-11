@@ -27,6 +27,8 @@ const paths: Record<NavIconKey, React.ReactNode> = {
       <circle cx="12" cy="12" r="3.2" />
     </>
   ),
+  transactions: <path d="M4 5h16v14H4z M7 9h10 M7 13h10 M7 17h6" />,
+  splitwise: <path d="M4 7h10m-3-3 3 3-3 3M20 17H10m3-3-3 3 3 3" />,
   categories: <path d="M4 5h16M4 12h16M4 19h10" />,
   setup: (
     <>

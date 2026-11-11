@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Breadcrumb } from "@/app/components/Breadcrumb";
 import { NavLinks } from "@/app/components/NavLinks";
+import { MobileNav } from "@/app/components/MobileNav";
 import { ThemeToggle } from "@/app/components/ThemeToggle";
 import { logoutAction } from "@/src/actions/auth";
 import { getCurrentSession } from "@/src/auth/session";
@@ -37,6 +38,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        <a className="skip-link" href="#main-content">Skip to main content</a>
         <div className="app-layout">
           <aside className="sidebar">
             <Link className="brand-block sidebar-brand" href="/">
@@ -53,7 +55,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               </form>
             </div>
           </aside>
-          <main className="app-content">
+          <div className="mobile-navigation"><MobileNav /></div>
+          <main className="app-content" id="main-content" tabIndex={-1}>
             <div className="content-inner">
               <Breadcrumb />
               {children}

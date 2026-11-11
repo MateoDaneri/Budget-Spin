@@ -7,6 +7,9 @@ coverage/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+# Raw bank notification emails contain real card/account data. Never commit.
+# Anonymized fixtures for tests live under tests/fixtures/ and are crafted by hand.
+*.eml
 .env
 .env.local
 .env.production

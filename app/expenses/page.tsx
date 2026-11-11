@@ -55,12 +55,18 @@ export default async function ExpensesPage({ searchParams }: Props) {
           <span className="eyebrow">Money out</span>
           <h1>Expenses</h1>
           <p className="muted">
-            Separate committed recurring expenses from optional scenarios, then compare both on the dashboard.
+            Track recurring and optional expenses.
           </p>
         </div>
       </section>
 
       {params.error ? <div className="alert">{params.error}</div> : null}
+
+      <section className="collection-summary" aria-label="Recurring expenses overview">
+        <div><span className="collection-mark" aria-hidden="true">↘</span><div><span>Recurring expenses</span><strong>{expenses.length}</strong><small>Active records</small></div></div>
+        <div><span>Committed</span><strong>{expenses.filter((expense) => !expense.isOptional).length}</strong><small>Included in base scenario</small></div>
+        <div><span>Optional</span><strong>{expenses.filter((expense) => expense.isOptional).length}</strong><small>Included in optional scenario</small></div>
+      </section>
 
       <details className="create-panel">
         <summary className="button">Add expense</summary>
@@ -171,9 +177,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
                   {group.isActive && group.name !== "General" ? (
                     <form action={deactivateExpenseGroupAction}>
                       <input type="hidden" name="id" value={group.id} />
-                      <button className="button button-danger" type="submit">
-                        Deactivate
-                      </button>
+                      <details className="confirm-action"><summary className="button button-danger">Deactivate</summary><div><p>Deactivate this family?</p><button className="button button-danger" type="submit">Confirm deactivation</button></div></details>
                     </form>
                   ) : null}
                 </div>
@@ -183,7 +187,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
         </div>
       </details>
 
-      <div className="panel">
+      <div className="panel collection-list">
         <div className="panel-header">
           <div>
             <h2>Current recurring expenses</h2>
@@ -212,23 +216,22 @@ export default async function ExpensesPage({ searchParams }: Props) {
                   groupSort: nextGroupSort(groupSort)
                 })}
               >
-                Category groups
-                {groupSort === "asc" ? " ↑" : groupSort === "desc" ? " ↓" : ""}
+                Category groups: {groupSort === "manual" ? "Manual" : groupSort === "asc" ? "A–Z" : "Z–A"}
               </Link>
-              <span className="muted">Drag to set manual order</span>
+              {groupSort === "manual" ? <span className="muted">Drag or use the arrow buttons to set manual order</span> : <Link href={buildExpensesQuery({ params, groupSort: "manual" })}>Switch to manual order</Link>}
             </div>
-            <ExpenseCategoryGroupOrder
+            {groupSort === "manual" ? <ExpenseCategoryGroupOrder
               categories={groupedExpenses.map((group) => ({
                 id: group.categoryId,
                 name: group.categoryName
               }))}
-            />
+            /> : null}
           </div>
         ) : null}
         {expenses.length === 0 ? (
           <p className="muted">No recurring expenses yet.</p>
         ) : (
-          <table className="table">
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table className="table record-table expense-records">
             <thead>
               <tr>
                 <th>{renderSortLink("Description", "description", sortKey, sortDirection, params)}</th>
@@ -271,7 +274,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
                     />
                   )}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </>
@@ -316,16 +319,16 @@ function FragmentRows({
         return (
           <Fragment key={expense.id}>
             <tr key={expense.id}>
-              <td>{expense.description}</td>
-              <td>{expense.categoryName}</td>
-              <td>{expense.groupName}</td>
-              <td>{formatRecurrence(expense)}</td>
-              <td>
+              <td data-label="Description">{expense.description}</td>
+              <td data-label="Category">{expense.categoryName}</td>
+              <td data-label="Family">{expense.groupName}</td>
+              <td data-label="Frequency">{formatRecurrence(expense)}</td>
+              <td data-label="Type">
                 <span className={`status-pill ${expense.isOptional ? "status-optional" : "status-committed"}`}>
                   {expense.isOptional ? "Optional" : "Committed"}
                 </span>
               </td>
-              <td>
+              <td data-label="Amount">
                 <MoneyStack
                   values={formatDisplayMoney({
                     amountMinor: expense.amountMinor,
@@ -335,11 +338,11 @@ function FragmentRows({
                   })}
                 />
               </td>
-              <td>
+              <td data-label="Active dates">
                 {expense.startDate}
                 {expense.endDate ? ` to ${expense.endDate}` : " no end date"}
               </td>
-              <td>
+              <td data-label="Actions">
                 <div className="actions-row">
                   <Link
                     className="button button-secondary"
@@ -349,9 +352,7 @@ function FragmentRows({
                   </Link>
                   <form action={deleteExpenseAction}>
                     <input type="hidden" name="id" value={expense.id} />
-                    <button className="button button-danger" type="submit">
-                      Delete
-                    </button>
+                    <details className="confirm-action"><summary className="button button-danger">Delete</summary><div><p>Remove this item?</p><button className="button button-danger" type="submit">Confirm delete</button></div></details>
                   </form>
                 </div>
               </td>

@@ -55,7 +55,7 @@ export default async function PlansPage({ searchParams }: Props) {
           <span className="eyebrow">Goals</span>
           <h1>Plans</h1>
           <p className="muted">
-            One-off goals like trips or big purchases. Track the target, the purchases, and the monthly pressure.
+            Track your goals and upcoming purchases.
           </p>
         </div>
       </section>
@@ -68,7 +68,7 @@ export default async function PlansPage({ searchParams }: Props) {
           <div className="panel-header span-full">
             <div>
               <h2>Create a plan</h2>
-              <p className="muted">Example: August trip, USD 2500, target date, and notes.</p>
+
             </div>
           </div>
           <div className="field span-2">
@@ -102,7 +102,6 @@ export default async function PlansPage({ searchParams }: Props) {
       <section className="section-title">
         <div>
           <h2>Active plans</h2>
-          <p className="muted">Each card shows progress and whether projected net can cover what remains.</p>
         </div>
       </section>
 
@@ -148,12 +147,23 @@ export default async function PlansPage({ searchParams }: Props) {
                     </p>
                     {plan.notes ? <p className="muted">{plan.notes}</p> : null}
                   </div>
-                  <form action={deletePlanAction}>
-                    <input type="hidden" name="id" value={plan.id} />
-                    <button className="button button-danger" type="submit">
-                      Delete plan
-                    </button>
-                  </form>
+                </div>
+
+                <div className="progress-block">
+                  <div className="panel-header">
+                    <div>
+                      <h3>Purchase progress</h3>
+                      <p className="muted">Done purchases reduce what is still needed.</p>
+                    </div>
+                    <span className={`status-pill ${progress >= 100 ? "status-done" : "status-pending"}`}>{progress}% done</span>
+                  </div>
+                  <div className="progress-track" aria-hidden="true">
+                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                  </div>
+                  <span className="muted">
+                    {progress}% bought - Purchases planned:{" "}
+                    <MoneyStack values={planDisplayMoney(projection.itemPlannedBaseMinor)} />
+                  </span>
                 </div>
 
                 <div className="grid grid-4">
@@ -178,23 +188,6 @@ export default async function PlansPage({ searchParams }: Props) {
                     label="Needed per month"
                     values={planDisplayMoney(projection.monthlyRequiredBaseMinor)}
                   />
-                </div>
-
-                <div className="progress-block">
-                  <div className="panel-header">
-                    <div>
-                      <h3>Purchase progress</h3>
-                      <p className="muted">Done purchases reduce what is still needed.</p>
-                    </div>
-                    <span className={`status-pill ${progress >= 100 ? "status-done" : "status-pending"}`}>{progress}% done</span>
-                  </div>
-                  <div className="progress-track" aria-hidden="true">
-                    <div className="progress-fill" style={{ width: `${progress}%` }} />
-                  </div>
-                  <span className="muted">
-                    {progress}% bought - Purchases planned:{" "}
-                    <MoneyStack values={planDisplayMoney(projection.itemPlannedBaseMinor)} />
-                  </span>
                 </div>
 
                 <div className="grid grid-2">
@@ -255,7 +248,7 @@ export default async function PlansPage({ searchParams }: Props) {
                     {projection.monthlyInputs.length === 0 ? (
                       <p className="muted">The target month is before the current month, so no future months are included.</p>
                     ) : (
-                      <table className="table trend-table">
+                      <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table className="table trend-table">
                         <thead>
                           <tr>
                             <th>Month</th>
@@ -288,18 +281,14 @@ export default async function PlansPage({ searchParams }: Props) {
                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                      </table></div>
                     )}
                   </div>
                 </details>
 
+                <details className="details-panel plan-editor">
+                  <summary className="button button-secondary">Add purchase</summary>
                 <form action={savePlanItemAction} className="form-grid compact-form">
-                  <div className="panel-header span-full">
-                    <div>
-                      <h3>Add purchase</h3>
-                      <p className="muted">Break the plan into concrete items like flight, hotel, insurance, or food.</p>
-                    </div>
-                  </div>
                   <input type="hidden" name="planId" value={plan.id} />
                   <div className="field span-2">
                     <label htmlFor={`item-description-${plan.id}`}>Description</label>
@@ -326,6 +315,7 @@ export default async function PlansPage({ searchParams }: Props) {
                     Add purchase
                   </button>
                 </form>
+                </details>
 
                 {planItems.length === 0 ? (
                   <p className="muted">No purchases added yet.</p>
@@ -337,7 +327,7 @@ export default async function PlansPage({ searchParams }: Props) {
                         <p className="muted">Pending items still count as planned. Done items count as already bought.</p>
                       </div>
                     </div>
-                    <table className="table">
+                    <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table className="table">
                       <thead>
                         <tr>
                           <th>Status</th>
@@ -381,9 +371,7 @@ export default async function PlansPage({ searchParams }: Props) {
                                   <form action={deletePlanItemAction}>
                                     <input type="hidden" name="planId" value={plan.id} />
                                     <input type="hidden" name="id" value={item.id} />
-                                    <button className="button button-danger" type="submit">
-                                      Delete
-                                    </button>
+                                    <details className="confirm-action"><summary className="button button-danger">Delete</summary><div><p>Remove this item?</p><button className="button button-danger" type="submit">Confirm delete</button></div></details>
                                   </form>
                                 </div>
                               </td>
@@ -391,13 +379,12 @@ export default async function PlansPage({ searchParams }: Props) {
                           );
                         })}
                       </tbody>
-                    </table>
+                    </table></div>
                   </div>
                 )}
 
-                <section className="section-title">
-                  <h3>Edit Plan Assumptions</h3>
-                </section>
+                <details className="details-panel plan-editor">
+                  <summary className="button button-secondary">Edit plan</summary>
                 <form action={savePlanAction} className="form-grid compact-form">
                   <input type="hidden" name="id" value={plan.id} />
                   <div className="field span-2">
@@ -434,6 +421,11 @@ export default async function PlansPage({ searchParams }: Props) {
                     Save plan
                   </button>
                 </form>
+                  <form action={deletePlanAction}>
+                    <input type="hidden" name="id" value={plan.id} />
+                    <details className="confirm-action"><summary className="button button-danger">Delete plan</summary><div><p>Remove this plan?</p><button className="button button-danger" type="submit">Confirm delete plan</button></div></details>
+                  </form>
+                </details>
               </article>
             );
           })}

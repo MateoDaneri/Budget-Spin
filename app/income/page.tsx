@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { deleteIncomeAction, saveIncomeAction } from "@/src/actions/forms";
 import { CurrencyFxFields } from "@/app/components/CurrencyFxFields";
 import { MoneyStack } from "@/app/components/MoneyStack";
@@ -29,12 +30,14 @@ export default async function IncomePage({ searchParams }: Props) {
           <span className="eyebrow">Money in</span>
           <h1>Income</h1>
           <p className="muted">
-            Recurring income concepts used by the dashboard projection. FX is required when currency is not {baseCurrency.code}.
+            Recurring income and monthly projections.
           </p>
         </div>
       </section>
 
       {params.error ? <div className="alert">{params.error}</div> : null}
+
+      <section className="collection-summary income-summary" aria-label="Income overview"><div><span className="collection-mark" aria-hidden="true">↗</span><div><span>Recurring income</span><strong>{incomeItems.length}</strong><small>Active records used in projections</small></div></div></section>
 
       <details className="create-panel">
         <summary className="button">Add income</summary>
@@ -42,7 +45,7 @@ export default async function IncomePage({ searchParams }: Props) {
           <div className="panel-header span-full">
             <div>
               <h2>Add recurring income</h2>
-              <p className="muted">Salary, freelance retainers, bonuses, aguinaldos, or other predictable income.</p>
+
             </div>
           </div>
           <div className="field span-2">
@@ -85,18 +88,18 @@ export default async function IncomePage({ searchParams }: Props) {
         </form>
       </details>
 
-      <div className="panel">
+      <div className="panel collection-list">
         <div className="panel-header">
           <div>
             <h2>Current income</h2>
-            <p className="muted">Only occurrences inside each selected month are used in projections.</p>
+
           </div>
           <span className="status-pill status-income">{incomeItems.length} active</span>
         </div>
         {incomeItems.length === 0 ? (
           <p className="muted">No income items yet.</p>
         ) : (
-          <table className="table">
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table className="table record-table income-records">
             <thead>
               <tr>
                 <th>Description</th>
@@ -113,14 +116,14 @@ export default async function IncomePage({ searchParams }: Props) {
                 const currency = currencyByCode.get(item.currencyCode);
                 const isEditing = params.edit === `income-${item.id}`;
                 return (
-                  <>
-                    <tr key={item.id}>
-                      <td>{item.description}</td>
-                      <td>
+                  <Fragment key={item.id}>
+                    <tr>
+                      <td data-label="Description">{item.description}</td>
+                      <td data-label="Category">
                         <span className="status-pill status-income">{item.categoryName}</span>
                       </td>
-                      <td>{formatRecurrence(item)}</td>
-                      <td>
+                      <td data-label="Frequency">{formatRecurrence(item)}</td>
+                      <td data-label="Amount">
                         <MoneyStack
                           values={formatDisplayMoney({
                             amountMinor: item.amountMinor,
@@ -130,21 +133,19 @@ export default async function IncomePage({ searchParams }: Props) {
                           })}
                         />
                       </td>
-                      <td>
+                      <td data-label="Active dates">
                         {item.startDate}
                         {item.endDate ? ` to ${item.endDate}` : " no end date"}
                       </td>
-                      <td>{item.fxRateToBase ?? "base"}</td>
-                      <td>
+                      <td data-label="FX">{item.fxRateToBase ?? "base"}</td>
+                      <td data-label="Actions">
                         <div className="actions-row">
                           <Link className="button button-secondary" href={`/income?edit=income-${item.id}`}>
                             Edit
                           </Link>
                           <form action={deleteIncomeAction}>
                             <input type="hidden" name="id" value={item.id} />
-                            <button className="button button-danger" type="submit">
-                              Delete
-                            </button>
+                            <details className="confirm-action"><summary className="button button-danger">Delete</summary><div><p>Remove this item?</p><button className="button button-danger" type="submit">Confirm delete</button></div></details>
                           </form>
                         </div>
                       </td>
@@ -222,11 +223,11 @@ export default async function IncomePage({ searchParams }: Props) {
                         </td>
                       </tr>
                     ) : null}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </>

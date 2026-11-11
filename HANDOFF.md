@@ -83,6 +83,84 @@ HANDOFF) regardless of roadmap fit.
 - **State:** all of the above is unstaged/untracked on `feat/ui-modern-refresh`
   — not committed, not merged, not part of any roadmap phase.
 
+## Finance integrations — branch `claude/feature-conciliacion`
+
+> **State: unmerged.** Deployment status: see the operator. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data.
+> Everything below describes the code as written, not observed behavior. Not a roadmap phase; roadmap state stays in `DEPLOY-ROADMAP`.
+
+The branch adds three things on top of the budget plan: importing bank
+purchase/transfer notices from e-mail, persisting Splitwise expenses, and an
+*observed spending* view on the dashboard that combines both. It also carries
+the refined UI (eight navigation entries, including `/transactions` and
+`/splitwise`). The monetary rules of observed spending are in
+`FINANCIAL-RULES`; they are not repeated here.
+
+### Data flow (conceptual, not measured data)
+```
+Mailbox (IMAP or Gmail API)
+  → From + Subject candidate filter      ← trust boundary: no sender authentication
+  → Itaú parser (purchase / transfer)
+      ├─ ok      → transactions (status = pending, dedup by Message-ID)
+      │              → /transactions: confirm or discard (transaction_reviews)
+      │              → observed spending on the dashboard
+      └─ failure → quarantine (locator + reason code, no body)
+
+Splitwise API (bearer API key)
+  → splitwise_imports (full snapshot per run)
+  → observed spending on the dashboard → rejected pairs in import_pair_exclusions
+```
+Pending notices count in observed spending until discarded; transfers are
+imported but only purchases enter the calculation.
+
+### New modules
+| Path | Role |
+|---|---|
+| `src/ingest/ingest-itau.ts` | One ingest pass: selects the provider (IMAP by default, Gmail if `ITAU_INGEST_PROVIDER=gmail`, the private selector file, or a Gmail credential file is present), processes candidates, inserts as `pending` (dedup by Message-ID), writes an `ingest_runs` row |
+| `src/ingest/imap.ts`, `imap-quarantine.ts` | Read-only IMAP by UID window (500 UIDs, 1 MiB per message, up to 10 windows per pass); cursor = `UIDVALIDITY` + last UID in `ingest_cursors`; private JSON quarantine (UID + reason, max 1000) |
+| `src/ingest/gmail.ts` | Gmail API alternative (`gmail.readonly`, refresh token obtained with PKCE by `scripts/gmail-oauth-bootstrap.mjs`): full scan, then history; state + quarantine in a private state file |
+| `src/ingest/itau-parser.ts`, `itau-transfer.ts` | Pure parsers. Candidate = sender address in the bank's domain + subject pattern. Defines the fixed quarantine reasons |
+| `src/ingest/trigger-token.ts` | Bearer token for the trigger routes, from `INGEST_TOKEN` or the private file `/app/data/ingest-token`; invalid or placeholder value → routes answer 503 |
+| `src/splitwise/*` | Client (bounded pagination), credential (env or private file), snapshot store, activity/balance store, `syncSplitwise()` |
+| `src/finance/actual-spending.ts`, `src/actions/reconciliation.ts` | Observed spending and pair rejection (see `FINANCIAL-RULES`) |
+| `app/api/ingest/itau`, `app/api/ingest/splitwise` | POST trigger routes: 503 not configured, 401 bad token (constant-time compare), 409 already running (per process), 500 generic failure |
+| `app/transactions`, `app/splitwise` | Review screen (confirm/discard, category) and Splitwise page (stored expenses, live balances, activity) |
+
+### New tables
+| Table | Holds |
+|---|---|
+| `transactions` | Imported notices; `kind` purchase / transfer_out / transfer_in; unique per user + Message-ID |
+| `transaction_reviews` | Confirm/discard decision per transaction; the original import row is kept, the effective status is the decision if any |
+| `ingest_cursors`, `ingest_runs` | IMAP cursor per mailbox identity hash; one row per ingest pass (counts, `ok`/`error`, fixed error text) |
+| `splitwise_sync_account`, `splitwise_imports` | Pinned Splitwise account + last sync time; expenses by account and expense ID (shares as decimal strings) |
+| `splitwise_activity_events`, `splitwise_activity_sync`, `splitwise_balance_observations` | Bounded activity feed and balance observations |
+| `import_category_rules` | Remembered category per normalized description |
+| `import_pair_exclusions` | Rejected bank ↔ Splitwise pairs |
+
+### Activation
+Two mutually exclusive ways to schedule the trigger routes: the Compose profiles
+`ingest` / `splitwise-ingest` (token in `INGEST_TOKEN`), or
+`scripts/activate-sync.py` (token file, containers outside Compose; it refuses
+to run if the app has `INGEST_TOKEN` set). Pick one. Procedures in `RUNBOOK`;
+unifying them is MEJ-005.
+
+### Trust boundary — bank e-mails are not authenticated
+A notice is accepted as a bank notice when its single `From` address is in the
+bank's domain and its subject matches a known pattern (`isItauAviso`,
+`isItauTransfer`). There is **no DKIM, DMARC or `Authentication-Results`
+check** anywhere in `src/`. Anyone able to deliver mail to the mailbox can
+forge such a notice; it would be imported as `pending` and **counted in
+observed spending until someone discards it** on `/transactions`. Gmail OAuth
+does not change this: it authenticates access to the mailbox, not the sender.
+Compensating control today: review pending notices before relying on the
+totals. Fix tracked as MEJ-002.
+
+- Other boundaries in the code: the trigger token can only start a pass (it
+  never reads data); provider error text is not persisted (fixed strings in
+  `ingest_runs`); quarantine stores locators and reason codes, never bodies;
+  credential files must be owner-only or they are rejected.
+- Open: `/api/fx-rate` answers without a session because the proxy matcher
+  skips every `api*` path (MEJ-006).
+
 ## Data ownership & volumes
 | Location | Volume / file | Role |
 |---|---|---|

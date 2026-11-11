@@ -39,6 +39,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static     ./.next/static
 COPY --from=builder /app/public           ./public
 COPY --from=builder /app/migrate.mjs      ./migrate.mjs
+COPY --from=builder /app/scripts/install-provider-secret.mjs ./install-provider-secret.mjs
 
 # El dir de datos es propiedad del usuario sin privilegios; el volume montado
 # ahí hereda esta propiedad. El resto del código queda de root y node solo lo
