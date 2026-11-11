@@ -43,6 +43,15 @@ cookie; credential comparison via `timingSafeEqual` (`src/auth/session.ts`);
 routes protected by `proxy.ts`; logout in header. 2FA modeled but **not enforced
 yet**.
 
+**API auth model:** every `/api/*` route goes through `proxy.ts`; the
+allow/deny decision is `decideAccess` in `src/auth/access-policy.ts` (default
+closed). Without a session a page redirects to `/login?next=…` and an API path
+gets **401 JSON**. Only `/api/ingest/itau` and `/api/ingest/splitwise` skip the
+session (exact path match) because they check their own bearer token.
+`/api/fx-rate` also checks the session itself. Form and login errors travel as
+fixed codes in `?error=` and pages map them to fixed text
+(`src/actions/error-codes.ts`); the query value is never rendered.
+
 **Finance:** recurring income (incl. custom recurrences, e.g. aguinaldo) and
 recurring expenses (committed vs optional, custom recurrences); expense
 categories and families/groups; dashboard (income, committed/optional spend,
@@ -187,8 +196,9 @@ totals. Fix tracked as MEJ-002.
   never reads data); provider error text is not persisted (fixed strings in
   `ingest_runs`); quarantine stores locators and reason codes, never bodies;
   credential files must be owner-only or they are rejected.
-- Open: `/api/fx-rate` answers without a session because the proxy matcher
-  skips every `api*` path (MEJ-006).
+- Closed on branch `claude/fix-endurecimiento-seguridad` (not merged):
+  `/api/fx-rate` now requires a session and the proxy no longer skips `api*`
+  paths (MEJ-006); `?error=` carries fixed codes, not free text (MEJ-007).
 
 ## Data ownership & volumes
 | Location | Volume / file | Role |

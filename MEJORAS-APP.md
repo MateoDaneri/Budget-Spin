@@ -75,6 +75,8 @@ Operación · schedulers · Prioridad media · Al final del proyecto · `docker-
 ## MEJ-006 — Autenticar `/api/fx-rate` y acotar la exclusión `api` del proxy
 Seguridad · rutas API · Prioridad media · Al final del proyecto · `proxy.ts` (`config.matcher`), `app/api/fx-rate/route.ts`
 
+**Estado:** resuelta en la rama `claude/fix-endurecimiento-seguridad` (sin mergear; lint, typecheck y tests pendientes de correr en el servidor). El texto de abajo queda como historia del hallazgo.
+
 - **Qué:** el matcher del proxy es `/((?!_next/static|_next/image|favicon.ico|api).*)`: excluye de la verificación de sesión **toda** ruta que empiece con `api`, no solo las de importación. `/api/fx-rate` no verifica sesión por su cuenta, así que responde sin autenticación.
 - **Por qué:**
   - Un cliente sin sesión puede hacer que el servidor consulte al proveedor de cotizaciones para cualquier par configurado y saber qué monedas están configuradas (400 vs 200). En caso de error devuelve el mensaje de la excepción (502).
@@ -83,9 +85,17 @@ Seguridad · rutas API · Prioridad media · Al final del proyecto · `proxy.ts`
 - **Cómo (verificar al implementar):** acotar la exclusión del matcher a `api/ingest/` (con barra) para que el resto de `/api` pase por la sesión. Además, verificar sesión dentro de `/api/fx-rate` (defensa en profundidad); el único llamador, `CurrencyFxFields`, hace un `fetch` del mismo origen y ya envía la cookie. Devolver un mensaje fijo en el 502.
 - **Alcance y riesgo:** cambio chico. Riesgo: que el proxy redirija a `/login` una llamada `fetch` (respuesta HTML en lugar de JSON); el componente tiene que tratarlo como error.
 - **Cuándo:** al final del proyecto; antes si la app se expone fuera de la red privada.
+- **Resolución:**
+  - El matcher ya no excluye `api`: `/((?!_next/static|_next/image|favicon.ico).*)`. Toda ruta `/api/*` pasa por el proxy.
+  - La decisión vive en `src/auth/access-policy.ts` (`decideAccess`, función pura con tests). Solo `/api/ingest/itau` y `/api/ingest/splitwise` pasan sin sesión, comparadas por ruta **exacta** (sin prefijos ni patrones): `/api/ingest/itau-foo`, `/api/ingest/itau/` o una ruta de importación nueva no heredan la excepción. Se descartó acotar el matcher a `api/ingest/`: dejaría pública por defecto cualquier ruta futura bajo ese prefijo.
+  - Sin sesión, una ruta `/api/*` responde **401 JSON** `{"error":"Unauthorized."}`; una página sigue redirigiendo a `/login?next=…`. `/apiX` se trata como página, no como API ni como excepción.
+  - `/api/fx-rate` verifica sesión por su cuenta (`getCurrentSession()`, 401) y devuelve un mensaje fijo en el 502.
+  - Tests: `tests/access-policy.test.ts` (decisión y proxy) y `tests/fx-rate-route.test.ts`.
 
 ## MEJ-007 — Códigos de error fijos en lugar de texto libre en `?error=`
 Server actions · mensajes de error · Prioridad baja · Al final del proyecto · `src/actions/forms.ts` (`redirectWithError`), `src/actions/auth.ts`, `app/expenses/page.tsx`, `app/income/page.tsx`, `app/plans/page.tsx`, `app/login/page.tsx`
+
+**Estado:** resuelta en la rama `claude/fix-endurecimiento-seguridad` (sin mergear; lint, typecheck y tests pendientes de correr en el servidor). El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** las acciones de gastos, ingresos, planes (y categorías) redirigen con `?error=<error.message>`, y login con mensajes propios o el de la excepción. Las páginas de gastos, ingresos, planes y login muestran ese parámetro tal cual. Pasar a códigos fijos que la página traduce a un texto conocido, como ya hacen `/transactions` (tabla `ERROR_MESSAGES`) y `/splitwise`.
 - **Por qué:**
@@ -95,3 +105,8 @@ Server actions · mensajes de error · Prioridad baja · Al final del proyecto �
 - **Cómo (verificar al implementar):** un mapa compartido código → mensaje; `redirectWithError` recibe un código, no un `Error`. Los errores de validación propios conservan su texto mediante códigos específicos; lo desconocido cae en un genérico.
 - **Alcance y riesgo:** toca varias acciones y páginas, sin lógica de datos. Riesgo: perder detalle útil de validación si los códigos son demasiado gruesos.
 - **Cuándo:** al final del proyecto, junto con MEJ-006.
+- **Resolución:**
+  - `src/actions/error-codes.ts`: códigos fijos, mapas código → mensaje (`FORM_ERROR_MESSAGES`, `LOGIN_ERROR_MESSAGES`) y `FormError`. Las validaciones de `src/actions/forms.ts` lanzan `FormError` con código; `redirectWithError` solo pone el código en la URL y todo lo demás (p. ej. errores de SQLite) sale como `unexpected`.
+  - Formularios: `missing-field`, `invalid-number`, `invalid-option`, `unknown-currency`, `invalid-amount`, `invalid-fx-rate`, `invalid-recurrence`, `general-family-locked`. Login: `invalid-credentials` (el mismo para usuario inexistente y contraseña incorrecta), `missing-field`, `password-mismatch`, `weak-password`, `setup-failed`.
+  - Gastos, ingresos, planes y login traducen el código con `formErrorMessage` / `loginErrorMessage`; un valor desconocido muestra un genérico y el parámetro nunca se renderiza. Categorías recibe el código pero no lo muestra (igual que antes).
+  - Tests: `tests/error-codes.test.ts` (mapa, texto armado nunca reflejado, acciones que redirigen con código).

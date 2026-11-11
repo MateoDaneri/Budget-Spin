@@ -813,12 +813,20 @@ export function upsertExpenseGroup(input: { id?: number; name: string; isActive?
   `).run(LOCAL_USER_ID, input.name, nowIso());
 }
 
+/** Thrown when trying to deactivate the default ("General") expense family. */
+export class DefaultExpenseGroupError extends Error {
+  constructor() {
+    super("The General expense family cannot be deactivated.");
+    this.name = "DefaultExpenseGroupError";
+  }
+}
+
 export function deactivateExpenseGroup(id: number) {
   migrate();
   const defaultGroupId = getDefaultExpenseGroupId();
 
   if (id === defaultGroupId) {
-    throw new Error("The General expense family cannot be deactivated.");
+    throw new DefaultExpenseGroupError();
   }
 
   const db = getDb();

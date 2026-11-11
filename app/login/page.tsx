@@ -1,4 +1,5 @@
 import { initializePasswordAction, loginAction } from "@/src/actions/auth";
+import { loginErrorMessage } from "@/src/actions/error-codes";
 import { getCurrentSession, isPasswordConfigured } from "@/src/auth/session";
 import { redirect } from "next/navigation";
 
@@ -16,6 +17,8 @@ export default async function LoginPage({ searchParams }: Props) {
 
   const params = searchParams ? await searchParams : {};
   const passwordConfigured = isPasswordConfigured();
+  // Fixed message per known code; the query value itself is never rendered.
+  const errorMessage = loginErrorMessage(params.error);
 
   return (
     <section className="login-shell">
@@ -30,7 +33,7 @@ export default async function LoginPage({ searchParams }: Props) {
           </p>
         </div>
 
-        {params.error ? <div className="form-error">{params.error}</div> : null}
+        {errorMessage ? <div className="form-error" role="alert">{errorMessage}</div> : null}
 
         {passwordConfigured ? (
           <form action={loginAction} className="form-stack">

@@ -7,6 +7,7 @@ import {
   saveExpenseAction,
   saveExpenseGroupAction
 } from "@/src/actions/forms";
+import { formErrorMessage } from "@/src/actions/error-codes";
 import { CurrencyFxFields } from "@/app/components/CurrencyFxFields";
 import { MoneyStack } from "@/app/components/MoneyStack";
 import { RecurrenceFields } from "@/app/components/RecurrenceFields";
@@ -34,6 +35,8 @@ type Props = {
 
 export default async function ExpensesPage({ searchParams }: Props) {
   const params = searchParams ? await searchParams : {};
+  // Fixed message per known code; the query value itself is never rendered.
+  const errorMessage = formErrorMessage(params.error);
   const currencies = listCurrencies();
   const baseCurrency = getBaseCurrency();
   const displayMoneyContext = await getDisplayMoneyContext(currencies);
@@ -60,7 +63,7 @@ export default async function ExpensesPage({ searchParams }: Props) {
         </div>
       </section>
 
-      {params.error ? <div className="alert">{params.error}</div> : null}
+      {errorMessage ? <div className="alert" role="alert">{errorMessage}</div> : null}
 
       <section className="collection-summary" aria-label="Recurring expenses overview">
         <div><span className="collection-mark" aria-hidden="true">↘</span><div><span>Recurring expenses</span><strong>{expenses.length}</strong><small>Active records</small></div></div>
