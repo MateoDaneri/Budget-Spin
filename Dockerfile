@@ -33,6 +33,20 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000
 
+# La imagen base trae paquetes Debian con parches pendientes y un npm/yarn
+# global que la app nunca usa (arranca con `node` directo). Aplicamos las
+# actualizaciones de seguridad de Debian y retiramos los gestores de paquetes:
+# menos superficie y menos CVEs que no son alcanzables pero sí reportados.
+# Trade-off: `apt-get upgrade` hace que dos builds del mismo commit en días
+# distintos puedan diferir en paquetes del SO; el digest de la imagen final
+# sigue siendo lo que se aprueba y despliega.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-v*
+
 # Solo los artefactos del builder. standalone no incluye static/ ni public/:
 # hay que copiarlos aparte.
 COPY --from=builder /app/.next/standalone ./
