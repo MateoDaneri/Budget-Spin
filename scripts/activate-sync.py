@@ -16,16 +16,25 @@ APP = "budget-spin-app-1"
 NETWORK = "budgetspin-ingest-internal"
 IMAGE = "curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69"
 TOKEN = Path.home() / ".local/share/budgetspin/ingest-token"
+# The Itaú scheduler keeps its historical container name so an installation that
+# already runs it is still recognized (existence check and network isolation).
 NAMES = ("budgetspin-gmail-scheduler", "budgetspin-splitwise-scheduler")
+# Itaú: the IMAP credential is the private JSON file or, failing that, the
+# ITAU_IMAP_USER / ITAU_IMAP_PASSWORD settings of the app container.
 CHECK = r'''const fs=require('fs');
 const kind=process.argv[1];
-const f=kind==='gmail'?'/app/data/gmail-oauth.json':'/app/data/splitwise-api-key';
-{
+if(kind==='itau'){
+ const f='/app/data/imap-credentials.json';
+ if(fs.existsSync(f)){
+  const s=fs.statSync(f); if (!s.isFile() || (s.mode&0o077)) throw Error('Invalid private credential file');
+  const c=JSON.parse(fs.readFileSync(f,'utf8'));
+  if (![c.user,c.password].every(x=>typeof x==='string'&&x.trim())) throw Error('Invalid IMAP credential');
+ } else if (![process.env.ITAU_IMAP_USER,process.env.ITAU_IMAP_PASSWORD].every(x=>typeof x==='string'&&x.trim())) throw Error('IMAP credential missing');
+} else {
+ const f='/app/data/splitwise-api-key';
  const s=fs.statSync(f); if (!s.isFile() || (s.mode&0o077)) throw Error('Invalid private credential file');
-}
-if(kind==='gmail'){const g=JSON.parse(fs.readFileSync(f,'utf8'));
- if (![g.clientId,g.clientSecret,g.refreshToken].every(x=>typeof x==='string'&&x.trim())) throw Error('Invalid Gmail credential');}
-else if (!/^\S+$/.test(fs.readFileSync(f,'utf8').trim())) throw Error('Invalid Splitwise credential');'''
+ if (!/^\S+$/.test(fs.readFileSync(f,'utf8').trim())) throw Error('Invalid Splitwise credential');
+}'''
 INSTALL = r'''const fs=require('fs'), p='/app/data/ingest-token', b=fs.readFileSync(0);
 const dir='/app/data/ingest-state';
 try {fs.mkdirSync(dir,{mode:0o700}); fs.chownSync(dir,1000,1000);} catch(e){if(e.code!=='EEXIST')throw e;}
@@ -45,11 +54,11 @@ def preflight(kind):
     app = json.loads(docker("inspect", APP).stdout)[0]
     if not app["State"]["Running"] or app["State"].get("Health", {}).get("Status") != "healthy":
         raise RuntimeError("Application is not healthy")
-    overrides = ("INGEST_TOKEN=", "INGEST_TOKEN_FILE=", "ITAU_INGEST_PROVIDER=", "GMAIL_CREDENTIALS_PATH=", "GMAIL_STATE_PATH=", "SPLITWISE_API_KEY=", "SPLITWISE_API_KEY_FILE=")
+    overrides = ("INGEST_TOKEN=", "INGEST_TOKEN_FILE=", "SPLITWISE_API_KEY=", "SPLITWISE_API_KEY_FILE=")
     if any(entry.startswith(overrides) for entry in app.get("Config", {}).get("Env", [])):
         raise RuntimeError("Provider settings override the activation defaults; inspect configuration")
     docker("exec", APP, "node", "-e", CHECK, kind)
-    name = NAMES[0] if kind == "gmail" else NAMES[1]
+    name = NAMES[0] if kind == "itau" else NAMES[1]
     if docker("inspect", name, check=False).returncode == 0:
         raise RuntimeError("The scheduler already exists; inspect it before retrying")
     net = docker("network", "inspect", NETWORK, check=False)
@@ -80,8 +89,8 @@ def free_subnet():
 
 def main():
     args = sys.argv[1:]
-    if not args or args[0] not in ("gmail", "splitwise") or args[1:] not in ([], ["--check"]):
-        raise RuntimeError("Usage: activate-sync.py gmail|splitwise [--check]")
+    if not args or args[0] not in ("itau", "splitwise") or args[1:] not in ([], ["--check"]):
+        raise RuntimeError("Usage: activate-sync.py itau|splitwise [--check]")
     kind = args[0]
     preflight(kind)
     if args[1:] == ["--check"]:
@@ -106,7 +115,7 @@ def main():
         docker("network", "connect", "--alias", "app", NETWORK, APP)
     created = []
     try:
-        schedules = {"gmail": (NAMES[0], "itau", "900"), "splitwise": (NAMES[1], "splitwise", "3600")}
+        schedules = {"itau": (NAMES[0], "itau", "900"), "splitwise": (NAMES[1], "splitwise", "3600")}
         for name, endpoint, interval in (schedules[kind],):
             # The header reaches curl as config on stdin from the printf builtin, so
             # the token is never in any process argument list inside the container.

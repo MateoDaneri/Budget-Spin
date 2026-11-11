@@ -26,15 +26,15 @@ Capa de datos · migraciones · Prioridad media · Al final del proyecto · `src
 > comportamiento verificado en ejecución.
 
 ## MEJ-002 — Autenticar el remitente de los avisos del banco
-Importación · autenticidad del origen · Prioridad media · Antes de activar la importación · `src/ingest/itau-parser.ts` (`isItauAviso`), `src/ingest/itau-transfer.ts` (`isItauTransfer`), `src/ingest/imap.ts`, `src/ingest/gmail.ts`
+Importación · autenticidad del origen · Prioridad media · Antes de activar la importación · `src/ingest/itau-parser.ts` (`isItauAviso`), `src/ingest/itau-transfer.ts` (`isItauTransfer`), `src/ingest/imap.ts`
 
 - **Qué:** antes de importar un aviso, exigir que el correo esté autenticado por el proveedor que lo recibió: `dkim=pass` (y/o `dmarc=pass`) alineado con el dominio del banco, leído del encabezado `Authentication-Results` que agrega el propio buzón. Hoy un aviso se acepta solo porque la dirección de `From` termina en el dominio del banco y el asunto coincide con un patrón.
 - **Por qué:**
   - El `From` se puede falsificar: cualquiera que pueda mandar un correo al buzón puede escribir ese remitente y ese asunto. El código no consulta DKIM ni `Authentication-Results` (no aparecen en `src/`).
   - Un aviso falso cuenta en el gasto observado: se importa como `pending` y, según `FINANCIAL-RULES`, los pendientes entran en el total hasta que se descartan en `/transactions`.
-  - OAuth de Gmail no lo resuelve: autentica el acceso al buzón, no al remitente de cada mensaje.
-- **Cómo (verificar al implementar):** pedir `Authentication-Results` junto con `From` y `Subject` (IMAP ya descarga el mensaje completo de los candidatos; Gmail con `format=raw` también lo trae). Confiar solo en el encabezado del servidor propio (por su `authserv-id`), nunca en uno incluido en el mensaje original. Empezar en modo observación: registrar sin bloquear, comprobar con avisos reales que el banco firma con un dominio alineado (no verificado) y recién después mandar a cuarentena los que fallen con un motivo nuevo (p. ej. `unauthenticated`).
-- **Alcance y riesgo:** toca el parser y los dos proveedores. Si el banco no firma, o firma con otro dominio, un control estricto dejaría todos los avisos en cuarentena: primero observar. Mientras no exista, el control compensatorio es revisar los pendientes antes de confiar en el total (ver `HANDOFF`, límite de confianza).
+  - La autenticación del buzón (contraseña de aplicación IMAP) no lo resuelve: autentica el acceso al buzón, no al remitente de cada mensaje.
+- **Cómo (verificar al implementar):** pedir `Authentication-Results` junto con `From` y `Subject` (IMAP ya descarga el mensaje completo de los candidatos). Confiar solo en el encabezado del servidor propio (por su `authserv-id`), nunca en uno incluido en el mensaje original. Empezar en modo observación: registrar sin bloquear, comprobar con avisos reales que el banco firma con un dominio alineado (no verificado) y recién después mandar a cuarentena los que fallen con un motivo nuevo (p. ej. `unauthenticated`).
+- **Alcance y riesgo:** toca el parser y el lector IMAP. Si el banco no firma, o firma con otro dominio, un control estricto dejaría todos los avisos en cuarentena: primero observar. Mientras no exista, el control compensatorio es revisar los pendientes antes de confiar en el total (ver `HANDOFF`, límite de confianza).
 - **Cuándo:** antes de activar el scheduler de importación con un buzón real. Es la mejora de este grupo con más impacto en la integridad de los datos.
 
 ## MEJ-003 — Emparejamiento más flexible y confirmación manual de pares
@@ -64,7 +64,7 @@ Operación · schedulers · Prioridad media · Al final del proyecto · `docker-
 
 - **Qué:** quedarse con un único mecanismo para disparar las sincronizaciones. Hoy hay dos, excluyentes entre sí:
   - Perfiles de Compose: sidecars `ingest` y `splitwise-ingest`, con el token en la variable `INGEST_TOKEN`.
-  - `scripts/activate-sync.py`: contenedores creados con `docker run` fuera de Compose, red interna propia y token en el archivo `/app/data/ingest-token`. El script se niega a seguir si la app tiene `INGEST_TOKEN` u otras variables de proveedor configuradas.
+  - `scripts/activate-sync.py`: contenedores creados con `docker run` fuera de Compose, red interna propia y token en el archivo `/app/data/ingest-token`. El script se niega a seguir si la app tiene `INGEST_TOKEN` o la clave de Splitwise configuradas como variables.
 - **Por qué:**
   - Dos caminos duplican nombres de contenedor, redes, ubicación del token e instrucciones. `triggerToken()` prefiere la variable al archivo: si alguien agrega `INGEST_TOKEN` después de usar el script, los schedulers del script reciben 401.
   - Los contenedores del script no aparecen en `docker compose ps`: más fácil olvidar uno corriendo.

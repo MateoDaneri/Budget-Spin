@@ -97,7 +97,7 @@ the refined UI (eight navigation entries, including `/transactions` and
 
 ### Data flow (conceptual, not measured data)
 ```
-Mailbox (IMAP or Gmail API)
+Mailbox (IMAP, read-only)
   → From + Subject candidate filter      ← trust boundary: no sender authentication
   → Itaú parser (purchase / transfer)
       ├─ ok      → transactions (status = pending, dedup by Message-ID)
@@ -115,9 +115,8 @@ imported but only purchases enter the calculation.
 ### New modules
 | Path | Role |
 |---|---|
-| `src/ingest/ingest-itau.ts` | One ingest pass: selects the provider (IMAP by default, Gmail if `ITAU_INGEST_PROVIDER=gmail`, the private selector file, or a Gmail credential file is present), processes candidates, inserts as `pending` (dedup by Message-ID), writes an `ingest_runs` row |
+| `src/ingest/ingest-itau.ts` | One ingest pass over IMAP (the only mail provider; the Gmail API / OAuth path was removed): processes candidates, inserts as `pending` (dedup by Message-ID), writes an `ingest_runs` row |
 | `src/ingest/imap.ts`, `imap-quarantine.ts` | Read-only IMAP by UID window (500 UIDs, 1 MiB per message, up to 10 windows per pass); cursor = `UIDVALIDITY` + last UID in `ingest_cursors`; private JSON quarantine (UID + reason, max 1000) |
-| `src/ingest/gmail.ts` | Gmail API alternative (`gmail.readonly`, refresh token obtained with PKCE by `scripts/gmail-oauth-bootstrap.mjs`): full scan, then history; state + quarantine in a private state file |
 | `src/ingest/itau-parser.ts`, `itau-transfer.ts` | Pure parsers. Candidate = sender address in the bank's domain + subject pattern. Defines the fixed quarantine reasons |
 | `src/ingest/trigger-token.ts` | Bearer token for the trigger routes, from `INGEST_TOKEN` or the private file `/app/data/ingest-token`; invalid or placeholder value → routes answer 503 |
 | `src/splitwise/*` | Client (bounded pagination), credential (env or private file), snapshot store, activity/balance store, `syncSplitwise()` |
@@ -133,8 +132,38 @@ imported but only purchases enter the calculation.
 | `ingest_cursors`, `ingest_runs` | IMAP cursor per mailbox identity hash; one row per ingest pass (counts, `ok`/`error`, fixed error text) |
 | `splitwise_sync_account`, `splitwise_imports` | Pinned Splitwise account + last sync time; expenses by account and expense ID (shares as decimal strings) |
 | `splitwise_activity_events`, `splitwise_activity_sync`, `splitwise_balance_observations` | Bounded activity feed and balance observations |
-| `import_category_rules` | Remembered category per normalized description |
+| `import_category_rules` | Remembered category per normalized description, plus merchant-level rules (see below) |
 | `import_pair_exclusions` | Rejected bank ↔ Splitwise pairs |
+
+### Automatic categorisation
+Imported bank purchases and Splitwise expenses get a category on arrival; there
+is no suggestion queue. The owner changes it on `/transactions` or `/splitwise`.
+
+- **Lookup order** (`automaticImportCategory`): exact-description rule →
+  merchant rule → the expense category "Other". A rule pointing at an inactive
+  category is ignored. Transfers and Splitwise payments get no category.
+- **Merchant key** (`src/finance/merchant-key.ts`, pure function): input capped
+  at 256 characters, Unicode NFKC, lower-case, split into word tokens
+  (punctuation and `*` are separators). Drops one trailing letters-only word
+  when it follows a token with digits (location after an id, e.g.
+  `…*TEST*00 ABCDE`), then trailing tokens containing digits (store/branch
+  numbers, reference or terminal ids). Fewer than 3 characters or no letter →
+  no merchant lookup.
+- **Learning** (`rememberImportCategory`): only an explicit category change by
+  the owner writes rules — one for the exact description, one for the merchant
+  key. Last choice wins. Rules never rewrite categories stored on other rows,
+  neither for exact nor for merchant matches; they only apply to rows created
+  later (or to bank rows still without a category when `migrate()` runs).
+- **Storage**: same table, no schema change. Merchant rules use the key
+  `"\tmerchant:" + merchantKey`; exact keys are trimmed, so they never start
+  with a tab and the two kinds cannot collide.
+- **Limits**: no place-name list, so a trailing location word is removed only
+  in the "id then one word" shape; `MERCADO X CENTRO` and `MERCADO X NORTE`
+  stay distinct. A name ending in a number after a word collapses to the word
+  (`CAFE 1900` → `cafe`), which can merge unrelated merchants with a short
+  shared prefix. Processor prefixes (`PROCESSOR*SHOP`) are not stripped, so each
+  shop behind one processor is learned separately. A forged notice (see the
+  trust boundary below) cannot create rules, but it is filed by them.
 
 ### Activation
 Two mutually exclusive ways to schedule the trigger routes: the Compose profiles
@@ -149,8 +178,8 @@ bank's domain and its subject matches a known pattern (`isItauAviso`,
 `isItauTransfer`). There is **no DKIM, DMARC or `Authentication-Results`
 check** anywhere in `src/`. Anyone able to deliver mail to the mailbox can
 forge such a notice; it would be imported as `pending` and **counted in
-observed spending until someone discards it** on `/transactions`. Gmail OAuth
-does not change this: it authenticates access to the mailbox, not the sender.
+observed spending until someone discards it** on `/transactions`. Mailbox
+authentication does not change this: it authenticates access to the mailbox, not the sender.
 Compensating control today: review pending notices before relying on the
 totals. Fix tracked as MEJ-002.
 

@@ -19,7 +19,7 @@ class ActivationTests(unittest.TestCase):
             if args[:1] == ('inspect',): return subprocess.CompletedProcess(args, 1, b'')
             return subprocess.CompletedProcess(args, 0, json.dumps([{'Internal': False}]).encode())
         with patch.object(a, 'docker', side_effect=fake):
-            with self.assertRaisesRegex(RuntimeError, 'not isolated'): a.preflight('gmail')
+            with self.assertRaisesRegex(RuntimeError, 'not isolated'): a.preflight('itau')
 
     def test_creates_schedulers_without_secrets_in_docker_arguments(self):
         app = {'State': {'Running': True, 'Health': {'Status': 'healthy'}}, 'NetworkSettings': {'Networks': {}}}
@@ -31,7 +31,7 @@ class ActivationTests(unittest.TestCase):
             if args[:2] == ('network', 'inspect'): return subprocess.CompletedProcess(args, 1, b'')
             return subprocess.CompletedProcess(args, 0, b'')
         with tempfile.TemporaryDirectory() as directory:
-            with patch.object(a, 'TOKEN', Path(directory) / 'ingest-token'), patch.object(a, 'docker', side_effect=fake), patch.object(a, 'free_subnet', return_value='10.231.0.0/28'), patch.object(a.sys, 'argv', ['activate-sync.py', 'gmail']):
+            with patch.object(a, 'TOKEN', Path(directory) / 'ingest-token'), patch.object(a, 'docker', side_effect=fake), patch.object(a, 'free_subnet', return_value='10.231.0.0/28'), patch.object(a.sys, 'argv', ['activate-sync.py', 'itau']):
                 a.main()
                 token = a.TOKEN.read_bytes()
                 self.assertEqual(a.TOKEN.stat().st_mode & 0o777, 0o600)
