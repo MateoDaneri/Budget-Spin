@@ -153,7 +153,6 @@ export default async function PlansPage({ searchParams }: Props) {
                   <div className="panel-header">
                     <div>
                       <h3>Purchase progress</h3>
-                      <p className="muted">Done purchases reduce what is still needed.</p>
                     </div>
                     <span className={`status-pill ${progress >= 100 ? "status-done" : "status-pending"}`}>{progress}% done</span>
                   </div>
@@ -246,7 +245,7 @@ export default async function PlansPage({ searchParams }: Props) {
                     </div>
 
                     {projection.monthlyInputs.length === 0 ? (
-                      <p className="muted">The target month is before the current month, so no future months are included.</p>
+                      <p className="muted">Target month already passed.</p>
                     ) : (
                       <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table className="table trend-table">
                         <thead>
@@ -324,7 +323,6 @@ export default async function PlansPage({ searchParams }: Props) {
                     <div className="panel-header">
                       <div>
                         <h3>Purchase checklist</h3>
-                        <p className="muted">Pending items still count as planned. Done items count as already bought.</p>
                       </div>
                     </div>
                     <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table className="table">

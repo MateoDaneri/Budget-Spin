@@ -64,8 +64,8 @@ export default async function ExpensesPage({ searchParams }: Props) {
 
       <section className="collection-summary" aria-label="Recurring expenses overview">
         <div><span className="collection-mark" aria-hidden="true">↘</span><div><span>Recurring expenses</span><strong>{expenses.length}</strong><small>Active records</small></div></div>
-        <div><span>Committed</span><strong>{expenses.filter((expense) => !expense.isOptional).length}</strong><small>Included in base scenario</small></div>
-        <div><span>Optional</span><strong>{expenses.filter((expense) => expense.isOptional).length}</strong><small>Included in optional scenario</small></div>
+        <div><span>Committed</span><strong>{expenses.filter((expense) => !expense.isOptional).length}</strong><small>Base scenario</small></div>
+        <div><span>Optional</span><strong>{expenses.filter((expense) => expense.isOptional).length}</strong><small>Optional scenario</small></div>
       </section>
 
       <details className="create-panel">
@@ -74,7 +74,6 @@ export default async function ExpensesPage({ searchParams }: Props) {
           <div className="panel-header span-full">
             <div>
               <h2>Add recurring expense</h2>
-              <p className="muted">Use committed for fixed obligations and optional for scenario planning.</p>
             </div>
           </div>
           <div className="field span-2">
@@ -140,7 +139,6 @@ export default async function ExpensesPage({ searchParams }: Props) {
           <div className="panel-header">
             <div>
               <h2>Expense families</h2>
-              <p className="muted">Families group recurring expenses across categories and appear in dashboard metrics.</p>
             </div>
             <span className="status-pill status-expense">{activeExpenseGroups.length} active</span>
           </div>
@@ -191,7 +189,6 @@ export default async function ExpensesPage({ searchParams }: Props) {
         <div className="panel-header">
           <div>
             <h2>Current recurring expenses</h2>
-            <p className="muted">Only active rows are used in monthly projections.</p>
           </div>
           <div className="actions-row">
             <Link
