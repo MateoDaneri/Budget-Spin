@@ -5,6 +5,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { isItauAviso, type ItauEmailInput, type QuarantineReason } from "./itau-parser";
 import { isItauTransfer } from "./itau-transfer";
+import { authenticationResultsValues } from "./sender-auth";
 
 export type ImapConfig = {
   host: string;
@@ -101,7 +102,9 @@ export async function fetchRecentMail(config: ImapConfig, previous: IngestCursor
           from: parsed.from?.value.length === 1 ? (parsed.from.value[0].address ?? "") : "",
           date: parsed.date ?? new Date(NaN),
           messageId: parsed.messageId ?? "",
-          html: typeof parsed.html === "string" ? parsed.html : (parsed.textAsHtml ?? "")
+          html: typeof parsed.html === "string" ? parsed.html : (parsed.textAsHtml ?? ""),
+          // Raw header lines keep message order and every instance (topmost first).
+          authenticationResults: authenticationResultsValues(parsed.headerLines)
         });
       }
     }
@@ -126,7 +129,7 @@ export async function fetchQuarantinedMail(config: ImapConfig, uidValidity: stri
       // Still too large or incomplete: leave it retained and keep retrying the others.
       if (!message.source || message.size === undefined || message.size > MAX_MESSAGE_BYTES || message.source.length !== message.size) continue;
       const parsed = await simpleParser(message.source);
-      result.push({ uid: message.uid, subject: parsed.subject ?? "", from: parsed.from?.value.length === 1 ? (parsed.from.value[0].address ?? "") : "", date: parsed.date ?? new Date(NaN), messageId: parsed.messageId ?? "", html: typeof parsed.html === "string" ? parsed.html : (parsed.textAsHtml ?? "") });
+      result.push({ uid: message.uid, subject: parsed.subject ?? "", from: parsed.from?.value.length === 1 ? (parsed.from.value[0].address ?? "") : "", date: parsed.date ?? new Date(NaN), messageId: parsed.messageId ?? "", html: typeof parsed.html === "string" ? parsed.html : (parsed.textAsHtml ?? ""), authenticationResults: authenticationResultsValues(parsed.headerLines) });
     }
     return result;
   } finally { await client.logout(); }

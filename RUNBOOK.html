@@ -860,7 +860,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml stop ingest
 <p>The optional activity extension records the most recent 100 Splitwise notifications at each successful check, retaining only supported event types linked to a stored expense where the authenticated account participates. It stores provider event IDs and times, never notification HTML. This feed is bounded and can miss earlier events. It also records each returned friend/currency balance with the observation time; it does not reconstruct earlier balances or interpret an absent balance as zero. Previously recorded observations are retained, and identical notification IDs are not duplicated. If the activity or balance API request fails, the separate expense snapshot already saved remains available, but that scheduler run reports an error and retries later.</p>
 <p>Imported purchases receive an editable category. A prior explicit choice is reused for the same whitespace-normalized, case-insensitive description; an unknown description is assigned <code>Other</code>. Payments and transfers are not treated as purchases. Categories do not cause imports to be counted in budget totals.</p>
 <h2 id="import-sync-operations">Import and sync operations</h2>
-<div class="callout warn"><strong>Branch <code>claude/feature-conciliacion</code>: unmerged.</strong> Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit <code>b71b5de</code>; the logic has not been checked against real bank or Splitwise data. Deployment status: see the operator. The commands below follow the code as written and have not been exercised one by one. Architecture and the trust boundary (bank e-mails are not sender-authenticated) are in <a href="HANDOFF.html#trust-boundary">HANDOFF</a>; observed-spending rules in <a href="FINANCIAL-RULES.html">FINANCIAL-RULES</a>.</div>
+<div class="callout warn"><strong>Merged into main via PR 58 and deployed on 2026-11-10.</strong> Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit <code>b71b5de</code>; the logic has not been checked against real bank or Splitwise data. The commands below follow the code as written and have not been exercised one by one. Architecture and the trust boundary (bank e-mail sender authentication is recorded but not enforced) are in <a href="HANDOFF.html#trust-boundary">HANDOFF</a>; observed-spending rules in <a href="FINANCIAL-RULES.html">FINANCIAL-RULES</a>.</div>
 <div class="flow" role="img" aria-label="Conceptual run path: a scheduler posts to a trigger route with the bearer token; the app runs one pass and records the outcome; results are read on the review screen and in ingest_runs.">
 <div class="flow-row"><div class="node"><strong>1. Scheduler</strong><span>curl POST with bearer token</span></div><div class="arrow">→</div><div class="node"><strong>2. Trigger route</strong><span>503 · 401 · 409 checks</span></div></div>
 <div class="flow-row"><div class="node"><strong>3. One pass</strong><span>import, quarantine, cursor</span></div><div class="arrow">→</div><div class="node"><strong>4. Results</strong><span><code>/transactions</code>, <code>ingest_runs</code>, <code>/splitwise</code></span></div></div>
@@ -876,6 +876,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml stop ingest
 <tr><td><code>ITAU_IMAP_HOST</code>, <code>ITAU_IMAP_PORT</code>, <code>ITAU_IMAP_USER</code>, <code>ITAU_IMAP_PASSWORD</code>, <code>ITAU_IMAP_MAILBOX</code></td><td>app (IMAP)</td><td>Port defaults to 993, mailbox to <code>INBOX</code>.</td></tr>
 <tr><td><code>ITAU_IMAP_CREDENTIALS_PATH</code></td><td>app (IMAP)</td><td>Private JSON <code>{"user","password"}</code> used when the user/password variables are unset (default <code>/app/data/imap-credentials.json</code>).</td></tr>
 <tr><td><code>ITAU_IMAP_STATE_DIR</code></td><td>app (IMAP)</td><td>Quarantine directory (default <code>/app/data/ingest-state</code>).</td></tr>
+<tr><td><code>ITAU_IMAP_AUTHSERV_ID</code></td><td>app (IMAP)</td><td>Optional. authserv-id of the mailbox provider's own <code>Authentication-Results</code> header; see <a href="#sender-auth">Sender authentication</a>. Unset = topmost header only (weaker).</td></tr>
 <tr><td><code>SPLITWISE_API_KEY</code></td><td>app (Splitwise)</td><td>Read by the code but <strong>not listed</strong> in <code>.env.production.example</code>. Preferred: the private file <code>/app/data/splitwise-api-key</code>.</td></tr>
 </table>
 
@@ -903,7 +904,7 @@ docker exec budgetspin-gmail-scheduler \
 
 <h3>Where to see results</h3>
 <ul>
-<li><strong><code>/transactions</code></strong>: last Itaú check (completed/failed, time, imported count), pending count among the latest 200 imports, and Confirm / Discard per notice. Pending notices count in observed spending until discarded.</li>
+<li><strong><code>/transactions</code></strong>: last Itaú check (completed/failed, time, imported count), pending count among the latest 200 imports, and Confirm / Discard per notice. Pending notices count in observed spending until discarded. Sender authentication labels: see <a href="#sender-auth">Sender authentication</a>.</li>
 <li><strong><code>ingest_runs</code></strong> (one row per Itaú pass, source <code>itau_email</code>; errors are fixed strings, never provider text. Older <code>gmail_api</code> rows from the removed Gmail API path may remain and are no longer read by the app):</li>
 </ul>
 <pre><code>docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
@@ -926,6 +927,43 @@ docker exec budgetspin-gmail-scheduler \
 <tr><td><code>incomplete</code></td><td>download incomplete or malformed headers</td></tr>
 </table>
 <div class="callout warn">While anything is retained, the pass is recorded with <code>status = 'error'</code> and <code>Unrecognized notices retained for review.</code>, <strong>but the route still answers 200 <code>{"ok":true}</code></strong>, so the scheduler logs nothing: check <code>ingest_runs</code> or <code>/transactions</code>. Once 1000 items are retained, a pass that needs to retain one more fails. The code has no command to remove an entry by hand.</div>
+
+<h3 id="sender-auth">Sender authentication (observation mode, MEJ-002)</h3>
+<p>Branch <code>claude/feature-autenticidad-avisos</code> (not merged). Each imported notice records a verdict in <code>transactions.sender_auth</code> from the <code>Authentication-Results</code> header written by the mailbox provider. <strong>Nothing is blocked and totals do not change</strong>; the verdict is only shown.</p>
+<div class="flow" role="img" aria-label="Conceptual message header stack, top to bottom: the topmost Authentication-Results header is added by the mailbox provider on receipt and is trusted; Received headers follow; a lower Authentication-Results header may come from the sender and is ignored; then the From header in the bank's domain.">
+<div class="flow-row"><div class="node"><strong>Topmost <code>Authentication-Results</code></strong><span><code>&lt;mailbox-provider-authserv-id&gt;</code>; added on receipt: trusted</span></div></div>
+<div class="flow-row"><div class="node"><strong><code>Received</code> …</strong><span>transport hops</span></div></div>
+<div class="flow-row"><div class="node"><strong>Lower <code>Authentication-Results</code></strong><span>may come from the sender: ignored</span></div></div>
+<div class="flow-row"><div class="node"><strong><code>From</code></strong><span><code>…@&lt;bank-domain&gt;</code></span></div></div>
+</div>
+<p style="color:var(--muted); font-size:14px;">Conceptual diagram of a message's headers, top to bottom; not a real message.</p>
+
+<p><strong>Find the trusted authserv-id</strong> (once per mailbox provider):</p>
+<ol>
+<li>In the mailbox web UI, open a real bank notice and choose "Show original" (or "View source" / "View message source").</li>
+<li>Find the <strong>topmost</strong> <code>Authentication-Results:</code> header. Do not use <code>ARC-Authentication-Results</code>. The authserv-id is the first token, before the first <code>;</code>.</li>
+<li>Check two or three notices, and one message from an unrelated sender: the topmost authserv-id should be the same in all of them (it identifies the provider, not the sender). If it differs between messages, leave the variable unset and note it in <a href="MEJORAS-APP.html#mej-002">MEJ-002</a>.</li>
+</ol>
+
+<p><strong>Set it</strong> in the untracked <code>.env.production</code>, then recreate the app so it reads the file again:</p>
+<pre><code># .env.production
+ITAU_IMAP_AUTHSERV_ID=&lt;mailbox-provider-authserv-id&gt;
+
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --force-recreate app</code></pre>
+<div class="callout warn">Unset or blank: only the topmost header is used, which is weaker (it relies on the provider always adding its own header). Set: only the topmost header with that authserv-id is used; any other is ignored. The verdict is computed once, at import; changing the variable does not recompute older rows.</div>
+
+<p><strong>Read the verdicts:</strong></p>
+<table>
+<tr><th><code>sender_auth</code></th><th>Meaning</th><th><code>/transactions</code></th></tr>
+<tr><td><code>pass</code></td><td><code>dmarc=pass</code> for the From domain, or <code>dkim=pass</code> signed by the From domain or a parent of it</td><td>nothing</td></tr>
+<tr><td><code>fail</code></td><td><code>dmarc=fail</code>, <code>dmarc=pass</code> for another domain, or dkim results without an aligned pass</td><td>"Sender check failed"</td></tr>
+<tr><td><code>none</code></td><td>no trusted header, or it has no dkim/dmarc result</td><td>"Sender unverified"</td></tr>
+<tr><td>NULL</td><td>imported before this change</td><td>nothing</td></tr>
+</table>
+<p>The page header shows "N pending unverified" when any pending notice is <code>fail</code> or <code>none</code> (among the latest 200 imports). Discard a forged notice with Discard, as before. Counts by verdict and review state:</p>
+<pre><code>docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
+  node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite'); console.table(db.prepare('SELECT t.sender_auth, COALESCE(r.decision, t.status) AS status, COUNT(*) AS notices FROM transactions t LEFT JOIN transaction_reviews r ON r.transaction_id = t.id GROUP BY t.sender_auth, status ORDER BY t.sender_auth, status').all()); db.close();"</code></pre>
+<p>If real bank notices come out <code>fail</code> or <code>none</code>, record what the topmost header showed (results only, no addresses) in <a href="MEJORAS-APP.html#mej-002">MEJ-002</a> before deciding on enforcement.</p>
 
 <h3>Enable / disable the schedulers</h3>
 <pre><code># Compose path

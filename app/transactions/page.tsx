@@ -16,6 +16,9 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
+// MEJ-002 observation mode: shown only; never changes review or totals. Legacy NULL and "pass" show nothing.
+const SENDER_AUTH_LABELS: Record<string, string> = { fail: "Sender check failed", none: "Sender unverified" };
+
 function errorMessage(code?: string) {
   if (!code) return null;
   return Object.hasOwn(ERROR_MESSAGES, code) ? ERROR_MESSAGES[code] : GENERIC_ERROR;
@@ -28,6 +31,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
   const categories = listCategories("expense");
   const currencies = new Map(listCurrencies().map((currency) => [currency.code, currency]));
   const error = errorMessage(params.error);
+  const unverifiedPending = transactions.filter((transaction) => transaction.status === "pending" && (transaction.senderAuth === "fail" || transaction.senderAuth === "none")).length;
 
   return (
     <>
@@ -36,6 +40,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
           <span className="eyebrow">Imported activity</span>
           <h1>Transactions</h1>
         </div>
+        {unverifiedPending > 0 ? <span className="status-pill status-warning">{unverifiedPending} pending unverified</span> : null}
       </section>
       {error ? <div className="alert" role="alert">{error}</div> : null}
       <section className="activity-overview" aria-label="Import overview">
@@ -68,6 +73,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
                   </div>
                   <div className="transaction-card-bottom">
                     <span className="status-pill status-muted">{transaction.status}</span>
+                    {transaction.senderAuth && Object.hasOwn(SENDER_AUTH_LABELS, transaction.senderAuth) ? <span className="status-pill status-warning">{SENDER_AUTH_LABELS[transaction.senderAuth]}</span> : null}
                     {transaction.kind === "purchase" ? <ImportCategory source="transaction" id={transaction.id} categoryId={transaction.categoryId} categories={categories} /> : null}
                     <TransactionActions transaction={transaction} />
                   </div>

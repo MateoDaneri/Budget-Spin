@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "@/src/db/client";
-import { getIngestCursor, listTransactions, migrate } from "@/src/db/repository";
+import { getIngestCursor, insertImportedTransaction, listCurrencies, listTransactions, migrate } from "@/src/db/repository";
+import { calculateActualMonth } from "@/src/finance/actual-spending";
 import { runItauIngest } from "@/src/ingest/ingest-itau";
 import { mailboxCursorKey, readImapConfigFromEnv } from "@/src/ingest/imap";
 import type { ItauEmailInput } from "@/src/ingest/itau-parser";
@@ -35,6 +36,7 @@ afterEach(() => {
   delete process.env.ITAU_IMAP_HOST;
   delete process.env.ITAU_IMAP_USER;
   delete process.env.ITAU_IMAP_PASSWORD;
+  delete process.env.ITAU_IMAP_AUTHSERV_ID;
 });
 
 function aviso(overrides: Partial<ItauEmailInput> = {}): ItauEmailInput {
@@ -225,5 +227,70 @@ describe("runItauIngest", () => {
     expect(lastRun()).toEqual({ status: "error", error: "IMAP synchronization failed." });
     await runItauIngest({ fetcher: async () => batch([aviso()]) });
     expect(lastRun()).toEqual({ status: "ok", error: null });
+  });
+});
+
+describe("sender authentication (MEJ-002, observation mode)", () => {
+  // Synthetic receiving-server identity; the bank domain matches the parser's sender check.
+  const RECEIVER = "mx.receiver.example";
+  const PASS = ` ${RECEIVER}; spf=pass smtp.mailfrom=itau.com.uy; dkim=pass (good signature) header.d=itau.com.uy; dmarc=pass header.from=itau.com.uy`;
+  const FAIL = ` ${RECEIVER}; spf=fail smtp.mailfrom=itau.com.uy; dkim=none; dmarc=fail (p=REJECT) header.from=itau.com.uy`;
+
+  function storedVerdicts(): Record<string, unknown> {
+    const rows = getDb().prepare("SELECT message_id, sender_auth FROM transactions ORDER BY id").all() as Array<{ message_id: string; sender_auth: unknown }>;
+    return Object.fromEntries(rows.map((row) => [row.message_id, row.sender_auth]));
+  }
+
+  it("stores pass, fail and none per imported notice, all still pending", async () => {
+    const summary = await runItauIngest({ fetcher: async () => batch([
+      aviso({ messageId: "<auth-pass@example.test>", authenticationResults: [PASS] }),
+      aviso({ messageId: "<auth-fail@example.test>", authenticationResults: [FAIL] }),
+      aviso({ messageId: "<auth-unaligned@example.test>", authenticationResults: [` ${RECEIVER}; dkim=pass header.d=esp.example`] }),
+      aviso({ messageId: "<auth-none@example.test>" })
+    ]) });
+    expect(summary).toEqual({ messagesSeen: 4, inserted: 4, skipped: 0 });
+    expect(storedVerdicts()).toEqual({
+      "<auth-pass@example.test>": "pass", "<auth-fail@example.test>": "fail",
+      "<auth-unaligned@example.test>": "fail", "<auth-none@example.test>": "none"
+    });
+    const rows = listTransactions();
+    expect(rows.every((row) => row.status === "pending")).toBe(true);
+    expect(rows.map((row) => row.senderAuth).sort()).toEqual(["fail", "fail", "none", "pass"]);
+  });
+
+  it("stores fail when only a lower, spoofed header claims pass (configured authserv-id)", async () => {
+    process.env.ITAU_IMAP_AUTHSERV_ID = RECEIVER;
+    await runItauIngest({ fetcher: async () => batch([
+      aviso({ messageId: "<forged-configured@example.test>", authenticationResults: [FAIL, PASS] }),
+      aviso({ messageId: "<forged-other-id@example.test>", authenticationResults: [PASS.replace(RECEIVER, "attacker.example")] })
+    ]) });
+    expect(storedVerdicts()).toEqual({ "<forged-configured@example.test>": "fail", "<forged-other-id@example.test>": "none" });
+  });
+
+  it("stores fail when only a lower, spoofed header claims pass (topmost header, no authserv-id configured)", async () => {
+    await runItauIngest({ fetcher: async () => batch([
+      aviso({ messageId: "<forged-topmost@example.test>", authenticationResults: [FAIL, PASS] })
+    ]) });
+    expect(storedVerdicts()).toEqual({ "<forged-topmost@example.test>": "fail" });
+  });
+
+  it("keeps NULL for rows imported without a verdict (legacy rows)", () => {
+    insertImportedTransaction({ txnDate: "2026-06-01T12:00:00.000Z", description: "Legacy", currencyCode: "UYU", amountMinor: 100, source: "itau_email", messageId: "<legacy@example.test>", status: "pending" });
+    expect(storedVerdicts()).toEqual({ "<legacy@example.test>": null });
+    expect(listTransactions()[0].senderAuth).toBeNull();
+  });
+
+  it("does not change observed spending", async () => {
+    await runItauIngest({ fetcher: async () => batch([
+      aviso({ messageId: "<spend-pass@example.test>", authenticationResults: [PASS] }),
+      aviso({ messageId: "<spend-fail@example.test>", authenticationResults: [FAIL] }),
+      aviso({ messageId: "<spend-none@example.test>" })
+    ]) });
+    const rows = listTransactions(Number.MAX_SAFE_INTEGER);
+    const minorUnits = new Map(listCurrencies().map((currency) => [currency.code, currency.minorUnit]));
+    const observed = calculateActualMonth("2026-06", rows, [], minorUnits);
+    const withoutVerdicts = calculateActualMonth("2026-06", rows.map((row) => ({ ...row, senderAuth: null })), [], minorUnits);
+    expect(observed).toEqual(withoutVerdicts);
+    expect(observed.totals).toEqual([{ currency: "UYU", amountMinor: 3 * 19900 }]);
   });
 });

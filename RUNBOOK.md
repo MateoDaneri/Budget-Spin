@@ -283,11 +283,11 @@ as purchases. Categories do not cause imports to be counted in budget totals.
 
 ## Import and sync operations
 
-> Branch `claude/feature-conciliacion`: unmerged. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data.
-> Deployment status: see the operator. The commands below follow the code as
+> Merged into main via PR 58 and deployed on 2026-11-10. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data.
+> The commands below follow the code as
 > written and have not been exercised one by one.
-> Architecture and the trust boundary (bank e-mails are not sender-authenticated)
-> are in `HANDOFF`; observed-spending rules in `FINANCIAL-RULES`.
+> Architecture and the trust boundary (bank e-mail sender authentication is
+> recorded but not enforced) are in `HANDOFF`; observed-spending rules in `FINANCIAL-RULES`.
 
 ### Environment variables (names only — values live in the untracked `.env.production`)
 | Variable | Read by | Notes |
@@ -298,6 +298,7 @@ as purchases. Categories do not cause imports to be counted in budget totals.
 | `ITAU_IMAP_HOST`, `ITAU_IMAP_PORT`, `ITAU_IMAP_USER`, `ITAU_IMAP_PASSWORD`, `ITAU_IMAP_MAILBOX` | app (IMAP) | Port defaults to 993, mailbox to `INBOX` |
 | `ITAU_IMAP_CREDENTIALS_PATH` | app (IMAP) | Private JSON `{"user","password"}` used when the user/password variables are unset (default `/app/data/imap-credentials.json`) |
 | `ITAU_IMAP_STATE_DIR` | app (IMAP) | Quarantine directory (default `/app/data/ingest-state`) |
+| `ITAU_IMAP_AUTHSERV_ID` | app (IMAP) | Optional. authserv-id of the mailbox provider's own `Authentication-Results` header; see [Sender authentication](#sender-authentication-observation-mode-mej-002). Unset = topmost header only (weaker) |
 | `SPLITWISE_API_KEY` | app (Splitwise) | Read by the code but **not listed** in `.env.production.example`. Preferred: the private file `/app/data/splitwise-api-key` |
 
 ### Two activation paths — pick one
@@ -337,7 +338,8 @@ Splitwise answers `{"ok":true}`.
 ### Where to see results
 - **`/transactions`**: last Itaú check (completed/failed, time, imported count),
   pending count among the latest 200 imports, and Confirm / Discard per notice.
-  Pending notices count in observed spending until discarded.
+  Pending notices count in observed spending until discarded. Sender
+  authentication labels: see [Sender authentication](#sender-authentication-observation-mode-mej-002).
 - **`ingest_runs`** (one row per Itaú pass, source `itau_email`; errors are fixed
   strings, never provider text. Older `gmail_api` rows from the removed Gmail API
   path may remain and are no longer read by the app):
@@ -374,6 +376,63 @@ While anything is retained, the pass is recorded with `status = 'error'` and
 `/transactions`. Once 1000 items are retained, a pass that needs to retain one
 more fails. The code has no
 command to remove an entry by hand.
+
+### Sender authentication (observation mode, MEJ-002)
+Branch `claude/feature-autenticidad-avisos` (not merged). Each imported notice
+records a verdict in `transactions.sender_auth` from the `Authentication-Results`
+header written by the mailbox provider. **Nothing is blocked and totals do not
+change**; the verdict is only shown.
+
+```
+Message headers, top to bottom (conceptual)
+  Authentication-Results: <mailbox-provider-authserv-id>; dkim=…; dmarc=…   ← added on receipt: trusted
+  Received: …
+  Authentication-Results: <anything>; dkim=pass …                          ← may come from the sender: ignored
+  From: …@<bank-domain>
+```
+
+**Find the trusted authserv-id** (once per mailbox provider):
+1. In the mailbox web UI, open a real bank notice and choose "Show original"
+   (or "View source" / "View message source").
+2. Find the **topmost** `Authentication-Results:` header. Do not use
+   `ARC-Authentication-Results`. The authserv-id is the first token, before
+   the first `;`.
+3. Check two or three notices, and one message from an unrelated sender: the
+   topmost authserv-id should be the same in all of them (it identifies the
+   provider, not the sender). If it differs between messages, leave the
+   variable unset and note it in MEJ-002.
+
+**Set it** in the untracked `.env.production`, then recreate the app so it
+reads the file again:
+```sh
+# .env.production
+ITAU_IMAP_AUTHSERV_ID=<mailbox-provider-authserv-id>
+
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --force-recreate app
+```
+Unset or blank: only the topmost header is used, which is weaker (it relies on
+the provider always adding its own header). Set: only the topmost header with
+that authserv-id is used; any other is ignored. The verdict is computed once, at
+import; changing the variable does not recompute older rows.
+
+**Read the verdicts:**
+
+| `sender_auth` | Meaning | `/transactions` |
+|---|---|---|
+| `pass` | `dmarc=pass` for the From domain, or `dkim=pass` signed by the From domain or a parent of it | nothing |
+| `fail` | `dmarc=fail`, `dmarc=pass` for another domain, or dkim results without an aligned pass | "Sender check failed" |
+| `none` | no trusted header, or it has no dkim/dmarc result | "Sender unverified" |
+| NULL | imported before this change | nothing |
+
+The page header shows "N pending unverified" when any pending notice is `fail`
+or `none` (among the latest 200 imports). Discard a forged notice with Discard,
+as before. Counts by verdict and review state:
+```sh
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
+  node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite'); console.table(db.prepare('SELECT t.sender_auth, COALESCE(r.decision, t.status) AS status, COUNT(*) AS notices FROM transactions t LEFT JOIN transaction_reviews r ON r.transaction_id = t.id GROUP BY t.sender_auth, status ORDER BY t.sender_auth, status').all()); db.close();"
+```
+If real bank notices come out `fail` or `none`, record what the topmost header
+showed (results only, no addresses) in MEJ-002 before deciding on enforcement.
 
 ### Enable / disable the schedulers
 ```sh
