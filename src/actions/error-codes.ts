@@ -82,3 +82,32 @@ export function formErrorMessage(code: unknown): string | null {
 export function loginErrorMessage(code: unknown): string | null {
   return errorMessageForCode(LOGIN_ERROR_MESSAGES, code, GENERIC_LOGIN_ERROR);
 }
+
+// Reconciliation choices on the dashboard (`?reconciliation=`), same rules as above.
+export const RECONCILIATION_ERROR_MESSAGES = {
+  "not-found": "That pair is no longer available.",
+  "pair-changed": "That pair no longer matches.",
+  "already-paired": "One side is already paired."
+} as const;
+
+export type ReconciliationErrorCode = keyof typeof RECONCILIATION_ERROR_MESSAGES | "unexpected";
+
+export const GENERIC_RECONCILIATION_ERROR = "Could not save that choice. Try again.";
+
+export class ReconciliationError extends Error {
+  readonly code: ReconciliationErrorCode;
+
+  constructor(code: ReconciliationErrorCode) {
+    super(code);
+    this.name = "ReconciliationError";
+    this.code = code;
+  }
+}
+
+export function reconciliationErrorCode(error: unknown): ReconciliationErrorCode {
+  return error instanceof ReconciliationError ? error.code : "unexpected";
+}
+
+export function reconciliationErrorMessage(code: unknown): string | null {
+  return errorMessageForCode(RECONCILIATION_ERROR_MESSAGES, code, GENERIC_RECONCILIATION_ERROR);
+}

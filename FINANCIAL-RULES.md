@@ -5,7 +5,8 @@
 > `src/finance/actual-spending.ts` (`calculateActualMonth`) and wired in `app/page.tsx`.
 
 **Status:** this logic was merged into main via PR 58 and deployed on 2026-11-10. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data. Everything below describes what the code says, not observed
-results.
+results. Suggestions and manual confirmation (section 7) were added by PR 66;
+lint, typecheck, 188 tests and the build passed on the server on 2026-11-11.
 
 ## 1. What observed spending is — and is not
 
@@ -39,10 +40,17 @@ included until someone discards it on `/transactions`.
 
 ## 3. Decision flow (conceptual diagram, not measured data)
 
-The HTML version draws this as two flowcharts. Text equivalent:
+The HTML version draws this as two flowcharts. They show the automatic rule;
+pairs confirmed by hand (section 7) are applied before it, and their two
+records skip these flows. Text equivalent:
 
 **One bank purchase** (already inside the included set of section 2):
 
+0. Is it in a pair confirmed by hand (section 7)?
+   - Yes, amounts still valid → **paired**: count the **owed share**.
+   - Yes, amounts no longer valid → count the **full bank amount** and count
+     the pair as omitted.
+   - Either way the automatic rule is skipped.
 1. Is there **exactly one** Splitwise expense that meets every pairing
    condition of section 4, and the pair has not been rejected?
    - No → count the **full bank amount**.
@@ -56,7 +64,9 @@ The HTML version draws this as two flowcharts. Text equivalent:
 **One Splitwise expense:**
 
 1. Payment (settlement) or deleted? → **never an expense** (dropped in section 2).
-2. Already paired with a bank purchase? → counted through that pair; nothing more.
+2. Already paired with a bank purchase (automatic or by hand)? → counted
+   through that pair; nothing more. In a confirmed pair that is no longer
+   valid → **omitted**.
 3. Are the amounts usable? The user's paid share, owed share and total must all
    convert to the currency's minor unit (section 5), with owed ≤ total and
    paid ≤ total. If the user does not participate, the shares are empty and
@@ -78,6 +88,9 @@ Consequences worth knowing:
   the Splitwise expense (whose paid share is > 0) becomes ambiguous.
 - If two bank purchases fit the same Splitwise expense, neither pairs: both
   count at full amount and the Splitwise expense becomes ambiguous.
+- A pair confirmed by hand wins over the automatic rule. If the bank purchase
+  had an automatic candidate, that Splitwise expense is left unpaired and, if
+  the user paid part of it, becomes ambiguous.
 
 ## 4. Pairing conditions (all required)
 
@@ -88,6 +101,7 @@ Consequences worth knowing:
 | Same currency | identical ISO code |
 | Same amount | the user's Splitwise paid share, converted to minor units, equals the bank amount and is > 0 |
 | Not rejected | the pair is not in `import_pair_exclusions` |
+| Not paired by hand | neither record is in a pair confirmed by hand (`import_pair_confirmations`) |
 | Unique on both sides | one candidate for the bank purchase, and that candidate fits only one bank purchase |
 
 ## 5. Converting Splitwise amounts
@@ -110,30 +124,74 @@ floating-point arithmetic.
 |---|---|
 | Totals per currency | sum of full bank amounts, paired owed shares and unpaid owed shares |
 | Pending bank notices | included purchases still in `pending` status |
-| Possible matches | pairs where the owed share replaced the bank amount |
+| Possible matches | pairs where the owed share replaced the bank amount, automatic or confirmed by hand |
+| Suggested | near matches waiting for a decision; they do not change any total |
 | Need a clear match | Splitwise expenses left out as ambiguous |
-| Unavailable or unsupported | Splitwise expenses omitted because the amounts could not be used |
+| Unavailable or unsupported | Splitwise expenses omitted because the amounts could not be used, plus confirmed pairs that are no longer valid |
 
 ## 7. Reviewing pairs
 
-Each pair is listed under "Review possible matches" with a **"Not the same
-expense"** button, which stores a rejection in `import_pair_exclusions`
-(keyed by bank transaction, Splitwise account and expense). Rejections persist
-across Splitwise syncs and can be undone with **"Allow matching again"**
-(the pair returns only if it still meets every condition). There is **no manual confirmation**
-of a pair and no way to pair two records by hand: a pair only exists when the
-automatic rule finds it.
+"Review matches" on the dashboard has three short lists. It opens by itself
+when there is a suggestion.
+
+| List | Buttons | Effect on totals |
+|---|---|---|
+| Suggested | **"Same expense"** stores a manual pair; **"Not the same"** stores a rejection | none while suggested |
+| Confirmed | **"Undo"** removes the manual pair | owed share replaces the bank amount; "Not applied" when the pair is no longer valid |
+| Matched | **"Not the same expense"** on automatic pairs; **"Allow matching again"** on rejected ones | automatic pairs count the owed share |
+
+### When a pair is suggested (all required)
+
+- Both records are in the month's included set (section 2) and the automatic
+  rule did not pair them.
+- Same currency, and the user's paid share equals the bank amount and is
+  above zero.
+- The date prefixes (first ten characters of the stored timestamps) are at most **one day** apart. The description is not
+  compared.
+- Neither record is in an automatic or manual pair, and this pair is not
+  rejected.
+- The shares are usable (owed ≤ total, bank amount ≤ total).
+- **Unique on both sides:** the bank purchase has exactly one such candidate
+  and that expense has exactly one such bank purchase. Otherwise nothing is
+  suggested.
+
+### Manual confirmation
+
+- Stored in `import_pair_confirmations` (bank transaction, Splitwise account,
+  expense), kept across Splitwise syncs and deleted with the bank transaction.
+- The server re-reads both records before saving: both must exist, the
+  expense must belong to the current Splitwise account, both must be in the
+  selected month, in the same currency, at most one day apart, with paid share
+  equal to the bank amount and usable shares. Amounts are never taken from the
+  form.
+- A bank purchase or a Splitwise expense can be in **at most one** confirmed
+  pair; a second confirmation for either side is refused.
+- Confirmation and rejection of the same pair exclude each other: confirming
+  removes the rejection, and rejecting removes the confirmation.
+- A confirmed pair counts exactly like an automatic one (owed share instead of
+  the bank amount) and takes priority over the automatic rule. It is
+  re-checked on every calculation: if the paid share no longer equals the bank
+  amount, the shares are no longer usable, or one record left the month, it is
+  **not applied**, the bank purchase counts in full and the pair is counted as
+  omitted.
+- "Undo" returns both records to the automatic rule and to suggestions.
+
+Bank notices are reviewed separately on `/transactions` (confirm or discard).
 
 ## 8. Limitations (true in the current code)
 
-- **Exact matching only.** A different spelling of the merchant, or a Splitwise
-  date that falls on another day than the bank's UTC date (for example near
-  midnight in local time), prevents a pair. Duplicate amounts, installments,
-  partial payments and currency conversions are not inferred.
+- **The automatic rule is exact.** A different spelling of the merchant, or a
+  Splitwise date on another day than the bank's UTC date (for example near
+  midnight in local time), prevents an automatic pair; such cases appear only
+  as suggestions, and only when unique and at most one day apart. Duplicate
+  amounts, installments, partial payments and currency conversions are not
+  inferred.
 - **Month and day boundaries use the stored timestamps' text**, not local time.
   A purchase made late in the evening locally can land in the next UTC day or
-  month.
-- **No manual pair confirmation**, only rejection.
+  month. Suggestions never cross a month boundary.
+- **A manual confirmation is trusted.** Suggestions ignore the description, so
+  a wrong "Same expense" replaces the bank amount with the owed share and
+  **underestimates** spending until it is undone.
 - **Totals are an estimate.** They can be incomplete and need review whenever
   ambiguous or omitted counts are non-zero.
 - **Amounts finer than the currency's minor unit are omitted**, not rounded.

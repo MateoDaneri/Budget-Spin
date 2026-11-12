@@ -4,10 +4,11 @@ import { getBaseCurrency, listCurrencies, listIncomeItems, listRecurringExpenses
 import { addMonths, currentMonthKey, formatMonthLabel, trailingMonths } from "@/src/finance/dates";
 import { formatDisplayMoneyFromUyu, getDisplayMoneyContext } from "@/src/finance/display-money";
 import { calculateMonthMetrics } from "@/src/finance/metrics";
-import { calculateActualMonth } from "@/src/finance/actual-spending";
+import { calculateActualMonth, suggestPairs } from "@/src/finance/actual-spending";
 import { comparePlanWithObserved, plannedExpenseByCurrency, type PlanComparison, type PlanComparisonStatus } from "@/src/finance/plan-vs-actual";
-import { listPairExclusions, listSplitwiseImports } from "@/src/splitwise/store";
-import { setPairExclusionAction } from "@/src/actions/reconciliation";
+import { listPairConfirmations, listPairExclusions, listSplitwiseImports } from "@/src/splitwise/store";
+import { confirmPairAction, setPairExclusionAction, undoPairConfirmationAction } from "@/src/actions/reconciliation";
+import { reconciliationErrorMessage } from "@/src/actions/error-codes";
 import { formatMoney } from "@/src/finance/money";
 
 export const dynamic = "force-dynamic";
@@ -29,12 +30,25 @@ export default async function DashboardPage({ searchParams }: Props) {
   const shared = listSplitwiseImports(Number.MAX_SAFE_INTEGER).expenses;
   const exclusions = listPairExclusions();
   const minorUnits = new Map(currencies.map((currency) => [currency.code, currency.minorUnit]));
-  const actual = calculateActualMonth(month, transactions, shared, minorUnits, exclusions);
+  const confirmations = listPairConfirmations();
+  const actual = calculateActualMonth(month, transactions, shared, minorUnits, exclusions, confirmations);
+  const suggestions = suggestPairs(month, transactions, shared, minorUnits, exclusions, confirmations);
+  const automaticPairs = actual.pairs.filter((pair) => !pair.manual);
+  // Confirmed pairs are listed even when stale (not applied), so the owner can undo them.
+  const confirmedPairs = confirmations.flatMap((entry) => {
+    const transaction = transactions.find((item) => item.id === entry.bankId);
+    const expense = shared.find((item) => item.id === entry.splitwiseId);
+    if (!transaction || !expense || !(transaction.txnDate.startsWith(month) || expense.date.startsWith(month))) return [];
+    const applied = actual.pairs.find((pair) => pair.manual && pair.bankId === entry.bankId && pair.splitwiseId === entry.splitwiseId);
+    return [{ transaction, expense, applied }];
+  });
+  const reconciliationError = reconciliationErrorMessage(params.reconciliation);
   const rejectedPairs = exclusions.flatMap((entry) => {
     const transaction = transactions.find((item) => item.id === entry.bankId && item.txnDate.startsWith(month));
     const expense = shared.find((item) => item.id === entry.splitwiseId);
     return transaction && expense ? [{ transaction, expense }] : [];
   });
+  const reviewCount = automaticPairs.length + rejectedPairs.length + suggestions.length + confirmedPairs.length;
   const showAmount = (currency: string, amountMinor: number) => {
     const unit = currencies.find((item) => item.code === currency);
     return unit ? formatMoney(amountMinor, unit) : `${currency} ${amountMinor} minor units`;
@@ -96,7 +110,7 @@ export default async function DashboardPage({ searchParams }: Props) {
         </div>
       </section>
       <section className="panel actual-spending" id="actual-spending" aria-labelledby="actual-spending-title">
-        {params.reconciliation === "error" && <p className="alert" role="alert">Could not save that choice. Try again.</p>}
+        {reconciliationError && <p className="alert" role="alert">{reconciliationError}</p>}
         <div className="panel-header"><h2 id="actual-spending-title">Spent vs plan</h2><span className="actual-month">{formatMonthLabel(month)}</span></div>
         {planComparison.length === 0 ? <p className="muted">No spending or plan for this month.</p> : (
           <ul className="plan-bars">
@@ -121,12 +135,18 @@ export default async function DashboardPage({ searchParams }: Props) {
         <ul className="count-chips" aria-label="Review counts">
           <li className="count-chip"><strong>{actual.pending}</strong> pending notices</li>
           {actual.matched > 0 && <li className="count-chip"><strong>{actual.matched}</strong> possible {actual.matched === 1 ? "match" : "matches"}</li>}
+          {suggestions.length > 0 && <li className="count-chip count-chip-warning"><strong>{suggestions.length}</strong> suggested</li>}
           {actual.ambiguous > 0 && <li className="count-chip count-chip-warning"><strong>{actual.ambiguous}</strong> need a clear match</li>}
           {actual.omitted > 0 && <li className="count-chip count-chip-muted"><strong>{actual.omitted}</strong> unavailable</li>}
         </ul>
-        {(actual.pairs.length > 0 || rejectedPairs.length > 0) && <details className="actual-pairs"><summary>Review matches ({actual.pairs.length + rejectedPairs.length})</summary>
-          <ul>{actual.pairs.map((pair) => <li key={`${pair.bankId}:${pair.splitwiseId}`}><div><strong>{pair.description}</strong><span>Bank {showAmount(pair.currency, pair.paidMinor)} · your share {showAmount(pair.currency, pair.owedMinor)}</span></div><form action={setPairExclusionAction}><input type="hidden" name="bank" value={pair.bankId}/><input type="hidden" name="shared" value={pair.splitwiseId}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="yes" type="submit">Not the same expense</button></form></li>)}
-          {rejectedPairs.map(({ transaction, expense }) => <li key={`excluded:${transaction.id}:${expense.id}`}><div><strong>{transaction.description}</strong><span>Not matched · {expense.description}</span></div><form action={setPairExclusionAction}><input type="hidden" name="bank" value={transaction.id}/><input type="hidden" name="shared" value={expense.id}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="no" type="submit">Allow matching again</button></form></li>)}</ul>
+        {reviewCount > 0 && <details className="actual-pairs" open={suggestions.length > 0}><summary>Review matches ({reviewCount})</summary>
+          {suggestions.length > 0 && <><h3>Suggested</h3>
+          <ul>{suggestions.map((item) => <li key={`suggested:${item.bankId}:${item.splitwiseId}`}><div id={`suggested-${item.bankId}-${item.splitwiseId}`}><strong>{item.bankDescription}</strong><span>{item.splitwiseDescription} · {item.bankDate} / {item.splitwiseDate}</span><span>Bank {showAmount(item.currency, item.paidMinor)} · your share {showAmount(item.currency, item.owedMinor)}</span></div><div className="pair-actions"><form action={confirmPairAction}><input type="hidden" name="bank" value={item.bankId}/><input type="hidden" name="shared" value={item.splitwiseId}/><input type="hidden" name="month" value={month}/><button className="button" type="submit" aria-describedby={`suggested-${item.bankId}-${item.splitwiseId}`}>Same expense</button></form><form action={setPairExclusionAction}><input type="hidden" name="bank" value={item.bankId}/><input type="hidden" name="shared" value={item.splitwiseId}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="yes" type="submit" aria-describedby={`suggested-${item.bankId}-${item.splitwiseId}`}>Not the same</button></form></div></li>)}</ul></>}
+          {confirmedPairs.length > 0 && <><h3>Confirmed</h3>
+          <ul>{confirmedPairs.map(({ transaction, expense, applied }) => <li key={`confirmed:${transaction.id}:${expense.id}`}><div id={`confirmed-${transaction.id}-${expense.id}`}><strong>{transaction.description}</strong><span>{expense.description}</span><span>{applied ? <>Bank {showAmount(applied.currency, applied.paidMinor)} · your share {showAmount(applied.currency, applied.owedMinor)}</> : "Not applied"}</span></div><form action={undoPairConfirmationAction}><input type="hidden" name="bank" value={transaction.id}/><input type="hidden" name="shared" value={expense.id}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" type="submit" aria-describedby={`confirmed-${transaction.id}-${expense.id}`}>Undo</button></form></li>)}</ul></>}
+          {(automaticPairs.length > 0 || rejectedPairs.length > 0) && <><h3>Matched</h3>
+          <ul>{automaticPairs.map((pair) => <li key={`${pair.bankId}:${pair.splitwiseId}`}><div><strong>{pair.description}</strong><span>Bank {showAmount(pair.currency, pair.paidMinor)} · your share {showAmount(pair.currency, pair.owedMinor)}</span></div><form action={setPairExclusionAction}><input type="hidden" name="bank" value={pair.bankId}/><input type="hidden" name="shared" value={pair.splitwiseId}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="yes" type="submit">Not the same expense</button></form></li>)}
+          {rejectedPairs.map(({ transaction, expense }) => <li key={`excluded:${transaction.id}:${expense.id}`}><div><strong>{transaction.description}</strong><span>Not matched · {expense.description}</span></div><form action={setPairExclusionAction}><input type="hidden" name="bank" value={transaction.id}/><input type="hidden" name="shared" value={expense.id}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="no" type="submit">Allow matching again</button></form></li>)}</ul></>}
         </details>}
         <p className="actual-links"><Link href="/transactions">Bank notices</Link><Link href="/splitwise">Shared expenses</Link></p>
       </section>

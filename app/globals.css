@@ -1702,6 +1702,8 @@ section.panel + section.panel { margin-top: 16px; }
 .actual-pairs li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; padding-block: .75rem; border-bottom: 1px solid var(--line); }
 .actual-pairs li div { display: grid; gap: .2rem; }
 .actual-pairs li span { font-size: .9rem; }
+.actual-pairs h3 { margin: 1rem 0 0; font-size: 1rem; }
+.actual-pairs li .pair-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 
 /* Spent vs plan: planned amount is the track, observed spending the fill. */
 .actual-spending .panel-header { align-items: baseline; }

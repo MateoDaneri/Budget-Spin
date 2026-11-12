@@ -195,6 +195,20 @@ export const importPairExclusions = sqliteTable(
   })
 );
 
+export const importPairConfirmations = sqliteTable(
+  "import_pair_confirmations",
+  {
+    transactionId: integer("transaction_id").notNull().references(() => transactions.id, { onDelete: "cascade" }),
+    accountId: integer("account_id").notNull(),
+    expenseId: integer("expense_id").notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.transactionId, table.accountId, table.expenseId] }),
+    oneTransaction: uniqueIndex("import_pair_confirmations_transaction_idx").on(table.transactionId),
+    oneExpense: uniqueIndex("import_pair_confirmations_expense_idx").on(table.accountId, table.expenseId)
+  })
+);
+
 export const splitwiseSyncAccount = sqliteTable("splitwise_sync_account", {
   singleton: integer("singleton").primaryKey(),
   accountId: integer("account_id").notNull(),
