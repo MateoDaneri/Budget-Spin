@@ -15,7 +15,7 @@ export function BalanceHistory({ entries }: { entries: Observation[] }) {
   const points = [...entries].reverse().slice(-24);
   const values = points.map((point) => chartValue(point.amount));
   const times = points.map((point) => Date.parse(point.observedAt));
-  if (points.length < 2 || values.some((value) => value === null) || times.some((time) => !Number.isFinite(time)) || times[0] === times.at(-1)) return <><p className={styles.empty}>A line will appear after at least two comparable observations. The value above is the latest available observation.</p><ObservedValues entries={entries} /></>;
+  if (points.length < 2 || values.some((value) => value === null) || times.some((time) => !Number.isFinite(time)) || times[0] === times.at(-1)) return <><p className={styles.empty}>Not enough points for a chart yet.</p><ObservedValues entries={entries} /></>;
   const numbers = values as number[];
   const low = Math.min(0, ...numbers), high = Math.max(0, ...numbers), span = high - low || 1;
   const coords = numbers.map((value, i) => ({ x: 34 + (times[i] - times[0]) * 532 / (times.at(-1)! - times[0]), y: 18 + (high - value) / span * 150 }));
@@ -49,20 +49,19 @@ export function SplitwiseActivity() {
   };
   return <>
     <section className={`panel ${styles.section}`} aria-labelledby="balance-history-title">
-      <div className={styles.heading}><div><h2 id="balance-history-title">Balance history</h2><p>Snapshots recorded by BudgetSpin from Splitwise. Earlier balances are not reconstructed.</p></div>{data.lastObservedAt && <span>Last observed {data.lastObservedAt.slice(0, 10)} UTC</span>}</div>
-      {grouped.size === 0 ? <p className={styles.empty}>No balance observations yet. They will appear after the next successful Splitwise sync.</p> : <div className={styles.histories}>{[...grouped.entries()].map(([key, entries]) => <article className={styles.history} key={key}>
-        <div className={styles.historyHeader}><h3>{entries[0].person}</h3><strong>{entries[0].currency} {entries[0].amount}</strong></div><p className={styles.caption}>Signed balance reported by Splitwise · {entries[0].currency}. The direction of the sign has not been verified; check Splitwise to see who owes whom.</p>
+      <div className={styles.heading}><div><h2 id="balance-history-title">Balance history</h2></div>{data.lastObservedAt && <span>Last observed {data.lastObservedAt.slice(0, 10)} UTC</span>}</div>
+      {grouped.size === 0 ? <p className={styles.empty}>No balance observations yet.</p> : <div className={styles.histories}>{[...grouped.entries()].map(([key, entries]) => <article className={styles.history} key={key}>
+        <div className={styles.historyHeader}><h3>{entries[0].person}</h3><strong>{entries[0].currency} {entries[0].amount}</strong></div><p className={styles.caption}>{entries[0].currency} · sign unverified</p>
         <BalanceHistory entries={entries} />
       </article>)}</div>}
-      {data.firstObservedAt && <p className={styles.footnote}>Recording began {data.firstObservedAt.slice(0, 10)} UTC. A missing observation does not mean the balance was zero. Showing up to 5,000 recent observations.</p>}
+      {data.firstObservedAt && <p className={styles.footnote}>Since {data.firstObservedAt.slice(0, 10)} UTC</p>}
     </section>
     <section className={`panel ${styles.section}`} aria-labelledby="shared-events-title">
-      <div className={styles.heading}><div><h2 id="shared-events-title">Activity affecting you</h2><p>Recent Splitwise notifications linked to an expense in which you participate. Earlier events may be missing.</p></div></div>
-      {data.events.length === 0 ? <p className={styles.empty}>No linked events have been recorded yet. The next successful sync will check recent notifications.</p> : <ol className={styles.events}>{data.events.map((event) => <li key={event.id}>
+      <div className={styles.heading}><div><h2 id="shared-events-title">Activity affecting you</h2></div></div>
+      {data.events.length === 0 ? <p className={styles.empty}>No linked events yet.</p> : <ol className={styles.events}>{data.events.map((event) => <li key={event.id}>
         <div><strong>{label(event.type, event.payment)}</strong><p>{event.description}</p><p className={styles.caption}>{event.paid !== null ? `You paid ${event.currency} ${event.paid}` : ""}{event.paid !== null && event.owed !== null ? " · " : ""}{event.owed !== null ? `Your share ${event.currency} ${event.owed}` : ""}</p></div>
         <div className={styles.eventMeta}><time dateTime={event.occurredAt}>{event.occurredAt.slice(0, 10)}</time><span>{event.actorId === data.accountId ? "You" : event.actorId && people.get(event.actorId) ? people.get(event.actorId) : "Participant"}</span></div>
       </li>)}</ol>}
-      <p className={styles.footnote}>Event dates come from Splitwise. Expense type, descriptions and amounts reflect the most recently synchronized version, not necessarily the values at the event date. Showing up to 100 saved events.</p>
     </section>
   </>;
 }

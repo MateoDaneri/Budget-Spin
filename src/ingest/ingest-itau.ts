@@ -1,10 +1,8 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
 import { getIngestCursor, insertImportedTransaction, listCurrencies, recordIngestRun, saveIngestCursor } from "@/src/db/repository";
 import { parseMoneyToMinor } from "@/src/finance/money";
 import { fetchQuarantinedMail, fetchRecentMail, mailboxCursorKey, readImapConfigFromEnv, type ImapConfig, type IngestCursor, type MailBatch } from "./imap";
 import { isItauAviso, parseItauAviso, UnrecognizedNoticeError, type ItauEmailInput } from "./itau-parser";
 import { isItauTransfer, parseItauTransfer } from "./itau-transfer";
-import { syncGmail } from "./gmail";
 import { ImapQuarantine } from "./imap-quarantine";
 
 export type IngestSummary = { messagesSeen: number; inserted: number; skipped: number };
@@ -22,15 +20,6 @@ export async function runItauIngest(options?: {
   fetcher?: (config: ImapConfig, cursor: IngestCursor | null) => Promise<MailBatch>;
   retryFetcher?: typeof fetchQuarantinedMail;
 }): Promise<IngestSummary> {
-  let provider = process.env.ITAU_INGEST_PROVIDER;
-  if (!provider && existsSync("/app/data/ingest-provider")) {
-    const stat = statSync("/app/data/ingest-provider");
-    if (!stat.isFile() || (stat.mode & 0o077)) throw new Error("Provider selector must be private.");
-    provider = readFileSync("/app/data/ingest-provider", "utf8").trim();
-    if (provider !== "gmail" && provider !== "imap") throw new Error("Invalid ingest provider.");
-  }
-  if (provider === "gmail" || (!provider && existsSync("/app/data/gmail-oauth.json"))) return runGmailIngest();
-  if (provider && provider !== "imap") throw new Error("Invalid ingest provider.");
   const config = readImapConfigFromEnv();
   if (!config) {
     throw new Error("IMAP is not configured. Set ITAU_IMAP_HOST, ITAU_IMAP_USER and ITAU_IMAP_PASSWORD.");
@@ -125,29 +114,4 @@ function processMessage(message: ItauEmailInput, minorUnits: Map<string, number>
     source: SOURCE, messageId: aviso.messageId, rawExcerpt: aviso.rawExcerpt,
     kind: transfer ? "transfer_out" : "purchase", status: "pending"
   }).inserted;
-}
-
-async function runGmailIngest(): Promise<IngestSummary> {
-  const credentialsPath = process.env.GMAIL_CREDENTIALS_PATH ?? "/app/data/gmail-oauth.json";
-  const statePath = process.env.GMAIL_STATE_PATH ?? "/app/data/ingest-state/gmail-state.json";
-  if (!credentialsPath || !statePath) throw new Error("Gmail paths are not configured.");
-  const startedAt = new Date().toISOString();
-  let messagesSeen = 0, inserted = 0, skipped = 0;
-  try {
-    const minorUnits = new Map(listCurrencies().map((currency) => [currency.code, currency.minorUnit]));
-    const sync = await syncGmail({ credentialsPath, statePath, process: (message) => {
-      messagesSeen++;
-      if (processMessage(message, minorUnits)) inserted++;
-      else skipped++;
-    } });
-    recordIngestRun({ source: "gmail_api", startedAt, messagesSeen, inserted, skipped, status: sync.quarantined ? "error" : "ok", ...(sync.quarantined ? { error: "Unrecognized notices retained for review." } : {}) });
-    return { messagesSeen, inserted, skipped };
-  } catch (error) {
-    // Provider exceptions can carry server-supplied text; persist only a fixed description.
-    // Status read structurally (GmailError carries it) so module mocks of ./gmail stay valid.
-    const status = (error as { status?: unknown } | null)?.status;
-    const description = typeof status === "number" && Number.isInteger(status) ? `Gmail synchronization failed (HTTP ${status}).` : "Gmail synchronization failed.";
-    recordIngestRun({ source: "gmail_api", startedAt, messagesSeen, inserted, skipped, status: "error", error: description });
-    throw error;
-  }
 }

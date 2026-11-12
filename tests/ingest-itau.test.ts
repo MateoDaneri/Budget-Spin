@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { closeDb } from "@/src/db/client";
+import { closeDb, getDb } from "@/src/db/client";
 import { getIngestCursor, listTransactions, migrate } from "@/src/db/repository";
 import { runItauIngest } from "@/src/ingest/ingest-itau";
 import { mailboxCursorKey, readImapConfigFromEnv } from "@/src/ingest/imap";
@@ -50,6 +50,10 @@ function aviso(overrides: Partial<ItauEmailInput> = {}): ItauEmailInput {
 
 function readQuarantine(key: string): unknown {
   return JSON.parse(fs.readFileSync(path.join(process.env.ITAU_IMAP_STATE_DIR!, `imap-quarantine-${key}.json`), "utf8"));
+}
+
+function lastRun(): { status: unknown; error: unknown } {
+  return getDb().prepare("SELECT status, error FROM ingest_runs ORDER BY id DESC LIMIT 1").get() as { status: unknown; error: unknown };
 }
 
 function batch(messages: ItauEmailInput[]) {
@@ -170,6 +174,7 @@ describe("runItauIngest", () => {
     const stored = fs.readFileSync(path.join(process.env.ITAU_IMAP_STATE_DIR!, `imap-quarantine-${key}.json`), "utf8");
     expect(JSON.parse(stored)).toEqual([{ uidValidity: "42", uid: 1, reason: "unrecognized" }]);
     expect(stored).not.toContain("unknown secret body");
+    expect(lastRun()).toEqual({ status: "error", error: "Unrecognized notices retained for review." });
   });
 
   it("retains zero-value notices for review without creating a transaction", async () => {
@@ -213,5 +218,12 @@ describe("runItauIngest", () => {
         }
       })
     ).rejects.toThrow("IMAP down");
+  });
+
+  it("records a fixed description, never the provider error text, when the pass fails", async () => {
+    await expect(runItauIngest({ fetcher: async () => { throw new Error("private provider detail"); } })).rejects.toThrow("private provider detail");
+    expect(lastRun()).toEqual({ status: "error", error: "IMAP synchronization failed." });
+    await runItauIngest({ fetcher: async () => batch([aviso()]) });
+    expect(lastRun()).toEqual({ status: "ok", error: null });
   });
 });

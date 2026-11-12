@@ -25,8 +25,8 @@ export default async function LoginPage({ searchParams }: Props) {
           <h1>{passwordConfigured ? "Login" : "Create your password"}</h1>
           <p className="muted">
             {passwordConfigured
-              ? "Use your local BudgetSpin account to access your finance data."
-              : "This will attach the current local database to the mdaneri user and protect it with a password."}
+              ? "Sign in to continue."
+              : "Set a password for this workspace."}
           </p>
         </div>
 

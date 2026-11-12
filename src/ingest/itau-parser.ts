@@ -61,9 +61,9 @@ const AVISO_SUBJECT_HINT = "aviso de consumo";
  * "aviso de consumo" (wrong sender/subject, or the body shape we don't know).
  * This function never throws for unknown content. The ingest loop only calls it
  * for sender/subject candidates, so a null result there means a recognized
- * notice it cannot read: the loop retains that message's locator (IMAP UID or
- * Gmail ID) in quarantine with a reason code, advances the checkpoint and
- * continues with the rest of the pass.
+ * notice it cannot read: the loop retains that message's IMAP UID in quarantine
+ * with a reason code, advances the checkpoint and continues with the rest of
+ * the pass.
  */
 export function parseItauAviso(input: ItauEmailInput): ParsedItauAviso | null {
   if (!isItauAviso(input) || !Number.isFinite(input.date.getTime())) {

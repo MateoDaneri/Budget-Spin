@@ -37,7 +37,7 @@ export default async function IncomePage({ searchParams }: Props) {
 
       {params.error ? <div className="alert">{params.error}</div> : null}
 
-      <section className="collection-summary income-summary" aria-label="Income overview"><div><span className="collection-mark" aria-hidden="true">↗</span><div><span>Recurring income</span><strong>{incomeItems.length}</strong><small>Active records used in projections</small></div></div></section>
+      <section className="collection-summary income-summary" aria-label="Income overview"><div><span className="collection-mark" aria-hidden="true">↗</span><div><span>Recurring income</span><strong>{incomeItems.length}</strong><small>Active</small></div></div></section>
 
       <details className="create-panel">
         <summary className="button">Add income</summary>

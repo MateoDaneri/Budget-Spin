@@ -179,7 +179,7 @@
           <span class="tag when">Antes de activar la importación</span>
         </div>
         <h2>Autenticar el remitente de los avisos del banco</h2>
-        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/ingest/itau-parser.ts</code> (<code class="inline">isItauAviso</code>), <code class="inline">src/ingest/itau-transfer.ts</code> (<code class="inline">isItauTransfer</code>), <code class="inline">src/ingest/imap.ts</code>, <code class="inline">src/ingest/gmail.ts</code></p>
+        <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/ingest/itau-parser.ts</code> (<code class="inline">isItauAviso</code>), <code class="inline">src/ingest/itau-transfer.ts</code> (<code class="inline">isItauTransfer</code>), <code class="inline">src/ingest/imap.ts</code></p>
       </div>
 
       <section class="block">
@@ -192,14 +192,14 @@
         <ul style="margin-bottom:0;">
           <li><strong>El <code class="inline">From</code> se puede falsificar.</strong> Cualquiera que pueda mandar un correo al buzón puede escribir ese remitente y ese asunto. El código no consulta DKIM ni <code class="inline">Authentication-Results</code> (no aparecen en <code class="inline">src/</code>).</li>
           <li><strong>Un aviso falso cuenta en el gasto observado.</strong> Se importa como <code class="inline">pending</code> y, según <a href="FINANCIAL-RULES.html">FINANCIAL-RULES</a>, los pendientes entran en el total hasta que alguien los descarta en <code class="inline">/transactions</code>.</li>
-          <li>OAuth de Gmail tampoco lo resuelve: autentica el acceso al buzón, no al remitente de cada mensaje.</li>
+          <li>La autenticación del buzón (contraseña de aplicación IMAP) tampoco lo resuelve: autentica el acceso al buzón, no al remitente de cada mensaje.</li>
         </ul>
       </div>
 
       <section class="block">
         <h3>Cómo (enfoque — verificar al implementar)</h3>
         <ul>
-          <li>Pedir el encabezado <code class="inline">Authentication-Results</code> junto con <code class="inline">From</code> y <code class="inline">Subject</code> (IMAP ya descarga el mensaje completo de los candidatos; Gmail con <code class="inline">format=raw</code> también lo trae).</li>
+          <li>Pedir el encabezado <code class="inline">Authentication-Results</code> junto con <code class="inline">From</code> y <code class="inline">Subject</code> (IMAP ya descarga el mensaje completo de los candidatos).</li>
           <li>Confiar solo en el encabezado que agrega el servidor propio (identificado por su <code class="inline">authserv-id</code>), nunca en uno que venga dentro del mensaje original.</li>
           <li>Empezar en modo observación: registrar el resultado sin bloquear, comprobar con avisos reales que el banco firma con un dominio alineado (no está verificado) y recién después enviar a cuarentena los que fallen, con un motivo nuevo (p. ej. <code class="inline">unauthenticated</code>).</li>
         </ul>
@@ -207,7 +207,7 @@
 
       <div class="callout risk">
         <h4>Alcance y riesgo</h4>
-        <p style="margin:0;">Toca el parser y los dos proveedores. Si el banco no firma, o firma con otro dominio, un control estricto dejaría todos los avisos en cuarentena: por eso primero observar. Mientras no exista, el control compensatorio es revisar los pendientes antes de confiar en el total (ver HANDOFF, límite de confianza).</p>
+        <p style="margin:0;">Toca el parser y el lector IMAP. Si el banco no firma, o firma con otro dominio, un control estricto dejaría todos los avisos en cuarentena: por eso primero observar. Mientras no exista, el control compensatorio es revisar los pendientes antes de confiar en el total (ver HANDOFF, límite de confianza).</p>
       </div>
 
       <section class="block">
@@ -326,7 +326,7 @@
         <p>Quedarse con un único mecanismo para disparar las sincronizaciones. Hoy hay dos, excluyentes entre sí:</p>
         <ul>
           <li><strong>Perfiles de Compose:</strong> sidecars <code class="inline">ingest</code> y <code class="inline">splitwise-ingest</code>, con el token en la variable <code class="inline">INGEST_TOKEN</code>.</li>
-          <li><strong><code class="inline">scripts/activate-sync.py</code>:</strong> contenedores creados con <code class="inline">docker run</code> fuera de Compose, red interna propia y token en el archivo <code class="inline">/app/data/ingest-token</code>. El script se niega a seguir si la app tiene <code class="inline">INGEST_TOKEN</code> u otras variables de proveedor configuradas.</li>
+          <li><strong><code class="inline">scripts/activate-sync.py</code>:</strong> contenedores creados con <code class="inline">docker run</code> fuera de Compose, red interna propia y token en el archivo <code class="inline">/app/data/ingest-token</code>. El script se niega a seguir si la app tiene <code class="inline">INGEST_TOKEN</code> o la clave de Splitwise configuradas como variables.</li>
         </ul>
       </section>
 

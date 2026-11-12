@@ -145,14 +145,14 @@
       <figure style="margin:8px 0;">
         <svg viewBox="0 0 860 300" width="100%" role="img" aria-labelledby="flow-title flow-desc" style="max-width:100%; height:auto; font-family:ui-sans-serif, system-ui, sans-serif;">
           <title id="flow-title">Import and reconciliation data flow</title>
-          <desc id="flow-desc">Top row: the mailbox is read over IMAP or the Gmail API; messages pass a From and Subject filter, then the Itaú parser; parsed notices are stored in the transactions table as pending, or their locator goes to quarantine. The /transactions screen confirms or discards them. Bottom row: the Splitwise API is read into splitwise_imports. Both feed observed spending on the dashboard, where pairs can be rejected into import_pair_exclusions. A red dashed line marks the trust boundary at the From and Subject filter: no sender authentication.</desc>
+          <desc id="flow-desc">Top row: the mailbox is read over IMAP; messages pass a From and Subject filter, then the Itaú parser; parsed notices are stored in the transactions table as pending, or their locator goes to quarantine. The /transactions screen confirms or discards them. Bottom row: the Splitwise API is read into splitwise_imports. Both feed observed spending on the dashboard, where pairs can be rejected into import_pair_exclusions. A red dashed line marks the trust boundary at the From and Subject filter: no sender authentication.</desc>
           <defs>
             <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#183153"/></marker>
           </defs>
           <g font-size="12.5" fill="#15202b">
             <rect x="10" y="30" width="120" height="54" rx="10" fill="#e7eef8" stroke="#183153"/>
             <text x="70" y="53" text-anchor="middle" font-weight="700">Mailbox</text>
-            <text x="70" y="71" text-anchor="middle">IMAP or Gmail API</text>
+            <text x="70" y="71" text-anchor="middle">IMAP, read-only</text>
 
             <rect x="165" y="30" width="130" height="54" rx="10" fill="#fde6e2" stroke="#a83a31"/>
             <text x="230" y="53" text-anchor="middle" font-weight="700">From + Subject</text>
@@ -206,9 +206,8 @@
       <h3>New modules</h3>
       <table>
         <tr><th>Path</th><th>Role</th></tr>
-        <tr><td><code class="inline">src/ingest/ingest-itau.ts</code></td><td>One ingest pass: selects the provider (IMAP by default, Gmail if <code class="inline">ITAU_INGEST_PROVIDER=gmail</code>, the private selector file, or a Gmail credential file is present), processes candidates, inserts as <code class="inline">pending</code> (dedup by Message-ID), writes an <code class="inline">ingest_runs</code> row.</td></tr>
+        <tr><td><code class="inline">src/ingest/ingest-itau.ts</code></td><td>One ingest pass over IMAP (the only mail provider; the Gmail API / OAuth path was removed): processes candidates, inserts as <code class="inline">pending</code> (dedup by Message-ID), writes an <code class="inline">ingest_runs</code> row.</td></tr>
         <tr><td><code class="inline">src/ingest/imap.ts</code>, <code class="inline">imap-quarantine.ts</code></td><td>Read-only IMAP by UID window (500 UIDs, 1 MiB per message, up to 10 windows per pass); cursor = <code class="inline">UIDVALIDITY</code> + last UID in <code class="inline">ingest_cursors</code>; private JSON quarantine (UID + reason, max 1000).</td></tr>
-        <tr><td><code class="inline">src/ingest/gmail.ts</code></td><td>Gmail API alternative (<code class="inline">gmail.readonly</code>, refresh token obtained with PKCE by <code class="inline">scripts/gmail-oauth-bootstrap.mjs</code>): full scan, then history; state + quarantine in a private state file.</td></tr>
         <tr><td><code class="inline">src/ingest/itau-parser.ts</code>, <code class="inline">itau-transfer.ts</code></td><td>Pure parsers. Candidate = sender address in the bank's domain + subject pattern. Defines the fixed quarantine reasons.</td></tr>
         <tr><td><code class="inline">src/ingest/trigger-token.ts</code></td><td>Bearer token for the trigger routes, from <code class="inline">INGEST_TOKEN</code> or the private file <code class="inline">/app/data/ingest-token</code>; invalid or placeholder value → routes answer 503.</td></tr>
         <tr><td><code class="inline">src/splitwise/*</code></td><td>Client (bounded pagination), credential (env or private file), snapshot store, activity/balance store, <code class="inline">syncSplitwise()</code>.</td></tr>
@@ -225,16 +224,51 @@
         <tr><td><code class="inline">ingest_cursors</code>, <code class="inline">ingest_runs</code></td><td>IMAP cursor per mailbox identity hash; one row per ingest pass (counts, <code class="inline">ok</code>/<code class="inline">error</code>, fixed error text).</td></tr>
         <tr><td><code class="inline">splitwise_sync_account</code>, <code class="inline">splitwise_imports</code></td><td>Pinned Splitwise account + last sync time; expenses by account and expense ID (shares as decimal strings).</td></tr>
         <tr><td><code class="inline">splitwise_activity_events</code>, <code class="inline">splitwise_activity_sync</code>, <code class="inline">splitwise_balance_observations</code></td><td>Bounded activity feed and balance observations.</td></tr>
-        <tr><td><code class="inline">import_category_rules</code></td><td>Remembered category per normalized description.</td></tr>
+        <tr><td><code class="inline">import_category_rules</code></td><td>Remembered category per normalized description, plus merchant-level rules (see below).</td></tr>
         <tr><td><code class="inline">import_pair_exclusions</code></td><td>Rejected bank ↔ Splitwise pairs.</td></tr>
       </table>
+
+      <h3 id="auto-categorisation">Automatic categorisation</h3>
+      <p>Imported bank purchases and Splitwise expenses get a category on arrival; there is no suggestion queue. The owner changes it on <code class="inline">/transactions</code> or <code class="inline">/splitwise</code>.</p>
+      <figure style="margin:10px 0;">
+        <svg viewBox="0 0 640 96" role="img" aria-labelledby="autocat-title autocat-desc" style="width:100%; height:auto; display:block;">
+          <title id="autocat-title">Category lookup order</title>
+          <desc id="autocat-desc">An imported description is checked first against an exact-description rule, then against a merchant rule, and otherwise filed under Other.</desc>
+          <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="13">
+            <rect x="4" y="22" width="130" height="48" rx="10" fill="#f6f8fc" stroke="#cdd6e2"/>
+            <text x="69" y="51" text-anchor="middle" fill="#15202b">Description</text>
+            <rect x="170" y="22" width="140" height="48" rx="10" fill="#e7eef8" stroke="#1f5fa8"/>
+            <text x="240" y="44" text-anchor="middle" fill="#183153" font-weight="700">1 · Exact rule</text>
+            <text x="240" y="61" text-anchor="middle" fill="#5d6b7a" font-size="11.5">same text</text>
+            <rect x="346" y="22" width="140" height="48" rx="10" fill="#e7eef8" stroke="#1f5fa8"/>
+            <text x="416" y="44" text-anchor="middle" fill="#183153" font-weight="700">2 · Merchant rule</text>
+            <text x="416" y="61" text-anchor="middle" fill="#5d6b7a" font-size="11.5">same merchant key</text>
+            <rect x="522" y="22" width="114" height="48" rx="10" fill="#fff1ce" stroke="#97640f"/>
+            <text x="579" y="51" text-anchor="middle" fill="#97640f" font-weight="700">3 · Other</text>
+            <g stroke="#5d6b7a" stroke-width="1.6" fill="none"><path d="M134 46h32"/><path d="M310 46h32"/><path d="M486 46h32"/></g>
+            <text x="326" y="38" text-anchor="middle" fill="#5d6b7a" font-size="11">miss</text>
+            <text x="502" y="38" text-anchor="middle" fill="#5d6b7a" font-size="11">miss</text>
+          </g>
+        </svg>
+        <figcaption style="font-size:13px; color:var(--muted);">Conceptual. The first match wins; a rule pointing at an inactive category counts as a miss.</figcaption>
+      </figure>
+      <ul>
+        <li><strong>Lookup order</strong> (<code class="inline">automaticImportCategory</code>): exact-description rule → merchant rule → the expense category "Other". A rule pointing at an inactive category is ignored. Transfers and Splitwise payments get no category.</li>
+        <li><strong>Merchant key</strong> (<code class="inline">src/finance/merchant-key.ts</code>, pure function): input capped at 256 characters, Unicode NFKC, lower-case, split into word tokens (punctuation and <code class="inline">*</code> are separators). Drops one trailing letters-only word when it follows a token with digits (location after an id, e.g. <code class="inline">…*TEST*00 ABCDE</code>), then trailing tokens containing digits (store/branch numbers, reference or terminal ids). Fewer than 3 characters or no letter → no merchant lookup.</li>
+        <li><strong>Learning</strong> (<code class="inline">rememberImportCategory</code>): only an explicit category change by the owner writes rules — one for the exact description, one for the merchant key. Last choice wins. Rules never rewrite categories stored on other rows, neither for exact nor for merchant matches; they only apply to rows created later (or to bank rows still without a category when <code class="inline">migrate()</code> runs).</li>
+        <li><strong>Storage</strong>: same table, no schema change. Merchant rules use the key <code class="inline">"\tmerchant:" + merchantKey</code>; exact keys are trimmed, so they never start with a tab and the two kinds cannot collide.</li>
+      </ul>
+      <div class="callout note">
+        <h4>Limits</h4>
+        No place-name list, so a trailing location word is removed only in the "id then one word" shape; <code class="inline">MERCADO X CENTRO</code> and <code class="inline">MERCADO X NORTE</code> stay distinct. A name ending in a number after a word collapses to the word (<code class="inline">CAFE 1900</code> → <code class="inline">cafe</code>), which can merge unrelated merchants with a short shared prefix. Processor prefixes (<code class="inline">PROCESSOR*SHOP</code>) are not stripped, so each shop behind one processor is learned separately. A forged notice (see the trust boundary below) cannot create rules, but it is filed by them.
+      </div>
 
       <h3>Activation</h3>
       <p>Two mutually exclusive ways to schedule the trigger routes: the Compose profiles <code class="inline">ingest</code> / <code class="inline">splitwise-ingest</code> (token in <code class="inline">INGEST_TOKEN</code>), or <code class="inline">scripts/activate-sync.py</code> (token file, containers outside Compose; it refuses to run if the app has <code class="inline">INGEST_TOKEN</code> set). Pick one. Procedures in <a href="RUNBOOK.html">RUNBOOK</a>; unifying them is <a href="MEJORAS-APP.html#mej-005">MEJ-005</a>.</p>
 
       <div class="callout sec" id="trust-boundary">
         <h4>Trust boundary — bank e-mails are not authenticated</h4>
-        A notice is accepted as a bank notice when its single <code class="inline">From</code> address is in the bank's domain and its subject matches a known pattern (<code class="inline">isItauAviso</code>, <code class="inline">isItauTransfer</code>). There is <strong>no DKIM, DMARC or <code class="inline">Authentication-Results</code> check</strong> anywhere in <code class="inline">src/</code>. Anyone able to deliver mail to the mailbox can forge such a notice; it would be imported as <code class="inline">pending</code> and <strong>counted in observed spending until someone discards it</strong> on <code class="inline">/transactions</code>. Gmail OAuth does not change this: it authenticates access to the mailbox, not the sender. Compensating control today: review pending notices before relying on the totals. Fix tracked as <a href="MEJORAS-APP.html#mej-002">MEJ-002</a>.
+        A notice is accepted as a bank notice when its single <code class="inline">From</code> address is in the bank's domain and its subject matches a known pattern (<code class="inline">isItauAviso</code>, <code class="inline">isItauTransfer</code>). There is <strong>no DKIM, DMARC or <code class="inline">Authentication-Results</code> check</strong> anywhere in <code class="inline">src/</code>. Anyone able to deliver mail to the mailbox can forge such a notice; it would be imported as <code class="inline">pending</code> and <strong>counted in observed spending until someone discards it</strong> on <code class="inline">/transactions</code>. Mailbox authentication does not change this: it authenticates access to the mailbox, not the sender. Compensating control today: review pending notices before relying on the totals. Fix tracked as <a href="MEJORAS-APP.html#mej-002">MEJ-002</a>.
       </div>
       <ul>
         <li>Other boundaries in the code: the trigger token can only start a pass (it never reads data); provider error text is not persisted (fixed strings in <code class="inline">ingest_runs</code>); quarantine stores locators and reason codes, never bodies; credential files must be owner-only or they are rejected.</li>

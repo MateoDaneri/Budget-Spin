@@ -5,6 +5,7 @@ import { addMonths, currentMonthKey, formatMonthLabel, trailingMonths } from "@/
 import { formatDisplayMoneyFromUyu, getDisplayMoneyContext } from "@/src/finance/display-money";
 import { calculateMonthMetrics } from "@/src/finance/metrics";
 import { calculateActualMonth } from "@/src/finance/actual-spending";
+import { comparePlanWithObserved, plannedExpenseByCurrency, type PlanComparison, type PlanComparisonStatus } from "@/src/finance/plan-vs-actual";
 import { listPairExclusions, listSplitwiseImports } from "@/src/splitwise/store";
 import { setPairExclusionAction } from "@/src/actions/reconciliation";
 import { formatMoney } from "@/src/finance/money";
@@ -38,6 +39,7 @@ export default async function DashboardPage({ searchParams }: Props) {
     const unit = currencies.find((item) => item.code === currency);
     return unit ? formatMoney(amountMinor, unit) : `${currency} ${amountMinor} minor units`;
   };
+  const planComparison = comparePlanWithObserved(plannedExpenseByCurrency(month, expenses), actual.totals);
   const trend = trailingMonths(month, 6).map((trendMonth) =>
     calculateMonthMetrics({ month: trendMonth, incomes, expenses, currencies, baseCurrency })
   );
@@ -85,7 +87,6 @@ export default async function DashboardPage({ searchParams }: Props) {
         <div className="outlook-main">
           <span className="outlook-kicker">Projected net · including optional</span>
           <div className="outlook-amount"><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.netWithOptionalBaseMinor, context: displayMoneyContext })} /></div>
-          <p>After committed and optional expenses</p>
           <div className="outlook-base"><span>Net before optional</span><strong><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.netBaseMinor, context: displayMoneyContext })} /></strong></div>
         </div>
         <div className="outlook-breakdown">
@@ -96,15 +97,38 @@ export default async function DashboardPage({ searchParams }: Props) {
       </section>
       <section className="panel actual-spending" id="actual-spending" aria-labelledby="actual-spending-title">
         {params.reconciliation === "error" && <p className="alert" role="alert">Could not save that choice. Try again.</p>}
-        <div className="panel-header"><div><h2 id="actual-spending-title">Observed spending</h2><p className="muted">An estimate for this month, separate from the recurring plan above. Pending bank notices are included until discarded.</p></div></div>
-        {actual.totals.length === 0 ? <p className="muted">No included spending found for this month.</p> : <ul className="actual-totals">{actual.totals.map((item) => <li key={item.currency}><span>{item.currency}</span><strong>{showAmount(item.currency, item.amountMinor)}</strong></li>)}</ul>}
-        <p className="muted">{actual.pending} pending bank notices · {actual.matched} possible matches · {actual.ambiguous} shared expenses need a clear match · {actual.omitted} unavailable or unsupported amounts.</p>
-        <details className="actual-method"><summary>How this estimate works</summary><p className="muted">Possible matches require the same date, exact merchant, currency and amount paid, with one candidate on each side. We use your Splitwise share instead of the bank amount. You can undo a match below. Unmatched shared expenses you paid are excluded to avoid double counting. Payments, transfers and deleted entries are excluded. Amounts stay in their original currency.</p></details>
-        {(actual.pairs.length > 0 || rejectedPairs.length > 0) && <details className="actual-pairs"><summary>Review possible matches</summary>
+        <div className="panel-header"><h2 id="actual-spending-title">Spent vs plan</h2><span className="actual-month">{formatMonthLabel(month)}</span></div>
+        {planComparison.length === 0 ? <p className="muted">No spending or plan for this month.</p> : (
+          <ul className="plan-bars">
+            {planComparison.map((row) => (
+              <li key={row.currency} className="plan-bar-row">
+                <div className="plan-bar-head">
+                  <strong>{row.currency}</strong>
+                  <span className={`status-pill ${planStatusClass[row.status]}`}>{planStatusLabel(row, showAmount)}</span>
+                </div>
+                <div className="plan-bar" aria-hidden="true">
+                  <span className="plan-bar-fill" data-state={row.status} style={{ width: `${row.observedPercent}%` }} />
+                  {row.status === "over" && row.plannedPercent > 0 ? <span className="plan-bar-planned" style={{ width: `${row.plannedPercent}%` }} /> : null}
+                </div>
+                <dl className="plan-bar-values">
+                  <div><dt>Spent</dt><dd>{showAmount(row.currency, row.observedMinor)}</dd></div>
+                  <div><dt>Planned</dt><dd>{row.plannedMinor === null ? "—" : showAmount(row.currency, row.plannedMinor)}</dd></div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        )}
+        <ul className="count-chips" aria-label="Review counts">
+          <li className="count-chip"><strong>{actual.pending}</strong> pending notices</li>
+          {actual.matched > 0 && <li className="count-chip"><strong>{actual.matched}</strong> possible {actual.matched === 1 ? "match" : "matches"}</li>}
+          {actual.ambiguous > 0 && <li className="count-chip count-chip-warning"><strong>{actual.ambiguous}</strong> need a clear match</li>}
+          {actual.omitted > 0 && <li className="count-chip count-chip-muted"><strong>{actual.omitted}</strong> unavailable</li>}
+        </ul>
+        {(actual.pairs.length > 0 || rejectedPairs.length > 0) && <details className="actual-pairs"><summary>Review matches ({actual.pairs.length + rejectedPairs.length})</summary>
           <ul>{actual.pairs.map((pair) => <li key={`${pair.bankId}:${pair.splitwiseId}`}><div><strong>{pair.description}</strong><span>Bank {showAmount(pair.currency, pair.paidMinor)} · your share {showAmount(pair.currency, pair.owedMinor)}</span></div><form action={setPairExclusionAction}><input type="hidden" name="bank" value={pair.bankId}/><input type="hidden" name="shared" value={pair.splitwiseId}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="yes" type="submit">Not the same expense</button></form></li>)}
           {rejectedPairs.map(({ transaction, expense }) => <li key={`excluded:${transaction.id}:${expense.id}`}><div><strong>{transaction.description}</strong><span>Not matched · {expense.description}</span></div><form action={setPairExclusionAction}><input type="hidden" name="bank" value={transaction.id}/><input type="hidden" name="shared" value={expense.id}/><input type="hidden" name="month" value={month}/><button className="button button-secondary" name="exclude" value="no" type="submit">Allow matching again</button></form></li>)}</ul>
         </details>}
-        <p><Link href="/transactions">Review bank notices</Link> · <Link href="/splitwise">Review shared expenses and categories</Link></p>
+        <p className="actual-links"><Link href="/transactions">Bank notices</Link><Link href="/splitwise">Shared expenses</Link></p>
       </section>
       <section className="overview-shortcuts" aria-label="Explore your finances">
         <Link href="/transactions"><span className="shortcut-icon" aria-hidden="true">↔</span><span><strong>Imported activity</strong><small>Review transactions</small></span><b aria-hidden="true">↗</b></Link>
@@ -117,14 +141,13 @@ export default async function DashboardPage({ searchParams }: Props) {
           <div className="panel-header">
             <div>
               <h2>Net trend</h2>
-              <p className="muted">Committed net vs net after optional expenses across the last six months.</p>
             </div>
           </div>
           <div className="line-chart-wrap">
             <div className="chart-axis-label chart-axis-label-top">
               <MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: netRange.max, context: displayMoneyContext })} />
             </div>
-            <svg className="line-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Net trend chart. Exact values are available in the six-month projection table below.">
+            <svg className="line-chart" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Net trend chart. Values in the six-month table below.">
               <line className="chart-zero-line" x1="0" x2="100" y1={lineY(0, netRange)} y2={lineY(0, netRange)} />
               <polyline className="chart-line chart-line-committed" points={committedNetPoints} />
               <polyline strokeDasharray="3 2" className="chart-line chart-line-optional" points={optionalNetPoints} />
@@ -163,7 +186,6 @@ export default async function DashboardPage({ searchParams }: Props) {
           <div className="panel-header">
             <div>
               <h2>Income vs spend</h2>
-              <p className="muted">Monthly income compared with committed and optional spend.</p>
             </div>
           </div>
           <div className="cashflow-chart" aria-hidden="true">
@@ -201,7 +223,6 @@ export default async function DashboardPage({ searchParams }: Props) {
 
       <details className="chart-data panel">
         <summary>View six-month projection values</summary>
-        <p className="muted">Income, committed spend, optional spend, and net outcomes by month.</p>
             <div className="table-scroll" role="region" aria-label="Six-month projection" tabIndex={0}><table className="table trend-table">
               <thead>
                 <tr>
@@ -247,14 +268,12 @@ export default async function DashboardPage({ searchParams }: Props) {
       <section className="grid grid-2">
         <DonutPanel
           title="Spend mix by category"
-          description={`Committed plus optional expenses active in ${formatMonthLabel(month)}.`}
           emptyText="No category spend yet."
           items={categoryMix}
           context={displayMoneyContext}
         />
         <DonutPanel
           title="Spend mix by family"
-          description="Same scenario, grouped by expense family."
           emptyText="No family spend yet."
           items={familyMix}
           context={displayMoneyContext}
@@ -267,7 +286,6 @@ export default async function DashboardPage({ searchParams }: Props) {
             <div>
               <span className="status-pill status-committed">Committed</span>
               <h2>Base scenario</h2>
-              <p className="muted">Only committed expenses active in {formatMonthLabel(month)}.</p>
             </div>
           </div>
           <div>
@@ -297,7 +315,6 @@ export default async function DashboardPage({ searchParams }: Props) {
             <div>
               <span className="status-pill status-optional">Scenario</span>
               <h2>With optional expenses</h2>
-              <p className="muted">Committed plus optional expenses active in {formatMonthLabel(month)}.</p>
             </div>
           </div>
           <div>
@@ -329,7 +346,6 @@ export default async function DashboardPage({ searchParams }: Props) {
             <div>
               <span className="status-pill status-committed">Families</span>
               <h2>Committed by family</h2>
-              <p className="muted">Same committed spend, grouped by expense family instead of category.</p>
             </div>
           </div>
           <div>
@@ -359,7 +375,6 @@ export default async function DashboardPage({ searchParams }: Props) {
             <div>
               <span className="status-pill status-optional">Families</span>
               <h2>With optional by family</h2>
-              <p className="muted">Committed plus optional expenses, grouped by family.</p>
             </div>
           </div>
           <div>
@@ -394,13 +409,11 @@ export default async function DashboardPage({ searchParams }: Props) {
 
 function DonutPanel({
   title,
-  description,
   emptyText,
   items,
   context
 }: {
   title: string;
-  description: string;
   emptyText: string;
   items: MixItem[];
   context: Awaited<ReturnType<typeof getDisplayMoneyContext>>;
@@ -410,7 +423,6 @@ function DonutPanel({
       <div className="panel-header">
         <div>
           <h2>{title}</h2>
-          <p className="muted">{description}</p>
         </div>
       </div>
       {items.length === 0 ? (
@@ -437,6 +449,20 @@ function DonutPanel({
       )}
     </div>
   );
+}
+
+const planStatusClass: Record<PlanComparisonStatus, string> = {
+  under: "status-ok",
+  "on-plan": "status-ok",
+  over: "status-warning",
+  "no-plan": "status-muted"
+};
+
+function planStatusLabel(row: PlanComparison, showAmount: (currency: string, amountMinor: number) => string) {
+  if (row.status === "no-plan" || row.differenceMinor === null) return "No plan";
+  if (row.status === "on-plan") return "On plan";
+  if (row.status === "over") return `Over by ${showAmount(row.currency, row.differenceMinor)}`;
+  return `${showAmount(row.currency, -row.differenceMinor)} left`;
 }
 
 type MixItem = {
