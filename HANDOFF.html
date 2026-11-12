@@ -106,6 +106,8 @@
         <li>Single local user <code class="inline">mdaneri</code>; legacy local-user data migrates to it. First login initializes the password (stored as hash + salt).</li>
         <li>Session as a signed HTTP-only cookie; credential comparison via <code class="inline">timingSafeEqual</code> (<code class="inline">src/auth/session.ts</code>); routes protected by <code class="inline">proxy.ts</code>; logout in the header.</li>
         <li>2FA is modeled for later but <strong>not enforced yet</strong>.</li>
+        <li><strong>API auth model:</strong> every <code class="inline">/api/*</code> route goes through <code class="inline">proxy.ts</code>; the allow/deny decision is <code class="inline">decideAccess</code> in <code class="inline">src/auth/access-policy.ts</code> (default closed). Without a session a page redirects to <code class="inline">/login?next=…</code> and an API path gets <strong>401 JSON</strong>. Only <code class="inline">/api/ingest/itau</code> and <code class="inline">/api/ingest/splitwise</code> skip the session (exact path match) because they check their own bearer token. <code class="inline">/api/fx-rate</code> also checks the session itself.</li>
+        <li>Form and login errors travel as fixed codes in <code class="inline">?error=</code> and pages map them to fixed text (<code class="inline">src/actions/error-codes.ts</code>); the query value is never rendered.</li>
       </ul>
       <h3>Finance</h3>
       <ul>
@@ -272,7 +274,7 @@
       </div>
       <ul>
         <li>Other boundaries in the code: the trigger token can only start a pass (it never reads data); provider error text is not persisted (fixed strings in <code class="inline">ingest_runs</code>); quarantine stores locators and reason codes, never bodies; credential files must be owner-only or they are rejected.</li>
-        <li>Open: <code class="inline">/api/fx-rate</code> answers without a session because the proxy matcher skips every <code class="inline">api*</code> path (<a href="MEJORAS-APP.html#mej-006">MEJ-006</a>).</li>
+        <li>Closed on branch <code class="inline">claude/fix-endurecimiento-seguridad</code> (not merged): <code class="inline">/api/fx-rate</code> now requires a session and the proxy no longer skips <code class="inline">api*</code> paths (<a href="MEJORAS-APP.html#mej-006">MEJ-006</a>); <code class="inline">?error=</code> carries fixed codes, not free text (<a href="MEJORAS-APP.html#mej-007">MEJ-007</a>).</li>
       </ul>
     </section>
 

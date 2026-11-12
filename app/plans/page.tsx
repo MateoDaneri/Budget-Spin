@@ -5,6 +5,7 @@ import {
   savePlanItemAction,
   togglePlanItemAction
 } from "@/src/actions/forms";
+import { formErrorMessage } from "@/src/actions/error-codes";
 import { CurrencyFxFields } from "@/app/components/CurrencyFxFields";
 import { MoneyStack } from "@/app/components/MoneyStack";
 import {
@@ -33,6 +34,8 @@ type Props = {
 
 export default async function PlansPage({ searchParams }: Props) {
   const params = searchParams ? await searchParams : {};
+  // Fixed message per known code; the query value itself is never rendered.
+  const errorMessage = formErrorMessage(params.error);
   const currencies = listCurrencies();
   const baseCurrency = getBaseCurrency();
   const displayMoneyContext = await getDisplayMoneyContext(currencies);
@@ -60,7 +63,7 @@ export default async function PlansPage({ searchParams }: Props) {
         </div>
       </section>
 
-      {params.error ? <div className="alert">{params.error}</div> : null}
+      {errorMessage ? <div className="alert" role="alert">{errorMessage}</div> : null}
 
       <details className="create-panel">
         <summary className="button">Create plan</summary>

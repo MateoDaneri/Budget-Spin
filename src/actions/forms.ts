@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  DefaultExpenseGroupError,
   deactivateCategory,
   deactivateExpenseGroup,
   deleteFinancialPlan,
@@ -27,6 +28,7 @@ import {
   type Frequency
 } from "@/src/db/repository";
 import { parseMoneyToMinor } from "@/src/finance/money";
+import { FormError, formErrorCode } from "@/src/actions/error-codes";
 
 export async function saveCategoryAction(formData: FormData) {
   try {
@@ -77,7 +79,10 @@ export async function deactivateExpenseGroupAction(formData: FormData) {
     revalidatePath("/");
     revalidatePath("/expenses");
   } catch (error) {
-    redirectWithError("/expenses", error);
+    redirectWithError(
+      "/expenses",
+      error instanceof DefaultExpenseGroupError ? new FormError("general-family-locked") : error
+    );
   }
 
   redirect("/expenses");
@@ -88,11 +93,7 @@ export async function saveIncomeAction(formData: FormData) {
     const currencies = listCurrencies();
     const baseCurrency = getBaseCurrency();
     const currencyCode = requiredString(formData.get("currencyCode"), "Currency");
-    const currency = currencies.find((item) => item.code === currencyCode);
-
-    if (!currency) {
-      throw new Error("Unknown currency.");
-    }
+    const currency = requireCurrency(currencies, currencyCode);
 
     const fxRateToBase = parseFxRate(formData.get("fxRateToBase"), currencyCode, baseCurrency.code);
     const endDate = optionalString(formData.get("endDate"));
@@ -108,7 +109,7 @@ export async function saveIncomeAction(formData: FormData) {
       categoryId: requiredNumber(formData.get("categoryId"), "Category"),
       description: requiredString(formData.get("description"), "Description"),
       currencyCode,
-      amountMinor: parseMoneyToMinor(requiredString(formData.get("amount"), "Amount"), currency.minorUnit),
+      amountMinor: parseAmount(formData.get("amount"), "Amount", currency.minorUnit),
       fxRateToBase,
       frequency,
       ...customRecurrence,
@@ -142,11 +143,7 @@ export async function saveExpenseAction(formData: FormData) {
     const currencies = listCurrencies();
     const baseCurrency = getBaseCurrency();
     const currencyCode = requiredString(formData.get("currencyCode"), "Currency");
-    const currency = currencies.find((item) => item.code === currencyCode);
-
-    if (!currency) {
-      throw new Error("Unknown currency.");
-    }
+    const currency = requireCurrency(currencies, currencyCode);
 
     const fxRateToBase = parseFxRate(formData.get("fxRateToBase"), currencyCode, baseCurrency.code);
     const endDate = optionalString(formData.get("endDate"));
@@ -163,7 +160,7 @@ export async function saveExpenseAction(formData: FormData) {
       groupId: requiredNumber(formData.get("groupId"), "Family"),
       description: requiredString(formData.get("description"), "Description"),
       currencyCode,
-      amountMinor: parseMoneyToMinor(requiredString(formData.get("amount"), "Amount"), currency.minorUnit),
+      amountMinor: parseAmount(formData.get("amount"), "Amount", currency.minorUnit),
       fxRateToBase,
       frequency,
       ...customRecurrence,
@@ -223,18 +220,14 @@ export async function savePlanAction(formData: FormData) {
     const currencies = listCurrencies();
     const baseCurrency = getBaseCurrency();
     const currencyCode = requiredString(formData.get("currencyCode"), "Currency");
-    const currency = currencies.find((item) => item.code === currencyCode);
-
-    if (!currency) {
-      throw new Error("Unknown currency.");
-    }
+    const currency = requireCurrency(currencies, currencyCode);
 
     upsertFinancialPlan({
       id: optionalNumber(formData.get("id")),
       name: requiredString(formData.get("name"), "Plan name"),
       targetDate: requiredString(formData.get("targetDate"), "Target date"),
       currencyCode,
-      targetAmountMinor: parseMoneyToMinor(requiredString(formData.get("targetAmount"), "Target amount"), currency.minorUnit),
+      targetAmountMinor: parseAmount(formData.get("targetAmount"), "Target amount", currency.minorUnit),
       fxRateToBase: parseFxRate(formData.get("fxRateToBase"), currencyCode, baseCurrency.code),
       notes: optionalString(formData.get("notes"))
     });
@@ -265,18 +258,14 @@ export async function savePlanItemAction(formData: FormData) {
     const currencies = listCurrencies();
     const baseCurrency = getBaseCurrency();
     const currencyCode = requiredString(formData.get("currencyCode"), "Currency");
-    const currency = currencies.find((item) => item.code === currencyCode);
-
-    if (!currency) {
-      throw new Error("Unknown currency.");
-    }
+    const currency = requireCurrency(currencies, currencyCode);
 
     upsertPlanItem({
       id: optionalNumber(formData.get("id")),
       planId,
       description: requiredString(formData.get("description"), "Description"),
       currencyCode,
-      amountMinor: parseMoneyToMinor(requiredString(formData.get("amount"), "Amount"), currency.minorUnit),
+      amountMinor: parseAmount(formData.get("amount"), "Amount", currency.minorUnit),
       fxRateToBase: parseFxRate(formData.get("fxRateToBase"), currencyCode, baseCurrency.code),
       isDone: optionalString(formData.get("isDone")) === "true"
     });
@@ -323,10 +312,15 @@ function parseFxRate(value: FormDataEntryValue | null, currencyCode: string, bas
     return null;
   }
 
-  const raw = requiredString(value, `FX rate from ${currencyCode} to ${baseCurrencyCode}`).replace(",", ".");
-  const parsed = Number(raw);
+  const label = `FX rate from ${currencyCode} to ${baseCurrencyCode}`;
+  const raw = optionalString(value);
+  if (!raw) {
+    throw new FormError("invalid-fx-rate", label);
+  }
+
+  const parsed = Number(raw.replace(",", "."));
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`FX rate from ${currencyCode} to ${baseCurrencyCode} must be greater than zero.`);
+    throw new FormError("invalid-fx-rate", label);
   }
 
   return parsed;
@@ -345,7 +339,7 @@ function parseCustomRecurrence(formData: FormData, frequency: Frequency) {
 
   const customInterval = requiredNumber(formData.get("customInterval"), "Custom interval");
   if (customInterval < 1 || customInterval > 120) {
-    throw new Error("Custom interval must be between 1 and 120.");
+    throw new FormError("invalid-recurrence", "Custom interval must be between 1 and 120.");
   }
 
   const customUnit = requiredEnum<CustomRecurrenceUnit>(formData.get("customUnit"), ["weeks", "months", "years"], "Custom unit");
@@ -356,7 +350,7 @@ function parseCustomRecurrence(formData: FormData, frequency: Frequency) {
   );
 
   if (customUnit === "weeks" && customAnchor !== "day_of_week") {
-    throw new Error("Custom weekly recurrence must use a day of week.");
+    throw new FormError("invalid-recurrence", "Custom weekly recurrence must use a day of week.");
   }
 
   const customDayOfMonth =
@@ -375,7 +369,7 @@ function parseCustomRecurrence(formData: FormData, frequency: Frequency) {
 
 function requiredString(value: FormDataEntryValue | null, label: string) {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${label} is required.`);
+    throw new FormError("missing-field", label);
   }
 
   return value.trim();
@@ -393,7 +387,7 @@ function requiredNumber(value: FormDataEntryValue | null, label: string) {
   const raw = requiredString(value, label);
   const parsed = Number(raw);
   if (!Number.isInteger(parsed)) {
-    throw new Error(`${label} must be an integer.`);
+    throw new FormError("invalid-number", label);
   }
 
   return parsed;
@@ -402,7 +396,8 @@ function requiredNumber(value: FormDataEntryValue | null, label: string) {
 function boundedNumber(value: FormDataEntryValue | null, label: string, min: number, max: number) {
   const parsed = requiredNumber(value, label);
   if (parsed < min || parsed > max) {
-    throw new Error(`${label} must be between ${min} and ${max}.`);
+    // Only used for the custom recurrence day fields.
+    throw new FormError("invalid-recurrence", `${label} must be between ${min} and ${max}.`);
   }
 
   return parsed;
@@ -415,7 +410,7 @@ function optionalNumber(value: FormDataEntryValue | null) {
 
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) {
-    throw new Error("Expected integer id.");
+    throw new FormError("invalid-number", "id");
   }
 
   return parsed;
@@ -424,13 +419,32 @@ function optionalNumber(value: FormDataEntryValue | null) {
 function requiredEnum<T extends string>(value: FormDataEntryValue | null, allowed: readonly T[], label: string): T {
   const raw = requiredString(value, label);
   if (!allowed.includes(raw as T)) {
-    throw new Error(`${label} is invalid.`);
+    throw new FormError("invalid-option", label);
   }
 
   return raw as T;
 }
 
+function parseAmount(value: FormDataEntryValue | null, label: string, minorUnit: number) {
+  const raw = requiredString(value, label);
+  try {
+    return parseMoneyToMinor(raw, minorUnit);
+  } catch {
+    throw new FormError("invalid-amount", label);
+  }
+}
+
+function requireCurrency<T extends { code: string }>(currencies: readonly T[], currencyCode: string): T {
+  const currency = currencies.find((item) => item.code === currencyCode);
+  if (!currency) {
+    throw new FormError("unknown-currency", currencyCode);
+  }
+
+  return currency;
+}
+
+// Redirects with a fixed code only (MEJ-007). Anything that is not a FormError
+// (database errors, bugs) becomes "unexpected"; its text never leaves the server.
 function redirectWithError(pathname: string, error: unknown): never {
-  const message = error instanceof Error ? error.message : "Unexpected form error.";
-  redirect(`${pathname}?error=${encodeURIComponent(message)}`);
+  redirect(`${pathname}?error=${formErrorCode(error)}`);
 }
