@@ -727,7 +727,7 @@ failed to calculate checksum of ref ...: "/app/public": not found</pre>
           <li><strong>Un checkpoint solo puede avanzar más allá de un mensaje si su falla quedó registrada en otro lado.</strong> Cuarentena con localizador + motivo = "dead-letter queue" mínima.</li>
           <li>Clasificar errores por <em>dueño</em> (este mensaje vs. esta corrida) antes de decidir si abortar.</li>
           <li>Seguridad: el contenido de un correo es entrada no confiable. Guardar solo códigos fijos (no cuerpos ni texto del proveedor) evita que datos externos terminen en la base o en logs.</li>
-          <li>Estado honesto: la rama no está mergeada (estado de despliegue: consultar al operador) ; lint, typecheck, la suite de tests (126) y el build de producción pasaron con Node 24 el 2026-11-10 sobre el commit <code>b71b5de</code>; no se comprobó contra datos reales del banco ni de Splitwise.</li>
+          <li>Estado honesto: mergeado a main en el PR 58 y desplegado el 2026-11-10; lint, typecheck, la suite de tests (126) y el build de producción pasaron con Node 24 el 2026-11-10 sobre el commit <code>b71b5de</code>; no se comprobó contra datos reales del banco ni de Splitwise.</li>
         </ul>
       </div>
     </article>

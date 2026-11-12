@@ -414,7 +414,7 @@ more fails. The code has no
 command to remove an entry by hand.
 
 ### Sender authentication (observation mode, MEJ-002)
-Branch `claude/feature-autenticidad-avisos` (not merged). Each imported notice
+Since PR 65 (deployed on 2026-11-11), each imported notice
 records a verdict in `transactions.sender_auth` from the `Authentication-Results`
 header written by the mailbox provider. **Nothing is blocked and totals do not
 change**; the verdict is only shown.

@@ -26,7 +26,7 @@ Capa de datos · migraciones · Prioridad media · Al final del proyecto · `src
 ## MEJ-002 — Autenticar el remitente de los avisos del banco
 Importación · autenticidad del origen · Prioridad media · Antes de activar la importación · `src/ingest/itau-parser.ts` (`isItauAviso`), `src/ingest/itau-transfer.ts` (`isItauTransfer`), `src/ingest/imap.ts`
 
-**Estado:** modo observación implementado en la rama `claude/feature-autenticidad-avisos` (sin mergear; lint, typecheck, tests y build pasaron en el servidor el 2026-11-11); el bloqueo queda pendiente de una decisión después de revisar avisos reales. El texto de abajo queda como historia del hallazgo.
+**Estado:** modo observación mergeado a main y desplegado el 2026-11-11 (PR 65; lint, typecheck, tests y build pasaron en el servidor el 2026-11-11); el bloqueo queda pendiente de una decisión después de revisar avisos reales. El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** antes de importar un aviso, exigir que el correo esté autenticado por el proveedor que lo recibió: `dkim=pass` (y/o `dmarc=pass`) alineado con el dominio del banco, leído del encabezado `Authentication-Results` que agrega el propio buzón. Hoy un aviso se acepta solo porque la dirección de `From` termina en el dominio del banco y el asunto coincide con un patrón.
 - **Por qué:**
@@ -50,7 +50,7 @@ Importación · autenticidad del origen · Prioridad media · Antes de activar l
 ## MEJ-003 — Emparejamiento más flexible y confirmación manual de pares
 Conciliación · gasto observado · Prioridad baja · Al final del proyecto · `src/finance/actual-spending.ts`, `src/actions/reconciliation.ts`, tabla `import_pair_exclusions`
 
-**Estado:** parcialmente resuelta en la rama `claude/feature-pares-manuales` (sin mergear; lint, typecheck y tests pendientes de correr en el servidor): sugerencias con confirmación manual; la regla automática no cambia. El texto de abajo queda como historia del hallazgo.
+**Estado:** parcialmente resuelta, mergeado a main y desplegado el 2026-11-11 (PR 66; lint, typecheck, 188 tests y build pasaron en el servidor el 2026-11-11): sugerencias con confirmación manual; la regla automática no cambia. El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** permitir que un aviso del banco y un gasto de Splitwise se emparejen aunque no coincidan exactamente (otro día cercano, descripción escrita distinto) y agregar una acción "son el mismo gasto" para confirmar un par a mano. Hoy solo se puede *rechazar* un par que la regla automática encontró.
 - **Por qué:**
@@ -62,6 +62,8 @@ Conciliación · gasto observado · Prioridad baja · Al final del proyecto · `
 
 ## MEJ-004 — Sincronización incremental de Splitwise (hoy relee todo y se corta en 2.000 gastos)
 Splitwise · sincronización · Prioridad media · Al final del proyecto · `src/splitwise/client.ts` (`getSplitwiseSnapshot`, `EXPENSE_LIMIT`), `src/splitwise/store.ts`
+
+**Estado:** resuelta, mergeado a main y desplegado el 2026-11-11 (PR 64; lint, typecheck, 134 tests y build pasaron en el servidor el 2026-11-11): sincronización incremental con marca de agua y pasada completa cada 7 días; el procedimiento está en RUNBOOK. No se comprobó contra la cuenta real de Splitwise. El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** pasar de una lectura completa en cada corrida a una incremental: pedir solo lo modificado desde la última sincronización exitosa.
 - **Por qué:**
@@ -87,7 +89,7 @@ Operación · schedulers · Prioridad media · Al final del proyecto · `docker-
 ## MEJ-006 — Autenticar `/api/fx-rate` y acotar la exclusión `api` del proxy
 Seguridad · rutas API · Prioridad media · Al final del proyecto · `proxy.ts` (`config.matcher`), `app/api/fx-rate/route.ts`
 
-**Estado:** resuelta en la rama `claude/fix-endurecimiento-seguridad` (PR 63, sin mergear; lint, typecheck, 168 tests y build pasaron en el servidor el 2026-11-11). El texto de abajo queda como historia del hallazgo.
+**Estado:** resuelta, mergeado a main y desplegado el 2026-11-11 (PR 63; lint, typecheck, 168 tests y build pasaron en el servidor el 2026-11-11). El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** el matcher del proxy es `/((?!_next/static|_next/image|favicon.ico|api).*)`: excluye de la verificación de sesión **toda** ruta que empiece con `api`, no solo las de importación. `/api/fx-rate` no verifica sesión por su cuenta, así que responde sin autenticación.
 - **Por qué:**
@@ -107,7 +109,7 @@ Seguridad · rutas API · Prioridad media · Al final del proyecto · `proxy.ts`
 ## MEJ-007 — Códigos de error fijos en lugar de texto libre en `?error=`
 Server actions · mensajes de error · Prioridad baja · Al final del proyecto · `src/actions/forms.ts` (`redirectWithError`), `src/actions/auth.ts`, `app/expenses/page.tsx`, `app/income/page.tsx`, `app/plans/page.tsx`, `app/login/page.tsx`
 
-**Estado:** resuelta en la rama `claude/fix-endurecimiento-seguridad` (PR 63, sin mergear; lint, typecheck, 168 tests y build pasaron en el servidor el 2026-11-11). El texto de abajo queda como historia del hallazgo.
+**Estado:** resuelta, mergeado a main y desplegado el 2026-11-11 (PR 63; lint, typecheck, 168 tests y build pasaron en el servidor el 2026-11-11). El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** las acciones de gastos, ingresos, planes (y categorías) redirigen con `?error=<error.message>`, y login con mensajes propios o el de la excepción. Las páginas de gastos, ingresos, planes y login muestran ese parámetro tal cual. Pasar a códigos fijos que la página traduce a un texto conocido, como ya hacen `/transactions` (tabla `ERROR_MESSAGES`) y `/splitwise`.
 - **Por qué:**
