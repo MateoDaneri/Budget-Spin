@@ -4,6 +4,7 @@ import { fetchQuarantinedMail, fetchRecentMail, mailboxCursorKey, readImapConfig
 import { isItauAviso, parseItauAviso, UnrecognizedNoticeError, type ItauEmailInput } from "./itau-parser";
 import { isItauTransfer, parseItauTransfer } from "./itau-transfer";
 import { ImapQuarantine } from "./imap-quarantine";
+import { readTrustedAuthservId, senderAuthVerdict } from "./sender-auth";
 
 export type IngestSummary = { messagesSeen: number; inserted: number; skipped: number };
 
@@ -34,6 +35,7 @@ export async function runItauIngest(options?: {
   let skipped = 0;
   try {
     const minorUnits = new Map(listCurrencies().map((currency) => [currency.code, currency.minorUnit]));
+    const trustedAuthservId = readTrustedAuthservId();
     const quarantine = await ImapQuarantine.open(cursorKey);
     const previous = getIngestCursor(cursorKey);
     if (previous) {
@@ -45,7 +47,7 @@ export async function runItauIngest(options?: {
           if (message.uid === undefined || !retry.includes(message.uid)) throw new Error("Unexpected retained IMAP notice.");
           try {
             messagesSeen++;
-            if (processMessage(message, minorUnits)) inserted++; else skipped++;
+            if (processMessage(message, minorUnits, trustedAuthservId)) inserted++; else skipped++;
             completed.push(message.uid);
           } catch (error) { if (!(error instanceof UnrecognizedNoticeError)) throw error; skipped++; }
         }
@@ -66,7 +68,7 @@ export async function runItauIngest(options?: {
       for (const message of batch.messages) {
         messagesSeen += 1;
         try {
-          const result = processMessage(message, minorUnits);
+          const result = processMessage(message, minorUnits, trustedAuthservId);
           if (result) inserted += 1;
           else skipped += 1;
         } catch (error) {
@@ -91,7 +93,7 @@ export async function runItauIngest(options?: {
   }
 }
 
-function processMessage(message: ItauEmailInput, minorUnits: Map<string, number>): boolean {
+function processMessage(message: ItauEmailInput, minorUnits: Map<string, number>, trustedAuthservId: string | null): boolean {
   const transfer = isItauTransfer(message);
   if (!transfer && !isItauAviso(message)) return false;
   const candidateLabel = message.uid === undefined ? "Candidate notification" : `Candidate notification UID ${message.uid}`;
@@ -112,6 +114,9 @@ function processMessage(message: ItauEmailInput, minorUnits: Map<string, number>
     txnDate: aviso.txnDateIso, description: aviso.merchant, currencyCode: aviso.currencyCode,
     amountMinor, cardNetwork: aviso.cardNetwork, cardLast4: aviso.cardLast4,
     source: SOURCE, messageId: aviso.messageId, rawExcerpt: aviso.rawExcerpt,
-    kind: transfer ? "transfer_out" : "purchase", status: "pending"
+    kind: transfer ? "transfer_out" : "purchase", status: "pending",
+    // Observation mode (MEJ-002): the verdict is recorded and shown, never used
+    // to block, quarantine or change totals.
+    senderAuth: senderAuthVerdict(message.authenticationResults, message.from, trustedAuthservId)
   }).inserted;
 }

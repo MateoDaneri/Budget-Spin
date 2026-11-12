@@ -17,6 +17,12 @@ export type ItauEmailInput = {
   messageId: string;
   /** Decoded HTML body. */
   html: string;
+  /**
+   * Authentication-Results header values, topmost first, each capped in length
+   * (see src/ingest/sender-auth.ts). Used only to compute the recorded verdict;
+   * never stored. Absent means no header was read (verdict "none").
+   */
+  authenticationResults?: string[];
 };
 
 /** Fixed, non-sensitive reasons a single notice is retained for review; never message content. */

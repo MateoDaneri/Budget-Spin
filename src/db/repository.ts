@@ -1,5 +1,6 @@
 import { getDb } from "./client";
 import { merchantKey } from "../finance/merchant-key";
+import { isSenderAuthVerdict, type SenderAuthVerdict } from "../ingest/sender-auth";
 
 export const LOCAL_USER_ID = "mdaneri";
 const LEGACY_LOCAL_USER_ID = "local-user";
@@ -121,6 +122,8 @@ export type Transaction = {
   rawExcerpt: string | null;
   status: TransactionStatus;
   createdAt: string;
+  /** Sender authentication recorded at import (MEJ-002); null for rows imported before it existed. */
+  senderAuth: SenderAuthVerdict | null;
 };
 
 export function migrate() {
@@ -351,6 +354,8 @@ export function migrate() {
   `);
 
   ensureColumn("transactions", "kind", "TEXT NOT NULL DEFAULT 'purchase' CHECK (kind IN ('purchase', 'transfer_out', 'transfer_in'))");
+  // Observation only (MEJ-002): nullable so older rows stay NULL ("not recorded").
+  ensureColumn("transactions", "sender_auth", "TEXT CHECK (sender_auth IS NULL OR sender_auth IN ('pass', 'fail', 'none'))");
   ensureColumn("splitwise_imports", "category_id", "INTEGER REFERENCES categories(id)");
   // Incremental Splitwise sync: latest provider updated_at committed, and the last full pass.
   ensureColumn("splitwise_sync_account", "updated_watermark", "TEXT");
@@ -1457,15 +1462,16 @@ export function insertImportedTransaction(input: {
   messageId: string;
   rawExcerpt?: string | null;
   status?: "confirmed" | "pending";
+  senderAuth?: SenderAuthVerdict | null;
 }): { inserted: boolean } {
   migrate();
   const result = getDb()
     .prepare(`
       INSERT INTO transactions (
         user_id, txn_date, description, currency_code, amount_minor, category_id,
-        card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind
+        card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind, sender_auth
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, message_id) DO NOTHING
     `)
     .run(
@@ -1482,7 +1488,8 @@ export function insertImportedTransaction(input: {
       input.rawExcerpt ?? null,
       input.status ?? "confirmed",
       nowIso(),
-      input.kind ?? "purchase"
+      input.kind ?? "purchase",
+      input.senderAuth ?? null
     );
 
   return { inserted: result.changes > 0 };
@@ -1494,7 +1501,7 @@ export function listTransactions(limit = 200): Transaction[] {
     .prepare(`
       SELECT t.id, t.user_id, t.txn_date, t.description, t.currency_code, t.amount_minor, t.category_id,
         t.card_network, t.card_last4, t.source, t.message_id, t.raw_excerpt, t.kind,
-        COALESCE(r.decision, t.status) AS status, t.created_at
+        COALESCE(r.decision, t.status) AS status, t.created_at, t.sender_auth
       FROM transactions t
       LEFT JOIN transaction_reviews r ON r.transaction_id = t.id
       WHERE t.user_id = ?
@@ -1517,6 +1524,7 @@ export function listTransactions(limit = 200): Transaction[] {
     raw_excerpt: string | null;
     status: TransactionStatus;
     created_at: string;
+    sender_auth: string | null;
   }>;
 
   return rows.map((row) => ({
@@ -1534,7 +1542,8 @@ export function listTransactions(limit = 200): Transaction[] {
     messageId: row.message_id,
     rawExcerpt: row.raw_excerpt,
     status: row.status,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    senderAuth: isSenderAuthVerdict(row.sender_auth) ? row.sender_auth : null
   }));
 }
 

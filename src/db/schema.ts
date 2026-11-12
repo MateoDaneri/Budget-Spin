@@ -105,7 +105,9 @@ export const transactions = sqliteTable(
     messageId: text("message_id"),
     rawExcerpt: text("raw_excerpt"),
     status: text("status", { enum: ["confirmed", "pending"] }).notNull().default("confirmed"),
-    createdAt: text("created_at").notNull()
+    createdAt: text("created_at").notNull(),
+    // MEJ-002 observation mode: NULL for rows imported before the verdict was recorded.
+    senderAuth: text("sender_auth", { enum: ["pass", "fail", "none"] })
   },
   (table) => ({
     userMessage: uniqueIndex("transactions_user_message_idx").on(table.userId, table.messageId)

@@ -96,7 +96,7 @@ HANDOFF) regardless of roadmap fit.
 
 ## Finance integrations — branch `claude/feature-conciliacion`
 
-> **State: unmerged.** Deployment status: see the operator. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data.
+> **State: merged into main via PR 58 and deployed on 2026-11-10.** Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data.
 > Everything below describes the code as written, not observed behavior. Not a roadmap phase; roadmap state stays in `DEPLOY-ROADMAP`.
 
 The branch adds three things on top of the budget plan: importing bank
@@ -109,9 +109,10 @@ the refined UI (eight navigation entries, including `/transactions` and
 ### Data flow (conceptual, not measured data)
 ```
 Mailbox (IMAP, read-only)
-  → From + Subject candidate filter      ← trust boundary: no sender authentication
+  → From + Subject candidate filter      ← trust boundary: sender auth recorded, not enforced
   → Itaú parser (purchase / transfer)
-      ├─ ok      → transactions (status = pending, dedup by Message-ID)
+      ├─ ok      → transactions (status = pending, dedup by Message-ID,
+      │              sender_auth = pass | fail | none, observation only)
       │              → /transactions: confirm or discard (transaction_reviews)
       │              → observed spending on the dashboard
       └─ failure → quarantine (locator + reason code, no body)
@@ -129,6 +130,7 @@ imported but only purchases enter the calculation.
 | `src/ingest/ingest-itau.ts` | One ingest pass over IMAP (the only mail provider; the Gmail API / OAuth path was removed): processes candidates, inserts as `pending` (dedup by Message-ID), writes an `ingest_runs` row |
 | `src/ingest/imap.ts`, `imap-quarantine.ts` | Read-only IMAP by UID window (500 UIDs, 1 MiB per message, up to 10 windows per pass); cursor = `UIDVALIDITY` + last UID in `ingest_cursors`; private JSON quarantine (UID + reason, max 1000) |
 | `src/ingest/itau-parser.ts`, `itau-transfer.ts` | Pure parsers. Candidate = sender address in the bank's domain + subject pattern. Defines the fixed quarantine reasons |
+| `src/ingest/sender-auth.ts` | Pure parser of `Authentication-Results` (8 KB cap per header, 32 instances, linear scanner, bounded regexes) and the per-notice verdict `pass` / `fail` / `none`; trusted authserv-id from `ITAU_IMAP_AUTHSERV_ID`. Observation only (MEJ-002) |
 | `src/ingest/trigger-token.ts` | Bearer token for the trigger routes, from `INGEST_TOKEN` or the private file `/app/data/ingest-token`; invalid or placeholder value → routes answer 503 |
 | `src/splitwise/*` | Client (pagination with a time budget and page cap, no item ceiling), credential (env or private file), snapshot store, activity/balance store, `syncSplitwise()` (chooses a full or incremental pass; details in `RUNBOOK`) |
 | `src/finance/actual-spending.ts`, `src/actions/reconciliation.ts` | Observed spending and pair rejection (see `FINANCIAL-RULES`) |
@@ -183,16 +185,37 @@ Two mutually exclusive ways to schedule the trigger routes: the Compose profiles
 to run if the app has `INGEST_TOKEN` set). Pick one. Procedures in `RUNBOOK`;
 unifying them is MEJ-005.
 
-### Trust boundary — bank e-mails are not authenticated
+### Trust boundary — bank e-mails: sender authentication recorded, not enforced
 A notice is accepted as a bank notice when its single `From` address is in the
 bank's domain and its subject matches a known pattern (`isItauAviso`,
-`isItauTransfer`). There is **no DKIM, DMARC or `Authentication-Results`
-check** anywhere in `src/`. Anyone able to deliver mail to the mailbox can
-forge such a notice; it would be imported as `pending` and **counted in
-observed spending until someone discards it** on `/transactions`. Mailbox
-authentication does not change this: it authenticates access to the mailbox, not the sender.
-Compensating control today: review pending notices before relying on the
-totals. Fix tracked as MEJ-002.
+`isItauTransfer`). Anyone able to deliver mail to the mailbox can forge such a
+notice; it is imported as `pending` and **counted in observed spending until
+someone discards it** on `/transactions`. Mailbox authentication does not change
+this: it authenticates access to the mailbox, not the sender.
+
+On branch `claude/feature-autenticidad-avisos` (not merged; MEJ-002 in
+observation mode):
+
+- **Recorded now:** each imported notice gets `transactions.sender_auth` =
+  `pass` | `fail` | `none` (NULL for rows imported earlier), computed by
+  `src/ingest/sender-auth.ts` from the `Authentication-Results` header of the
+  receiving mailbox provider. The header itself is not stored.
+- **Which header is trusted:** with `ITAU_IMAP_AUTHSERV_ID` set, the topmost
+  instance carrying that authserv-id; instances with any other authserv-id are
+  never used. Unset, only the topmost instance (weaker: it relies on the
+  provider always adding its own header above anything the sender wrote).
+- **Verdict:** `pass` = `dmarc=pass` for the `From` domain, or `dkim=pass`
+  signed by the `From` domain or a parent of it; `fail` = `dmarc=fail`,
+  `dmarc=pass` for another domain, or dkim results with no aligned pass;
+  `none` = no trusted header or no dkim/dmarc result.
+- **Shown:** `/transactions` labels `fail` ("Sender check failed") and `none`
+  ("Sender unverified") per row and counts pending notices that are not `pass`
+  in the page header.
+- **Still not enforced:** nothing is blocked or quarantined, and totals are
+  unchanged by the verdict. A forged notice still counts in observed spending
+  until discarded. Compensating control: review pending notices, starting with
+  the labelled ones, before relying on the totals. Enforcement is pending a
+  decision after checking real notices (MEJ-002).
 
 - Other boundaries in the code: the trigger token can only start a pass (it
   never reads data); provider error text is not persisted (fixed strings in
