@@ -301,6 +301,19 @@ export function migrate() {
       PRIMARY KEY (transaction_id, account_id, expense_id)
     );
 
+    -- Pairs the owner confirmed by hand (MEJ-003). One confirmation per bank purchase and
+    -- per Splitwise expense; the unique indexes enforce it even if a check is bypassed.
+    CREATE TABLE IF NOT EXISTS import_pair_confirmations (
+      transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      account_id INTEGER NOT NULL,
+      expense_id INTEGER NOT NULL,
+      PRIMARY KEY (transaction_id, account_id, expense_id)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS import_pair_confirmations_transaction_idx
+      ON import_pair_confirmations(transaction_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS import_pair_confirmations_expense_idx
+      ON import_pair_confirmations(account_id, expense_id);
+
     CREATE TABLE IF NOT EXISTS splitwise_sync_account (
       singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
       account_id INTEGER NOT NULL,

@@ -40,6 +40,8 @@ Importación · autenticidad del origen · Prioridad media · Antes de activar l
 ## MEJ-003 — Emparejamiento más flexible y confirmación manual de pares
 Conciliación · gasto observado · Prioridad baja · Al final del proyecto · `src/finance/actual-spending.ts`, `src/actions/reconciliation.ts`, tabla `import_pair_exclusions`
 
+**Estado:** parcialmente resuelta en la rama `claude/feature-pares-manuales` (sin mergear; lint, typecheck y tests pendientes de correr en el servidor): sugerencias con confirmación manual; la regla automática no cambia. El texto de abajo queda como historia del hallazgo.
+
 - **Qué:** permitir que un aviso del banco y un gasto de Splitwise se emparejen aunque no coincidan exactamente (otro día cercano, descripción escrita distinto) y agregar una acción "son el mismo gasto" para confirmar un par a mano. Hoy solo se puede *rechazar* un par que la regla automática encontró.
 - **Por qué:**
   - La regla exige mismo día UTC, misma descripción normalizada, misma moneda y mismo monto (detalle en `FINANCIAL-RULES`). Una compra cerca de la medianoche local o un comercio escrito distinto en Splitwise queda sin emparejar y se cuenta entero.
