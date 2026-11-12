@@ -352,6 +352,9 @@ export function migrate() {
 
   ensureColumn("transactions", "kind", "TEXT NOT NULL DEFAULT 'purchase' CHECK (kind IN ('purchase', 'transfer_out', 'transfer_in'))");
   ensureColumn("splitwise_imports", "category_id", "INTEGER REFERENCES categories(id)");
+  // Incremental Splitwise sync: latest provider updated_at committed, and the last full pass.
+  ensureColumn("splitwise_sync_account", "updated_watermark", "TEXT");
+  ensureColumn("splitwise_sync_account", "full_synced_at", "TEXT");
   ensureUserAuthColumns();
   migrateLegacyLocalUser();
   ensureColumn("recurring_expenses", "is_optional", "INTEGER NOT NULL DEFAULT 0 CHECK (is_optional IN (0, 1))");

@@ -147,7 +147,7 @@
       <figure style="margin:8px 0;">
         <svg viewBox="0 0 860 300" width="100%" role="img" aria-labelledby="flow-title flow-desc" style="max-width:100%; height:auto; font-family:ui-sans-serif, system-ui, sans-serif;">
           <title id="flow-title">Import and reconciliation data flow</title>
-          <desc id="flow-desc">Top row: the mailbox is read over IMAP; messages pass a From and Subject filter, then the Itaú parser; parsed notices are stored in the transactions table as pending, or their locator goes to quarantine. The /transactions screen confirms or discards them. Bottom row: the Splitwise API is read into splitwise_imports. Both feed observed spending on the dashboard, where pairs can be rejected into import_pair_exclusions. A red dashed line marks the trust boundary at the From and Subject filter: no sender authentication.</desc>
+          <desc id="flow-desc">Top row: the mailbox is read over IMAP; messages pass a From and Subject filter, then the Itaú parser; parsed notices are stored in the transactions table as pending, or their locator goes to quarantine. The /transactions screen confirms or discards them. Bottom row: the Splitwise API is read into splitwise_imports, incrementally by provider updated_at with a full pass at least every 7 days. Both feed observed spending on the dashboard, where pairs can be rejected into import_pair_exclusions. A red dashed line marks the trust boundary at the From and Subject filter: no sender authentication.</desc>
           <defs>
             <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#183153"/></marker>
           </defs>
@@ -182,7 +182,7 @@
 
             <rect x="330" y="220" width="150" height="54" rx="10" fill="#fff1ce" stroke="#97640f"/>
             <text x="405" y="243" text-anchor="middle" font-weight="700">splitwise_imports</text>
-            <text x="405" y="261" text-anchor="middle">full snapshot / run</text>
+            <text x="405" y="261" text-anchor="middle">incremental sync</text>
 
             <rect x="560" y="200" width="200" height="74" rx="10" fill="#e1f2e6" stroke="#207447"/>
             <text x="660" y="225" text-anchor="middle" font-weight="700">Observed spending</text>
@@ -212,7 +212,7 @@
         <tr><td><code class="inline">src/ingest/imap.ts</code>, <code class="inline">imap-quarantine.ts</code></td><td>Read-only IMAP by UID window (500 UIDs, 1 MiB per message, up to 10 windows per pass); cursor = <code class="inline">UIDVALIDITY</code> + last UID in <code class="inline">ingest_cursors</code>; private JSON quarantine (UID + reason, max 1000).</td></tr>
         <tr><td><code class="inline">src/ingest/itau-parser.ts</code>, <code class="inline">itau-transfer.ts</code></td><td>Pure parsers. Candidate = sender address in the bank's domain + subject pattern. Defines the fixed quarantine reasons.</td></tr>
         <tr><td><code class="inline">src/ingest/trigger-token.ts</code></td><td>Bearer token for the trigger routes, from <code class="inline">INGEST_TOKEN</code> or the private file <code class="inline">/app/data/ingest-token</code>; invalid or placeholder value → routes answer 503.</td></tr>
-        <tr><td><code class="inline">src/splitwise/*</code></td><td>Client (bounded pagination), credential (env or private file), snapshot store, activity/balance store, <code class="inline">syncSplitwise()</code>.</td></tr>
+        <tr><td><code class="inline">src/splitwise/*</code></td><td>Client (pagination with a time budget and page cap, no item ceiling), credential (env or private file), snapshot store, activity/balance store, <code class="inline">syncSplitwise()</code> (chooses a full or incremental pass; details in <a href="RUNBOOK.html">RUNBOOK</a>).</td></tr>
         <tr><td><code class="inline">src/finance/actual-spending.ts</code>, <code class="inline">src/actions/reconciliation.ts</code></td><td>Observed spending and pair rejection (see FINANCIAL-RULES).</td></tr>
         <tr><td><code class="inline">app/api/ingest/itau</code>, <code class="inline">app/api/ingest/splitwise</code></td><td>POST trigger routes: 503 not configured, 401 bad token (constant-time compare), 409 already running (per process), 500 generic failure.</td></tr>
         <tr><td><code class="inline">app/transactions</code>, <code class="inline">app/splitwise</code></td><td>Review screen (confirm/discard, category) and Splitwise page (stored expenses, live balances, activity).</td></tr>
@@ -224,7 +224,7 @@
         <tr><td><code class="inline">transactions</code></td><td>Imported notices; <code class="inline">kind</code> purchase / transfer_out / transfer_in; unique per user + Message-ID.</td></tr>
         <tr><td><code class="inline">transaction_reviews</code></td><td>Confirm/discard decision per transaction; the original import row is kept, the effective status is the decision if any.</td></tr>
         <tr><td><code class="inline">ingest_cursors</code>, <code class="inline">ingest_runs</code></td><td>IMAP cursor per mailbox identity hash; one row per ingest pass (counts, <code class="inline">ok</code>/<code class="inline">error</code>, fixed error text).</td></tr>
-        <tr><td><code class="inline">splitwise_sync_account</code>, <code class="inline">splitwise_imports</code></td><td>Pinned Splitwise account + last sync time; expenses by account and expense ID (shares as decimal strings).</td></tr>
+        <tr><td><code class="inline">splitwise_sync_account</code>, <code class="inline">splitwise_imports</code></td><td>Pinned Splitwise account + last sync time, update watermark (<code class="inline">updated_watermark</code>) and last full pass (<code class="inline">full_synced_at</code>); expenses by account and expense ID (shares as decimal strings).</td></tr>
         <tr><td><code class="inline">splitwise_activity_events</code>, <code class="inline">splitwise_activity_sync</code>, <code class="inline">splitwise_balance_observations</code></td><td>Bounded activity feed and balance observations.</td></tr>
         <tr><td><code class="inline">import_category_rules</code></td><td>Remembered category per normalized description, plus merchant-level rules (see below).</td></tr>
         <tr><td><code class="inline">import_pair_exclusions</code></td><td>Rejected bank ↔ Splitwise pairs.</td></tr>

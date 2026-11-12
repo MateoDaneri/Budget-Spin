@@ -117,7 +117,7 @@ Mailbox (IMAP, read-only)
       └─ failure → quarantine (locator + reason code, no body)
 
 Splitwise API (bearer API key)
-  → splitwise_imports (full snapshot per run)
+  → splitwise_imports (incremental by provider updated_at; full pass at least every 7 days)
   → observed spending on the dashboard → rejected pairs in import_pair_exclusions
 ```
 Pending notices count in observed spending until discarded; transfers are
@@ -130,7 +130,7 @@ imported but only purchases enter the calculation.
 | `src/ingest/imap.ts`, `imap-quarantine.ts` | Read-only IMAP by UID window (500 UIDs, 1 MiB per message, up to 10 windows per pass); cursor = `UIDVALIDITY` + last UID in `ingest_cursors`; private JSON quarantine (UID + reason, max 1000) |
 | `src/ingest/itau-parser.ts`, `itau-transfer.ts` | Pure parsers. Candidate = sender address in the bank's domain + subject pattern. Defines the fixed quarantine reasons |
 | `src/ingest/trigger-token.ts` | Bearer token for the trigger routes, from `INGEST_TOKEN` or the private file `/app/data/ingest-token`; invalid or placeholder value → routes answer 503 |
-| `src/splitwise/*` | Client (bounded pagination), credential (env or private file), snapshot store, activity/balance store, `syncSplitwise()` |
+| `src/splitwise/*` | Client (pagination with a time budget and page cap, no item ceiling), credential (env or private file), snapshot store, activity/balance store, `syncSplitwise()` (chooses a full or incremental pass; details in `RUNBOOK`) |
 | `src/finance/actual-spending.ts`, `src/actions/reconciliation.ts` | Observed spending and pair rejection (see `FINANCIAL-RULES`) |
 | `app/api/ingest/itau`, `app/api/ingest/splitwise` | POST trigger routes: 503 not configured, 401 bad token (constant-time compare), 409 already running (per process), 500 generic failure |
 | `app/transactions`, `app/splitwise` | Review screen (confirm/discard, category) and Splitwise page (stored expenses, live balances, activity) |
@@ -141,7 +141,7 @@ imported but only purchases enter the calculation.
 | `transactions` | Imported notices; `kind` purchase / transfer_out / transfer_in; unique per user + Message-ID |
 | `transaction_reviews` | Confirm/discard decision per transaction; the original import row is kept, the effective status is the decision if any |
 | `ingest_cursors`, `ingest_runs` | IMAP cursor per mailbox identity hash; one row per ingest pass (counts, `ok`/`error`, fixed error text) |
-| `splitwise_sync_account`, `splitwise_imports` | Pinned Splitwise account + last sync time; expenses by account and expense ID (shares as decimal strings) |
+| `splitwise_sync_account`, `splitwise_imports` | Pinned Splitwise account + last sync time, update watermark (`updated_watermark`) and last full pass (`full_synced_at`); expenses by account and expense ID (shares as decimal strings) |
 | `splitwise_activity_events`, `splitwise_activity_sync`, `splitwise_balance_observations` | Bounded activity feed and balance observations |
 | `import_category_rules` | Remembered category per normalized description, plus merchant-level rules (see below) |
 | `import_pair_exclusions` | Rejected bank ↔ Splitwise pairs |
