@@ -23,7 +23,9 @@ scanning as a gate.
 - **Image:** multi-stage Dockerfile. Builder runs `npm ci` + `next build`; final
   stage carries only the Next `standalone` output + `.next/static` + `public` +
   an esbuild-bundled `migrate.mjs`. No devDeps, no toolchain, no `src/`. Base
-  `node:24-slim` pinned by digest.
+  `node:24-slim` pinned by digest. The runtime stage applies Debian security updates
+  and removes npm, npx, yarn and corepack from the base image (since 2026-11-11);
+  the dev compose builds the `builder` stage, which keeps npm.
 - **Least privilege:** runs as `USER node` (uid 1000); code is root-owned
   read-only, only `/app/data` is writable.
 - **Startup:** `node migrate.mjs && node server.js` (no npm at runtime). The prod
