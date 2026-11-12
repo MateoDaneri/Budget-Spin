@@ -1,4 +1,5 @@
 import { getDb } from "./client";
+import { merchantKey } from "../finance/merchant-key";
 
 export const LOCAL_USER_ID = "mdaneri";
 const LEGACY_LOCAL_USER_ID = "local-user";
@@ -1362,13 +1363,43 @@ export function deletePlanItem(id: number) {
  * recorded for this user (idempotent re-processing). Returns whether a row was
  * actually inserted so the ingest run can report inserted vs skipped.
  */
-/** Call after migrate; exact-description rules are learned only from explicit edits. */
+/**
+ * Keys stored in import_category_rules.description_key:
+ *  - exact rule:    the trimmed, whitespace-collapsed, lower-cased description;
+ *  - merchant rule: MERCHANT_RULE_PREFIX + merchantKey(description).
+ * The prefix starts with a tab. An exact key is trim()med, and trim() removes
+ * exactly the characters \s matches, so an exact key can never start with a
+ * tab: the two kinds cannot collide and no schema change is needed.
+ */
+const MERCHANT_RULE_PREFIX = "\tmerchant:";
+
+function exactRuleKey(description: string): string {
+  return description.trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+}
+
+function merchantRuleKey(description: string): string | null {
+  const key = merchantKey(description);
+  return key === null ? null : MERCHANT_RULE_PREFIX + key;
+}
+
+function ruleCategory(key: string): number | undefined {
+  const rule = getDb().prepare(`SELECT c.id FROM import_category_rules r JOIN categories c ON c.id=r.category_id
+    WHERE r.description_key=? AND c.user_id=? AND c.type='expense' AND c.is_active=1`).get(key, LOCAL_USER_ID) as { id: number } | undefined;
+  return rule?.id;
+}
+
+/**
+ * Call after migrate. Lookup order: exact-description rule, then merchant-key
+ * rule, then the "Other" expense category. Rules are learned only from explicit
+ * edits; this only chooses a category for a row being created or still NULL.
+ */
 export function automaticImportCategory(description: string): number {
   const db = getDb();
-  const key = description.trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
-  const rule = db.prepare(`SELECT c.id FROM import_category_rules r JOIN categories c ON c.id=r.category_id
-    WHERE r.description_key=? AND c.user_id=? AND c.type='expense' AND c.is_active=1`).get(key, LOCAL_USER_ID) as { id: number } | undefined;
-  if (rule) return rule.id;
+  const exact = ruleCategory(exactRuleKey(description));
+  if (exact !== undefined) return exact;
+  const merchantRule = merchantRuleKey(description);
+  const byMerchant = merchantRule === null ? undefined : ruleCategory(merchantRule);
+  if (byMerchant !== undefined) return byMerchant;
   let other = db.prepare("SELECT id FROM categories WHERE user_id=? AND type='expense' AND is_active=1 AND lower(name)='other' ORDER BY id LIMIT 1").get(LOCAL_USER_ID) as { id: number } | undefined;
   if (!other) {
     const result = db.prepare("INSERT INTO categories (user_id, name, type, is_active, sort_order, created_at) VALUES (?, 'Other', 'expense', 1, 9999, ?)").run(LOCAL_USER_ID, nowIso());
@@ -1377,13 +1408,22 @@ export function automaticImportCategory(description: string): number {
   return other.id;
 }
 
+/**
+ * Remembers an explicit choice for the exact description and, when the
+ * description yields a non-generic merchant key, for that merchant (last choice
+ * wins). Only rules are written: categories already stored on other movements
+ * are never rewritten here.
+ */
 export function rememberImportCategory(description: string, categoryId: number) {
   const db = getDb();
   const valid = db.prepare("SELECT id FROM categories WHERE id=? AND user_id=? AND type='expense' AND is_active=1").get(categoryId, LOCAL_USER_ID);
   if (!valid) throw new Error("Invalid category.");
-  const key = description.trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+  const key = exactRuleKey(description);
   if (!key) throw new Error("Empty description.");
-  db.prepare("INSERT INTO import_category_rules (description_key, category_id) VALUES (?, ?) ON CONFLICT(description_key) DO UPDATE SET category_id=excluded.category_id").run(key, categoryId);
+  const upsert = db.prepare("INSERT INTO import_category_rules (description_key, category_id) VALUES (?, ?) ON CONFLICT(description_key) DO UPDATE SET category_id=excluded.category_id");
+  upsert.run(key, categoryId);
+  const merchantRule = merchantRuleKey(description);
+  if (merchantRule !== null) upsert.run(merchantRule, categoryId);
 }
 
 export function setTransactionCategory(id: number, categoryId: number) {
@@ -1549,6 +1589,7 @@ export function saveIngestCursor(mailboxKey: string, uidValidity: string, lastUi
 
 export function latestItauIngestRun(): { finishedAt: string | null; status: string; messagesSeen: number; inserted: number; skipped: number } | null {
   migrate();
-  const row = getDb().prepare("SELECT finished_at, status, messages_seen, inserted, skipped FROM ingest_runs WHERE source IN (?, ?) ORDER BY id DESC LIMIT 1").get("itau_email", "gmail_api") as { finished_at: string | null; status: string; messages_seen: number; inserted: number; skipped: number } | undefined;
+  // Only IMAP runs (`itau_email`). Rows from the removed Gmail API path (`gmail_api`) stay in the table but are not read.
+  const row = getDb().prepare("SELECT finished_at, status, messages_seen, inserted, skipped FROM ingest_runs WHERE source = ? ORDER BY id DESC LIMIT 1").get("itau_email") as { finished_at: string | null; status: string; messages_seen: number; inserted: number; skipped: number } | undefined;
   return row ? { finishedAt: row.finished_at, status: row.status, messagesSeen: row.messages_seen, inserted: row.inserted, skipped: row.skipped } : null;
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install IMAP credentials through a terminal and Docker stdin, never argv.
 
-This stages credentials only. It does not switch the provider or touch OAuth.
+This stages credentials only. It does not start or change the scheduler.
 Run on the Docker host in an interactive terminal, never through a chat.
 """
 import getpass
@@ -48,7 +48,7 @@ def main():
                             stderr=subprocess.DEVNULL, check=False, timeout=30)
     if result.returncode:
         raise RuntimeError('Could not install; file may already exist or Docker may be unavailable.')
-    print('Credential staged privately. OAuth and scheduler remain unchanged.')
+    print('Credential staged privately. Scheduler remains unchanged.')
 
 if __name__ == '__main__':
     try:

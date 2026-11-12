@@ -4,7 +4,7 @@ import { runItauIngest } from "../src/ingest/ingest-itau";
 import { mailboxCursorKey, readImapConfigFromEnv } from "../src/ingest/imap";
 
 async function main() {
-  if (process.env.DATABASE_PATH !== "/shadow/budgetspin.sqlite" || process.env.ITAU_IMAP_STATE_DIR !== "/shadow/state" || process.env.ITAU_IMAP_CREDENTIALS_PATH !== "/secrets/imap-credentials.json" || process.env.ITAU_INGEST_PROVIDER !== "imap") throw new Error("Isolated configuration required.");
+  if (process.env.DATABASE_PATH !== "/shadow/budgetspin.sqlite" || process.env.ITAU_IMAP_STATE_DIR !== "/shadow/state" || process.env.ITAU_IMAP_CREDENTIALS_PATH !== "/secrets/imap-credentials.json") throw new Error("Isolated configuration required.");
   const config = readImapConfigFromEnv();
   if (!config) throw new Error("IMAP credential unavailable.");
   const key = mailboxCursorKey(config);

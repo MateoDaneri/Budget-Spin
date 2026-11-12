@@ -718,6 +718,7 @@ failed to calculate checksum of ref ...: "/app/public": not found</pre>
           </div>
         </div>
         <p>La corrida queda con <code class="inline">status = 'error'</code> y el texto "Unrecognized notices retained for review." mientras haya algo en cuarentena, para que no pase desapercibido.</p>
+        <p><strong>Nota posterior (2026-11-10):</strong> la ruta Gmail API / OAuth se eliminó después de este fix; la importación usa solo IMAP. La capa "Gmail" y <code class="inline">src/ingest/gmail.ts</code> ya no existen. Para IMAP, <code class="inline">ingest_runs</code> guarda el texto fijo "IMAP synchronization failed.".</p>
       </section>
 
       <div class="callout lesson">

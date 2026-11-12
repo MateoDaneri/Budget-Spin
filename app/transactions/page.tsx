@@ -35,18 +35,17 @@ export default async function TransactionsPage({ searchParams }: Props) {
         <div>
           <span className="eyebrow">Imported activity</span>
           <h1>Transactions</h1>
-          <p className="muted">Imported notifications, dated by email. Purchases appear in observed spending; they do not change the recurring plan.</p>
         </div>
       </section>
       {error ? <div className="alert" role="alert">{error}</div> : null}
       <section className="activity-overview" aria-label="Import overview">
-        <div><span className="activity-icon" aria-hidden="true">↔</span><span><small>Import status</small><strong>{latestRun ? latestRun.status === "ok" ? "Last check completed" : "Last check failed" : "No checks yet"}</strong><small>{latestRun ? `${latestRun.finishedAt ?? "—"} · ${latestRun.inserted} imported` : "Transactions will appear here after a check."}</small></span></div>
-        <div><span><small>Recent imports</small><strong>{transactions.length}</strong><small>Up to 200 notifications</small></span></div>
-        <div><span><small>Pending review</small><strong>{transactions.filter((transaction) => transaction.status === "pending").length}</strong><small>Among recent imports</small></span></div>
+        <div><span className="activity-icon" aria-hidden="true">↔</span><span><small>Import status</small><strong>{latestRun ? latestRun.status === "ok" ? "Last check completed" : "Last check failed" : "No checks yet"}</strong><small>{latestRun ? `${latestRun.finishedAt ?? "—"} · ${latestRun.inserted} imported` : "—"}</small></span></div>
+        <div><span><small>Recent imports</small><strong>{transactions.length}</strong><small>Last 200</small></span></div>
+        <div><span><small>Pending review</small><strong>{transactions.filter((transaction) => transaction.status === "pending").length}</strong><small>To confirm</small></span></div>
       </section>
       <section className="panel activity-list">
         <div className="panel-header">
-          <div><h2>Recent imports</h2><p className="muted">Up to 200 recent notifications.</p></div>
+          <h2>Recent imports</h2>
         </div>
         {transactions.length === 0 ? <p className="muted">No imported transactions yet.</p> : (
           <>
