@@ -105,7 +105,9 @@ export const transactions = sqliteTable(
     messageId: text("message_id"),
     rawExcerpt: text("raw_excerpt"),
     status: text("status", { enum: ["confirmed", "pending"] }).notNull().default("confirmed"),
-    createdAt: text("created_at").notNull()
+    createdAt: text("created_at").notNull(),
+    // MEJ-002 observation mode: NULL for rows imported before the verdict was recorded.
+    senderAuth: text("sender_auth", { enum: ["pass", "fail", "none"] })
   },
   (table) => ({
     userMessage: uniqueIndex("transactions_user_message_idx").on(table.userId, table.messageId)
@@ -210,7 +212,9 @@ export const importPairConfirmations = sqliteTable(
 export const splitwiseSyncAccount = sqliteTable("splitwise_sync_account", {
   singleton: integer("singleton").primaryKey(),
   accountId: integer("account_id").notNull(),
-  syncedAt: text("synced_at").notNull()
+  syncedAt: text("synced_at").notNull(),
+  updatedWatermark: text("updated_watermark"),
+  fullSyncedAt: text("full_synced_at")
 });
 
 export const splitwiseImports = sqliteTable(

@@ -259,11 +259,45 @@ added to budget totals. The dashboard's observed-spending view can pair them
 with bank notices; the rules are in `FINANCIAL-RULES`. The authenticated user's paid
 and owed shares are stored as decimal strings. Payments and deletion flags are
 preserved when supplied by Splitwise; records absent from a response are not
-assumed deleted. Each complete pass reads at most 100 pages of 20; failure or an
-exceeded bound leaves the prior snapshot intact. This is a bounded full scan,
-not a guarantee that every deletion or concurrent change will be observed. The
-page shows the latest 200 stored records and last successful synchronization.
-Real-account behavior and provider rate limits still need verification.
+assumed deleted. The page shows the latest 200 stored records and last
+successful synchronization. Real-account behavior and provider rate limits
+still need verification.
+
+Each run is either a full pass or an incremental pass:
+
+| Pass | When | What it requests | Saved state |
+|---|---|---|---|
+| Full | no watermark yet (first run, or a database from before this change), or the last full pass is 7 days old or older | every expense updated before the run start | rows, `updated_watermark`, `full_synced_at` |
+| Incremental | otherwise (normally every hourly run) | expenses with `updated_after` = watermark minus 5 minutes, and `updated_before` = run start | rows, `updated_watermark` |
+
+- The **watermark** (`splitwise_sync_account.updated_watermark`) is the latest
+  provider `updated_at` seen in a committed pass, never the local clock. It is
+  written in the same transaction as the rows and never moves backwards. The
+  5-minute overlap re-reads a few already-stored expenses; the upsert by account
+  and expense ID makes that harmless and keeps owner-set categories.
+- A deletion is stored only when Splitwise returns the expense with `deleted_at`.
+  The official API reference does not state whether `get_expenses` returns
+  deleted expenses, so this is not guaranteed; a full pass does not infer
+  deletions from absence either.
+- Pages are 20 expenses, with no item ceiling. A pass stops with an explicit
+  reason after 5 minutes (`time-budget`) or 1,000 pages (`page-cap`). A failed
+  or stopped pass saves nothing and leaves the watermark unchanged; the next run
+  repeats the same window.
+
+Inspect the sync state:
+
+```sh
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
+  node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite', { readOnly: true }); console.table(db.prepare('SELECT synced_at, updated_watermark, full_synced_at FROM splitwise_sync_account').all()); db.close();"
+```
+
+To force a full pass on the next run, clear the watermark (rows and categories
+are kept):
+
+```sh
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
+  node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite'); db.prepare('UPDATE splitwise_sync_account SET updated_watermark = NULL').run(); db.close();"
+```
 
 The optional activity extension records the most recent 100 Splitwise
 notifications at each successful check, retaining only supported event types
@@ -283,11 +317,11 @@ as purchases. Categories do not cause imports to be counted in budget totals.
 
 ## Import and sync operations
 
-> Branch `claude/feature-conciliacion`: unmerged. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data.
-> Deployment status: see the operator. The commands below follow the code as
+> Merged into main via PR 58 and deployed on 2026-11-10. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data.
+> The commands below follow the code as
 > written and have not been exercised one by one.
-> Architecture and the trust boundary (bank e-mails are not sender-authenticated)
-> are in `HANDOFF`; observed-spending rules in `FINANCIAL-RULES`.
+> Architecture and the trust boundary (bank e-mail sender authentication is
+> recorded but not enforced) are in `HANDOFF`; observed-spending rules in `FINANCIAL-RULES`.
 
 ### Environment variables (names only — values live in the untracked `.env.production`)
 | Variable | Read by | Notes |
@@ -298,6 +332,7 @@ as purchases. Categories do not cause imports to be counted in budget totals.
 | `ITAU_IMAP_HOST`, `ITAU_IMAP_PORT`, `ITAU_IMAP_USER`, `ITAU_IMAP_PASSWORD`, `ITAU_IMAP_MAILBOX` | app (IMAP) | Port defaults to 993, mailbox to `INBOX` |
 | `ITAU_IMAP_CREDENTIALS_PATH` | app (IMAP) | Private JSON `{"user","password"}` used when the user/password variables are unset (default `/app/data/imap-credentials.json`) |
 | `ITAU_IMAP_STATE_DIR` | app (IMAP) | Quarantine directory (default `/app/data/ingest-state`) |
+| `ITAU_IMAP_AUTHSERV_ID` | app (IMAP) | Optional. authserv-id of the mailbox provider's own `Authentication-Results` header; see [Sender authentication](#sender-authentication-observation-mode-mej-002). Unset = topmost header only (weaker) |
 | `SPLITWISE_API_KEY` | app (Splitwise) | Read by the code but **not listed** in `.env.production.example`. Preferred: the private file `/app/data/splitwise-api-key` |
 
 ### Two activation paths — pick one
@@ -337,7 +372,8 @@ Splitwise answers `{"ok":true}`.
 ### Where to see results
 - **`/transactions`**: last Itaú check (completed/failed, time, imported count),
   pending count among the latest 200 imports, and Confirm / Discard per notice.
-  Pending notices count in observed spending until discarded.
+  Pending notices count in observed spending until discarded. Sender
+  authentication labels: see [Sender authentication](#sender-authentication-observation-mode-mej-002).
 - **`ingest_runs`** (one row per Itaú pass, source `itau_email`; errors are fixed
   strings, never provider text. Older `gmail_api` rows from the removed Gmail API
   path may remain and are no longer read by the app):
@@ -346,8 +382,10 @@ Splitwise answers `{"ok":true}`.
     node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite'); console.table(db.prepare('SELECT id, source, started_at, finished_at, messages_seen, inserted, skipped, status, error FROM ingest_runs ORDER BY id DESC LIMIT 10').all()); db.close();"
   ```
 - **Splitwise** writes no `ingest_runs` row. `/splitwise` shows the last
-  successful sync (`splitwise_sync_account.synced_at`); the trigger's HTTP status
-  and the scheduler log are the only per-run signal.
+  successful sync (`splitwise_sync_account.synced_at`); the trigger's HTTP status,
+  the scheduler log and the app log are the only per-run signal. A pass stopped
+  by its own bound logs `[splitwise-sync] <full|incremental> pass stopped
+  (time-budget|page-cap); nothing saved, watermark unchanged.` in the app log.
 - **Scheduler logs**: a failed trigger prints `[ingest] trigger failed`,
   `[splitwise-ingest] trigger failed` (Compose) or `sync trigger failed` (script).
 
@@ -375,6 +413,63 @@ While anything is retained, the pass is recorded with `status = 'error'` and
 more fails. The code has no
 command to remove an entry by hand.
 
+### Sender authentication (observation mode, MEJ-002)
+Branch `claude/feature-autenticidad-avisos` (not merged). Each imported notice
+records a verdict in `transactions.sender_auth` from the `Authentication-Results`
+header written by the mailbox provider. **Nothing is blocked and totals do not
+change**; the verdict is only shown.
+
+```
+Message headers, top to bottom (conceptual)
+  Authentication-Results: <mailbox-provider-authserv-id>; dkim=…; dmarc=…   ← added on receipt: trusted
+  Received: …
+  Authentication-Results: <anything>; dkim=pass …                          ← may come from the sender: ignored
+  From: …@<bank-domain>
+```
+
+**Find the trusted authserv-id** (once per mailbox provider):
+1. In the mailbox web UI, open a real bank notice and choose "Show original"
+   (or "View source" / "View message source").
+2. Find the **topmost** `Authentication-Results:` header. Do not use
+   `ARC-Authentication-Results`. The authserv-id is the first token, before
+   the first `;`.
+3. Check two or three notices, and one message from an unrelated sender: the
+   topmost authserv-id should be the same in all of them (it identifies the
+   provider, not the sender). If it differs between messages, leave the
+   variable unset and note it in MEJ-002.
+
+**Set it** in the untracked `.env.production`, then recreate the app so it
+reads the file again:
+```sh
+# .env.production
+ITAU_IMAP_AUTHSERV_ID=<mailbox-provider-authserv-id>
+
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --force-recreate app
+```
+Unset or blank: only the topmost header is used, which is weaker (it relies on
+the provider always adding its own header). Set: only the topmost header with
+that authserv-id is used; any other is ignored. The verdict is computed once, at
+import; changing the variable does not recompute older rows.
+
+**Read the verdicts:**
+
+| `sender_auth` | Meaning | `/transactions` |
+|---|---|---|
+| `pass` | `dmarc=pass` for the From domain, or `dkim=pass` signed by the From domain or a parent of it | nothing |
+| `fail` | `dmarc=fail`, `dmarc=pass` for another domain, or dkim results without an aligned pass | "Sender check failed" |
+| `none` | no trusted header, or it has no dkim/dmarc result | "Sender unverified" |
+| NULL | imported before this change | nothing |
+
+The page header shows "N pending unverified" when any pending notice is `fail`
+or `none` (among the latest 200 imports). Discard a forged notice with Discard,
+as before. Counts by verdict and review state:
+```sh
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
+  node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite'); console.table(db.prepare('SELECT t.sender_auth, COALESCE(r.decision, t.status) AS status, COUNT(*) AS notices FROM transactions t LEFT JOIN transaction_reviews r ON r.transaction_id = t.id GROUP BY t.sender_auth, status ORDER BY t.sender_auth, status').all()); db.close();"
+```
+If real bank notices come out `fail` or `none`, record what the topmost header
+showed (results only, no addresses) in MEJ-002 before deciding on enforcement.
+
 ### Enable / disable the schedulers
 ```sh
 # Compose path
@@ -400,7 +495,7 @@ anything that can reach the app. Remove or rotate the token to fully disable.
 | 401 `Unauthorized.` | scheduler token ≠ app token | a shell-exported `INGEST_TOKEN` overriding Compose interpolation; both activation paths mixed |
 | 409 `Ingest already running.` | a pass is still running in that process | wait; do not run several app replicas |
 | 500 `Ingest failed.` | the pass threw | latest `ingest_runs` row: `IMAP synchronization failed.` → credential, connection or provider; also cursor errors and a full quarantine. **No new row** → it failed before the pass: IMAP not configured, or an IMAP credential file that is not private or not valid. The route does not log the exception |
-| 500 on Splitwise | sync threw | `/splitwise` banner (not configured / rejected credential / rate limited / unavailable); key file private; a changed Splitwise account is refused and the existing imports are kept; 2,000+ expenses make every sync fail (MEJ-004) |
+| 500 on Splitwise | sync threw | `/splitwise` banner (not configured / rejected credential / rate limited / unavailable); key file private; a changed Splitwise account is refused and the existing imports are kept; app log `[splitwise-sync] … pass stopped (time-budget)` → provider slow or throttled, retried next run with the same window; `(page-cap)` → more than 20,000 expenses in one window, the cap needs raising. Nothing is saved and the watermark does not move on any failure |
 | 200 but `status = 'error'` | items in quarantine | see Quarantine |
 | 200, `inserted = 0` for days | possibly a changed bank e-mail format | no automatic watchdog exists; compare with the mailbox |
 

@@ -1,6 +1,9 @@
 services:
   app:
-    build: .
+    # Dev usa el stage builder: tiene npm y devDependencies; el runtime no.
+    build:
+      context: .
+      target: builder
     command: sh -c "npm run db:migrate && npm run dev"
     environment:
       DATABASE_PATH: /app/data/budgetspin.sqlite

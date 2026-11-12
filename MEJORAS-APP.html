@@ -99,6 +99,11 @@
     .callout.resolved { background: var(--green-soft); border-color: var(--green); }
     .callout.resolved h4 { color: var(--green); }
     .status-note { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--green); }
+    .tag.partial { background: var(--amber-soft); border-color: #ecd79a; color: var(--amber); }
+    .tag.partial code { font-size: 11px; }
+    .status-note.partial { color: var(--amber); }
+    .callout.partial { background: var(--amber-soft); border-color: var(--amber); }
+    .callout.partial h4 { color: var(--amber); }
 
     footer { max-width: 880px; margin: 0 auto; padding: 0 22px 50px; color: var(--muted); font-size: 13px; }
   </style>
@@ -171,7 +176,7 @@
     </article>
 
     <div class="howto">
-      <strong>MEJ-002 a MEJ-007</strong> surgen de la rama <code class="inline">claude/feature-conciliacion</code> (importación de avisos Itaú, Splitwise y gasto observado). Esa rama <strong>no está mergeada</strong> (estado de despliegue: consultar al operador), ; lint, typecheck, la suite de tests (126) y el build de producción pasaron con Node 24 el 2026-11-10 sobre el commit <code class="inline">b71b5de</code>; no se comprobó contra datos reales del banco ni de Splitwise: cada entrada describe el código tal como está escrito, no un comportamiento verificado en ejecución.
+      <strong>MEJ-002 a MEJ-007</strong> surgen de la rama <code class="inline">claude/feature-conciliacion</code> (importación de avisos Itaú, Splitwise y gasto observado). Ese trabajo se integró en <code class="inline">main</code> con el PR 58 y se desplegó el 2026-11-10. Cada entrada indica su propio estado.
     </div>
 
     <!-- ====================== MEJORA #2 ====================== -->
@@ -182,9 +187,11 @@
           <span class="tag area">Importación · autenticidad del origen</span>
           <span class="tag prio-med">Prioridad media</span>
           <span class="tag when">Antes de activar la importación</span>
+          <span class="tag partial">Modo observación en <code>claude/feature-autenticidad-avisos</code> · sin mergear</span>
         </div>
         <h2>Autenticar el remitente de los avisos del banco</h2>
         <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/ingest/itau-parser.ts</code> (<code class="inline">isItauAviso</code>), <code class="inline">src/ingest/itau-transfer.ts</code> (<code class="inline">isItauTransfer</code>), <code class="inline">src/ingest/imap.ts</code></p>
+        <p class="status-note partial">Estado: modo observación implementado en la rama <code class="inline">claude/feature-autenticidad-avisos</code> (sin mergear; lint, typecheck, tests y build pasaron en el servidor el 2026-11-11); el bloqueo queda pendiente de una decisión después de revisar avisos reales. El texto de abajo queda como historia del hallazgo.</p>
       </div>
 
       <section class="block">
@@ -219,6 +226,21 @@
         <h3>Cuándo</h3>
         <p>Antes de activar el scheduler de importación con un buzón real. Es la mejora de este grupo con más impacto en la integridad de los datos.</p>
       </section>
+
+      <div class="callout partial">
+        <h4>Implementado (modo observación)</h4>
+        <ul style="margin-bottom:0;">
+          <li>Cada aviso importado guarda un veredicto en <code class="inline">transactions.sender_auth</code>: <code class="inline">pass</code>, <code class="inline">fail</code> o <code class="inline">none</code>. Las filas importadas antes quedan en <code class="inline">NULL</code> (columna agregada con <code class="inline">ensureColumn</code>, sin migración destructiva). El encabezado no se guarda.</li>
+          <li>Encabezado confiable: con <code class="inline">ITAU_IMAP_AUTHSERV_ID</code> definida, el <code class="inline">Authentication-Results</code> más alto que tenga ese <code class="inline">authserv-id</code>; uno con otro <code class="inline">authserv-id</code> nunca se usa. Sin la variable, solo el más alto, lo que es más débil: depende de que el proveedor siempre agregue el suyo.</li>
+          <li><code class="inline">pass</code>: <code class="inline">dmarc=pass</code> con <code class="inline">header.from</code> igual al dominio del <code class="inline">From</code>, o <code class="inline">dkim=pass</code> con <code class="inline">header.d</code> (o el dominio de <code class="inline">header.i</code>) igual al dominio del <code class="inline">From</code> o padre de él. <code class="inline">fail</code>: <code class="inline">dmarc=fail</code>, <code class="inline">dmarc=pass</code> evaluado para otro dominio, o resultados <code class="inline">dkim</code> sin ninguno alineado que pase. <code class="inline">none</code>: sin encabezado confiable o sin resultados <code class="inline">dkim</code>/<code class="inline">dmarc</code>.</li>
+          <li>La alineación es más estricta que la de DMARC relajado (sin lista de sufijos públicos): una firma de un subdominio del <code class="inline">From</code> no cuenta como alineada por sí sola, y un dominio de una sola etiqueta nunca se alinea.</li>
+          <li>Parser defensivo (<code class="inline">src/ingest/sender-auth.ts</code>, función pura): tope de 8 KB por encabezado y de 32 instancias, escáner lineal para comentarios y cadenas entre comillas, expresiones regulares fijas y acotadas.</li>
+          <li>No bloquea, no manda a cuarentena y no cambia totales: el gasto observado es el mismo con o sin veredicto.</li>
+          <li><code class="inline">/transactions</code> muestra <em>Sender check failed</em> (<code class="inline">fail</code>) o <em>Sender unverified</em> (<code class="inline">none</code>) por fila, y un contador <em>N pending unverified</em> en la cabecera. Nada para <code class="inline">pass</code> ni para filas antiguas.</li>
+          <li>Tests: <code class="inline">tests/sender-auth.test.ts</code> (parser, alineación, selección del encabezado) y <code class="inline">tests/ingest-itau.test.ts</code> (veredicto guardado, encabezado inferior falsificado, gasto observado sin cambios).</li>
+          <li>Pendiente: revisar avisos reales, confirmar que el banco firma con un dominio alineado y decidir si los que fallan van a cuarentena con un motivo nuevo (p. ej. <code class="inline">unauthenticated</code>).</li>
+        </ul>
+      </div>
     </article>
 
     <!-- ====================== MEJORA #3 ====================== -->
@@ -376,7 +398,7 @@
         </div>
         <h2>Autenticar <code>/api/fx-rate</code> y acotar la exclusión <code>api</code> del proxy</h2>
         <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">proxy.ts</code> (<code class="inline">config.matcher</code>), <code class="inline">app/api/fx-rate/route.ts</code></p>
-        <p class="status-note">Estado: resuelta en la rama <code class="inline">claude/fix-endurecimiento-seguridad</code> (sin mergear; lint, typecheck y tests pendientes de correr en el servidor). El texto de abajo queda como historia del hallazgo.</p>
+        <p class="status-note">Estado: resuelta en la rama <code class="inline">claude/fix-endurecimiento-seguridad</code> (PR 63, sin mergear; lint, typecheck, 168 tests y build pasaron en el servidor el 2026-11-11). El texto de abajo queda como historia del hallazgo.</p>
       </div>
 
       <section class="block">
@@ -436,7 +458,7 @@
         </div>
         <h2>Códigos de error fijos en lugar de texto libre en <code>?error=</code></h2>
         <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/actions/forms.ts</code> (<code class="inline">redirectWithError</code>), <code class="inline">src/actions/auth.ts</code>, <code class="inline">app/expenses/page.tsx</code>, <code class="inline">app/income/page.tsx</code>, <code class="inline">app/plans/page.tsx</code>, <code class="inline">app/login/page.tsx</code></p>
-        <p class="status-note">Estado: resuelta en la rama <code class="inline">claude/fix-endurecimiento-seguridad</code> (sin mergear; lint, typecheck y tests pendientes de correr en el servidor). El texto de abajo queda como historia del hallazgo.</p>
+        <p class="status-note">Estado: resuelta en la rama <code class="inline">claude/fix-endurecimiento-seguridad</code> (PR 63, sin mergear; lint, typecheck, 168 tests y build pasaron en el servidor el 2026-11-11). El texto de abajo queda como historia del hallazgo.</p>
       </div>
 
       <section class="block">

@@ -20,13 +20,13 @@ Capa de datos · migraciones · Prioridad media · Al final del proyecto · `src
 - **Cuándo:** al final del proyecto, junto con los TODOs de cierre (p. ej. migración a Renovate). No es parte de la Fase 2.
 
 > MEJ-002 a MEJ-007 surgen de la rama `claude/feature-conciliacion` (importación
-> de avisos Itaú, Splitwise y gasto observado). Esa rama **no está mergeada**
-> (estado de despliegue: consultar al operador), ; lint, typecheck, la suite de tests (126) y el build de producción pasaron con Node 24 el 2026-11-10 sobre el commit `b71b5de`; no se comprobó contra datos reales del banco ni de Splitwise:
-> cada entrada describe el código tal como está escrito, no un
-> comportamiento verificado en ejecución.
+> de avisos Itaú, Splitwise y gasto observado). Ese trabajo se integró en `main`
+> con el PR 58 y se desplegó el 2026-11-10. Cada entrada indica su propio estado.
 
 ## MEJ-002 — Autenticar el remitente de los avisos del banco
 Importación · autenticidad del origen · Prioridad media · Antes de activar la importación · `src/ingest/itau-parser.ts` (`isItauAviso`), `src/ingest/itau-transfer.ts` (`isItauTransfer`), `src/ingest/imap.ts`
+
+**Estado:** modo observación implementado en la rama `claude/feature-autenticidad-avisos` (sin mergear; lint, typecheck, tests y build pasaron en el servidor el 2026-11-11); el bloqueo queda pendiente de una decisión después de revisar avisos reales. El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** antes de importar un aviso, exigir que el correo esté autenticado por el proveedor que lo recibió: `dkim=pass` (y/o `dmarc=pass`) alineado con el dominio del banco, leído del encabezado `Authentication-Results` que agrega el propio buzón. Hoy un aviso se acepta solo porque la dirección de `From` termina en el dominio del banco y el asunto coincide con un patrón.
 - **Por qué:**
@@ -36,6 +36,16 @@ Importación · autenticidad del origen · Prioridad media · Antes de activar l
 - **Cómo (verificar al implementar):** pedir `Authentication-Results` junto con `From` y `Subject` (IMAP ya descarga el mensaje completo de los candidatos). Confiar solo en el encabezado del servidor propio (por su `authserv-id`), nunca en uno incluido en el mensaje original. Empezar en modo observación: registrar sin bloquear, comprobar con avisos reales que el banco firma con un dominio alineado (no verificado) y recién después mandar a cuarentena los que fallen con un motivo nuevo (p. ej. `unauthenticated`).
 - **Alcance y riesgo:** toca el parser y el lector IMAP. Si el banco no firma, o firma con otro dominio, un control estricto dejaría todos los avisos en cuarentena: primero observar. Mientras no exista, el control compensatorio es revisar los pendientes antes de confiar en el total (ver `HANDOFF`, límite de confianza).
 - **Cuándo:** antes de activar el scheduler de importación con un buzón real. Es la mejora de este grupo con más impacto en la integridad de los datos.
+- **Implementado (modo observación):**
+  - Cada aviso importado guarda un veredicto en `transactions.sender_auth`: `pass`, `fail` o `none`. Las filas importadas antes quedan en `NULL` (columna agregada con `ensureColumn`, sin migración destructiva). El encabezado no se guarda.
+  - Encabezado confiable: con `ITAU_IMAP_AUTHSERV_ID` definida, el `Authentication-Results` más alto que tenga ese `authserv-id`; uno con otro `authserv-id` nunca se usa. Sin la variable, solo el más alto, lo que es más débil: depende de que el proveedor siempre agregue el suyo.
+  - `pass`: `dmarc=pass` con `header.from` igual al dominio del `From`, o `dkim=pass` con `header.d` (o el dominio de `header.i`) igual al dominio del `From` o padre de él. `fail`: `dmarc=fail`, `dmarc=pass` evaluado para otro dominio, o resultados `dkim` sin ninguno alineado que pase. `none`: sin encabezado confiable o sin resultados `dkim`/`dmarc`.
+  - La alineación es más estricta que la de DMARC relajado (sin lista de sufijos públicos): una firma de un subdominio del `From` no cuenta como alineada por sí sola, y un dominio de una sola etiqueta nunca se alinea.
+  - Parser defensivo (`src/ingest/sender-auth.ts`, función pura): tope de 8 KB por encabezado y de 32 instancias, escáner lineal para comentarios y cadenas entre comillas, expresiones regulares fijas y acotadas.
+  - No bloquea, no manda a cuarentena y no cambia totales: el gasto observado es el mismo con o sin veredicto.
+  - `/transactions` muestra *Sender check failed* (`fail`) o *Sender unverified* (`none`) por fila, y un contador *N pending unverified* en la cabecera. Nada para `pass` ni para filas antiguas.
+  - Tests: `tests/sender-auth.test.ts` (parser, alineación, selección del encabezado) y `tests/ingest-itau.test.ts` (veredicto guardado, encabezado inferior falsificado, gasto observado sin cambios).
+  - Pendiente: revisar avisos reales, confirmar que el banco firma con un dominio alineado y decidir si los que fallan van a cuarentena con un motivo nuevo (p. ej. `unauthenticated`).
 
 ## MEJ-003 — Emparejamiento más flexible y confirmación manual de pares
 Conciliación · gasto observado · Prioridad baja · Al final del proyecto · `src/finance/actual-spending.ts`, `src/actions/reconciliation.ts`, tabla `import_pair_exclusions`
@@ -77,7 +87,7 @@ Operación · schedulers · Prioridad media · Al final del proyecto · `docker-
 ## MEJ-006 — Autenticar `/api/fx-rate` y acotar la exclusión `api` del proxy
 Seguridad · rutas API · Prioridad media · Al final del proyecto · `proxy.ts` (`config.matcher`), `app/api/fx-rate/route.ts`
 
-**Estado:** resuelta en la rama `claude/fix-endurecimiento-seguridad` (sin mergear; lint, typecheck y tests pendientes de correr en el servidor). El texto de abajo queda como historia del hallazgo.
+**Estado:** resuelta en la rama `claude/fix-endurecimiento-seguridad` (PR 63, sin mergear; lint, typecheck, 168 tests y build pasaron en el servidor el 2026-11-11). El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** el matcher del proxy es `/((?!_next/static|_next/image|favicon.ico|api).*)`: excluye de la verificación de sesión **toda** ruta que empiece con `api`, no solo las de importación. `/api/fx-rate` no verifica sesión por su cuenta, así que responde sin autenticación.
 - **Por qué:**
@@ -97,7 +107,7 @@ Seguridad · rutas API · Prioridad media · Al final del proyecto · `proxy.ts`
 ## MEJ-007 — Códigos de error fijos en lugar de texto libre en `?error=`
 Server actions · mensajes de error · Prioridad baja · Al final del proyecto · `src/actions/forms.ts` (`redirectWithError`), `src/actions/auth.ts`, `app/expenses/page.tsx`, `app/income/page.tsx`, `app/plans/page.tsx`, `app/login/page.tsx`
 
-**Estado:** resuelta en la rama `claude/fix-endurecimiento-seguridad` (sin mergear; lint, typecheck y tests pendientes de correr en el servidor). El texto de abajo queda como historia del hallazgo.
+**Estado:** resuelta en la rama `claude/fix-endurecimiento-seguridad` (PR 63, sin mergear; lint, typecheck, 168 tests y build pasaron en el servidor el 2026-11-11). El texto de abajo queda como historia del hallazgo.
 
 - **Qué:** las acciones de gastos, ingresos, planes (y categorías) redirigen con `?error=<error.message>`, y login con mensajes propios o el de la excepción. Las páginas de gastos, ingresos, planes y login muestran ese parámetro tal cual. Pasar a códigos fijos que la página traduce a un texto conocido, como ya hacen `/transactions` (tabla `ERROR_MESSAGES`) y `/splitwise`.
 - **Por qué:**

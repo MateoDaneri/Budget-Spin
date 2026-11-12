@@ -4,10 +4,9 @@
 > Describes the "Observed spending" estimate on the dashboard, as implemented in
 > `src/finance/actual-spending.ts` (`calculateActualMonth`) and wired in `app/page.tsx`.
 
-**Status:** this logic lives on an unmerged branch. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data. Everything below describes what the code says, not observed
-results. Suggestions and manual confirmation (section 7) were added on branch
-`claude/feature-pares-manuales`; lint, typecheck and tests for that change are
-pending on the server.
+**Status:** this logic was merged into main via PR 58 and deployed on 2026-11-10. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data. Everything below describes what the code says, not observed
+results. Suggestions and manual confirmation (section 7) were added by PR 66;
+lint, typecheck, 188 tests and the build passed on the server on 2026-11-11.
 
 ## 1. What observed spending is — and is not
 
