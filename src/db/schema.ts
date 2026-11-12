@@ -198,7 +198,9 @@ export const importPairExclusions = sqliteTable(
 export const splitwiseSyncAccount = sqliteTable("splitwise_sync_account", {
   singleton: integer("singleton").primaryKey(),
   accountId: integer("account_id").notNull(),
-  syncedAt: text("synced_at").notNull()
+  syncedAt: text("synced_at").notNull(),
+  updatedWatermark: text("updated_watermark"),
+  fullSyncedAt: text("full_synced_at")
 });
 
 export const splitwiseImports = sqliteTable(

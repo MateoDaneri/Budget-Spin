@@ -259,11 +259,45 @@ added to budget totals. The dashboard's observed-spending view can pair them
 with bank notices; the rules are in `FINANCIAL-RULES`. The authenticated user's paid
 and owed shares are stored as decimal strings. Payments and deletion flags are
 preserved when supplied by Splitwise; records absent from a response are not
-assumed deleted. Each complete pass reads at most 100 pages of 20; failure or an
-exceeded bound leaves the prior snapshot intact. This is a bounded full scan,
-not a guarantee that every deletion or concurrent change will be observed. The
-page shows the latest 200 stored records and last successful synchronization.
-Real-account behavior and provider rate limits still need verification.
+assumed deleted. The page shows the latest 200 stored records and last
+successful synchronization. Real-account behavior and provider rate limits
+still need verification.
+
+Each run is either a full pass or an incremental pass:
+
+| Pass | When | What it requests | Saved state |
+|---|---|---|---|
+| Full | no watermark yet (first run, or a database from before this change), or the last full pass is 7 days old or older | every expense updated before the run start | rows, `updated_watermark`, `full_synced_at` |
+| Incremental | otherwise (normally every hourly run) | expenses with `updated_after` = watermark minus 5 minutes, and `updated_before` = run start | rows, `updated_watermark` |
+
+- The **watermark** (`splitwise_sync_account.updated_watermark`) is the latest
+  provider `updated_at` seen in a committed pass, never the local clock. It is
+  written in the same transaction as the rows and never moves backwards. The
+  5-minute overlap re-reads a few already-stored expenses; the upsert by account
+  and expense ID makes that harmless and keeps owner-set categories.
+- A deletion is stored only when Splitwise returns the expense with `deleted_at`.
+  The official API reference does not state whether `get_expenses` returns
+  deleted expenses, so this is not guaranteed; a full pass does not infer
+  deletions from absence either.
+- Pages are 20 expenses, with no item ceiling. A pass stops with an explicit
+  reason after 5 minutes (`time-budget`) or 1,000 pages (`page-cap`). A failed
+  or stopped pass saves nothing and leaves the watermark unchanged; the next run
+  repeats the same window.
+
+Inspect the sync state:
+
+```sh
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
+  node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite', { readOnly: true }); console.table(db.prepare('SELECT synced_at, updated_watermark, full_synced_at FROM splitwise_sync_account').all()); db.close();"
+```
+
+To force a full pass on the next run, clear the watermark (rows and categories
+are kept):
+
+```sh
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T app \
+  node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite'); db.prepare('UPDATE splitwise_sync_account SET updated_watermark = NULL').run(); db.close();"
+```
 
 The optional activity extension records the most recent 100 Splitwise
 notifications at each successful check, retaining only supported event types
@@ -348,8 +382,10 @@ Splitwise answers `{"ok":true}`.
     node --input-type=module -e "import { DatabaseSync } from 'node:sqlite'; const db = new DatabaseSync('/app/data/budgetspin.sqlite'); console.table(db.prepare('SELECT id, source, started_at, finished_at, messages_seen, inserted, skipped, status, error FROM ingest_runs ORDER BY id DESC LIMIT 10').all()); db.close();"
   ```
 - **Splitwise** writes no `ingest_runs` row. `/splitwise` shows the last
-  successful sync (`splitwise_sync_account.synced_at`); the trigger's HTTP status
-  and the scheduler log are the only per-run signal.
+  successful sync (`splitwise_sync_account.synced_at`); the trigger's HTTP status,
+  the scheduler log and the app log are the only per-run signal. A pass stopped
+  by its own bound logs `[splitwise-sync] <full|incremental> pass stopped
+  (time-budget|page-cap); nothing saved, watermark unchanged.` in the app log.
 - **Scheduler logs**: a failed trigger prints `[ingest] trigger failed`,
   `[splitwise-ingest] trigger failed` (Compose) or `sync trigger failed` (script).
 
@@ -459,7 +495,7 @@ anything that can reach the app. Remove or rotate the token to fully disable.
 | 401 `Unauthorized.` | scheduler token ≠ app token | a shell-exported `INGEST_TOKEN` overriding Compose interpolation; both activation paths mixed |
 | 409 `Ingest already running.` | a pass is still running in that process | wait; do not run several app replicas |
 | 500 `Ingest failed.` | the pass threw | latest `ingest_runs` row: `IMAP synchronization failed.` → credential, connection or provider; also cursor errors and a full quarantine. **No new row** → it failed before the pass: IMAP not configured, or an IMAP credential file that is not private or not valid. The route does not log the exception |
-| 500 on Splitwise | sync threw | `/splitwise` banner (not configured / rejected credential / rate limited / unavailable); key file private; a changed Splitwise account is refused and the existing imports are kept; 2,000+ expenses make every sync fail (MEJ-004) |
+| 500 on Splitwise | sync threw | `/splitwise` banner (not configured / rejected credential / rate limited / unavailable); key file private; a changed Splitwise account is refused and the existing imports are kept; app log `[splitwise-sync] … pass stopped (time-budget)` → provider slow or throttled, retried next run with the same window; `(page-cap)` → more than 20,000 expenses in one window, the cap needs raising. Nothing is saved and the watermark does not move on any failure |
 | 200 but `status = 'error'` | items in quarantine | see Quarantine |
 | 200, `inserted = 0` for days | possibly a changed bank e-mail format | no automatic watchdog exists; compare with the mailbox |
 

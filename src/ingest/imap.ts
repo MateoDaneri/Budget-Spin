@@ -27,9 +27,11 @@ export function readImapConfigFromEnv(): ImapConfig | null {
   let fileConfig: { user?: unknown; password?: unknown } = {};
   const file = process.env.ITAU_IMAP_CREDENTIALS_PATH ?? "/app/data/imap-credentials.json";
   try {
-    const stat = statSync(file);
+    // turbopackIgnore: a runtime path, not a build asset; without it the standalone
+    // trace pulls the whole project (sources, docs) into the production image.
+    const stat = statSync(/* turbopackIgnore: true */ file);
     if (!stat.isFile() || (stat.mode & 0o077) !== 0) throw new Error("IMAP credential file must be private.");
-    fileConfig = JSON.parse(readFileSync(file, "utf8"));
+    fileConfig = JSON.parse(readFileSync(/* turbopackIgnore: true */ file, "utf8"));
     if (typeof fileConfig.user !== "string" || typeof fileConfig.password !== "string") throw new Error("Invalid IMAP credential file.");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;

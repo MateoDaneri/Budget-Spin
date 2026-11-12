@@ -357,6 +357,9 @@ export function migrate() {
   // Observation only (MEJ-002): nullable so older rows stay NULL ("not recorded").
   ensureColumn("transactions", "sender_auth", "TEXT CHECK (sender_auth IS NULL OR sender_auth IN ('pass', 'fail', 'none'))");
   ensureColumn("splitwise_imports", "category_id", "INTEGER REFERENCES categories(id)");
+  // Incremental Splitwise sync: latest provider updated_at committed, and the last full pass.
+  ensureColumn("splitwise_sync_account", "updated_watermark", "TEXT");
+  ensureColumn("splitwise_sync_account", "full_synced_at", "TEXT");
   ensureUserAuthColumns();
   migrateLegacyLocalUser();
   ensureColumn("recurring_expenses", "is_optional", "INTEGER NOT NULL DEFAULT 0 CHECK (is_optional IN (0, 1))");
