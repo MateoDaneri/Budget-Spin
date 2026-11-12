@@ -5,16 +5,8 @@
 # GitHub code scanning and the DefectDojo import retain visibility of accepted
 # findings. Every entry MUST include evidence, a justification, and an expiry.
 
-# CVE-2026-12151 / GHSA-vxpw-j846-p89q — undici WebSocket DoS, HIGH.
-# Accepted 2026-06-22; review by 2026-09-22.
+# No active acceptances.
 #
-# Evidence: Trivy located undici 6.25.0 at
-# /usr/local/lib/node_modules/npm/node_modules/undici/package.json in the
-# node:24-slim runtime image. It is shipped by the base image's global npm, not
-# by BudgetSpin's package-lock.json. Production starts with `node` directly and
-# never invokes npm. A repository search also found no use of `new WebSocket`,
-# `WebSocketStream`, or ws:// / wss:// endpoints. The upstream advisory requires
-# one of those client APIs to connect to an attacker-controlled or compromised
-# WebSocket endpoint, so the vulnerable path is not reachable in BudgetSpin.
-# Reassess if runtime startup or outbound networking changes, or at expiry.
-CVE-2026-12151 exp:2026-09-22
+# 2026-11-11: CVE-2026-12151 (undici inside the base image's global npm) was
+# retired: the runtime stage now removes npm, yarn and corepack, so the package
+# is no longer in the image. Its acceptance had also expired on 2026-09-22.
