@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
+import { getCurrentSession } from "@/src/auth/session";
 import { listCurrencies } from "@/src/db/repository";
 import { fetchLatestFxRate } from "@/src/finance/fx-rate";
 
 export async function GET(request: Request) {
+  // Defence in depth: proxy.ts already requires a session for /api/*, but this
+  // route must not depend on the proxy matcher staying correct.
+  if (!(await getCurrentSession())) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const base = searchParams.get("base")?.toUpperCase();
   const quote = searchParams.get("quote")?.toUpperCase();
@@ -24,8 +31,8 @@ export async function GET(request: Request) {
   try {
     const rate = await fetchLatestFxRate(base, quote);
     return NextResponse.json(rate);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not fetch FX rate.";
-    return NextResponse.json({ error: message }, { status: 502 });
+  } catch {
+    // Fixed message: provider/exception details stay on the server.
+    return NextResponse.json({ error: "Could not fetch FX rate." }, { status: 502 });
   }
 }

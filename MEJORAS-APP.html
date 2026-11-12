@@ -94,6 +94,11 @@
     .callout.benefit h4 { color: var(--green); }
     .callout.risk { background: var(--red-soft); border-color: var(--red); }
     .callout.risk h4 { color: var(--red); }
+    .tag.done { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+    .tag.done code { font-size: 11px; }
+    .callout.resolved { background: var(--green-soft); border-color: var(--green); }
+    .callout.resolved h4 { color: var(--green); }
+    .status-note { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--green); }
 
     footer { max-width: 880px; margin: 0 auto; padding: 0 22px 50px; color: var(--muted); font-size: 13px; }
   </style>
@@ -365,9 +370,11 @@
           <span class="tag area">Seguridad · rutas API</span>
           <span class="tag prio-med">Prioridad media</span>
           <span class="tag when">Al final del proyecto</span>
+          <span class="tag done">Resuelta en <code>claude/fix-endurecimiento-seguridad</code> · sin mergear</span>
         </div>
         <h2>Autenticar <code>/api/fx-rate</code> y acotar la exclusión <code>api</code> del proxy</h2>
         <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">proxy.ts</code> (<code class="inline">config.matcher</code>), <code class="inline">app/api/fx-rate/route.ts</code></p>
+        <p class="status-note">Estado: resuelta en la rama <code class="inline">claude/fix-endurecimiento-seguridad</code> (sin mergear; lint, typecheck y tests pendientes de correr en el servidor). El texto de abajo queda como historia del hallazgo.</p>
       </div>
 
       <section class="block">
@@ -402,6 +409,17 @@
         <h3>Cuándo</h3>
         <p>Al final del proyecto; antes si la app se expone fuera de la red privada.</p>
       </section>
+
+      <div class="callout resolved">
+        <h4>Resolución</h4>
+        <ul style="margin-bottom:0;">
+          <li>El matcher ya no excluye <code class="inline">api</code>: <code class="inline">/((?!_next/static|_next/image|favicon.ico).*)</code>. Toda ruta <code class="inline">/api/*</code> pasa por el proxy.</li>
+          <li>La decisión vive en <code class="inline">src/auth/access-policy.ts</code> (<code class="inline">decideAccess</code>, función pura con tests). Solo <code class="inline">/api/ingest/itau</code> y <code class="inline">/api/ingest/splitwise</code> pasan sin sesión, comparadas por ruta <strong>exacta</strong> (sin prefijos ni patrones): <code class="inline">/api/ingest/itau-foo</code>, <code class="inline">/api/ingest/itau/</code> o una ruta de importación nueva no heredan la excepción. Se descartó acotar el matcher a <code class="inline">api/ingest/</code>: dejaría pública por defecto cualquier ruta futura bajo ese prefijo.</li>
+          <li>Sin sesión, una ruta <code class="inline">/api/*</code> responde <strong>401 JSON</strong> <code class="inline">{"error":"Unauthorized."}</code>; una página sigue redirigiendo a <code class="inline">/login?next=…</code>. <code class="inline">/apiX</code> se trata como página, no como API ni como excepción.</li>
+          <li><code class="inline">/api/fx-rate</code> verifica sesión por su cuenta (<code class="inline">getCurrentSession()</code>, 401) y devuelve un mensaje fijo en el 502.</li>
+          <li>Tests: <code class="inline">tests/access-policy.test.ts</code> (decisión y proxy) y <code class="inline">tests/fx-rate-route.test.ts</code>.</li>
+        </ul>
+      </div>
     </article>
 
     <!-- ====================== MEJORA #7 ====================== -->
@@ -412,9 +430,11 @@
           <span class="tag area">Server actions · mensajes de error</span>
           <span class="tag prio-low">Prioridad baja</span>
           <span class="tag when">Al final del proyecto</span>
+          <span class="tag done">Resuelta en <code>claude/fix-endurecimiento-seguridad</code> · sin mergear</span>
         </div>
         <h2>Códigos de error fijos en lugar de texto libre en <code>?error=</code></h2>
         <p style="margin:0; color:var(--muted); font-size:14px;"><code class="inline">src/actions/forms.ts</code> (<code class="inline">redirectWithError</code>), <code class="inline">src/actions/auth.ts</code>, <code class="inline">app/expenses/page.tsx</code>, <code class="inline">app/income/page.tsx</code>, <code class="inline">app/plans/page.tsx</code>, <code class="inline">app/login/page.tsx</code></p>
+        <p class="status-note">Estado: resuelta en la rama <code class="inline">claude/fix-endurecimiento-seguridad</code> (sin mergear; lint, typecheck y tests pendientes de correr en el servidor). El texto de abajo queda como historia del hallazgo.</p>
       </div>
 
       <section class="block">
@@ -448,6 +468,16 @@
         <h3>Cuándo</h3>
         <p>Al final del proyecto, junto con MEJ-006.</p>
       </section>
+
+      <div class="callout resolved">
+        <h4>Resolución</h4>
+        <ul style="margin-bottom:0;">
+          <li><code class="inline">src/actions/error-codes.ts</code>: códigos fijos, mapas código → mensaje (<code class="inline">FORM_ERROR_MESSAGES</code>, <code class="inline">LOGIN_ERROR_MESSAGES</code>) y <code class="inline">FormError</code>. Las validaciones de <code class="inline">src/actions/forms.ts</code> lanzan <code class="inline">FormError</code> con código; <code class="inline">redirectWithError</code> solo pone el código en la URL y todo lo demás (p. ej. errores de SQLite) sale como <code class="inline">unexpected</code>.</li>
+          <li>Formularios: <code class="inline">missing-field</code>, <code class="inline">invalid-number</code>, <code class="inline">invalid-option</code>, <code class="inline">unknown-currency</code>, <code class="inline">invalid-amount</code>, <code class="inline">invalid-fx-rate</code>, <code class="inline">invalid-recurrence</code>, <code class="inline">general-family-locked</code>. Login: <code class="inline">invalid-credentials</code> (el mismo para usuario inexistente y contraseña incorrecta), <code class="inline">missing-field</code>, <code class="inline">password-mismatch</code>, <code class="inline">weak-password</code>, <code class="inline">setup-failed</code>.</li>
+          <li>Gastos, ingresos, planes y login traducen el código con <code class="inline">formErrorMessage</code> / <code class="inline">loginErrorMessage</code>; un valor desconocido muestra un genérico y el parámetro nunca se renderiza. Categorías recibe el código pero no lo muestra (igual que antes).</li>
+          <li>Tests: <code class="inline">tests/error-codes.test.ts</code> (mapa, texto armado nunca reflejado, acciones que redirigen con código).</li>
+        </ul>
+      </div>
     </article>
 
   </main>

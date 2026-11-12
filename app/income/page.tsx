@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
 import { deleteIncomeAction, saveIncomeAction } from "@/src/actions/forms";
+import { formErrorMessage } from "@/src/actions/error-codes";
 import { CurrencyFxFields } from "@/app/components/CurrencyFxFields";
 import { MoneyStack } from "@/app/components/MoneyStack";
 import { RecurrenceFields } from "@/app/components/RecurrenceFields";
@@ -16,6 +17,8 @@ type Props = {
 
 export default async function IncomePage({ searchParams }: Props) {
   const params = searchParams ? await searchParams : {};
+  // Fixed message per known code; the query value itself is never rendered.
+  const errorMessage = formErrorMessage(params.error);
   const currencies = listCurrencies();
   const baseCurrency = getBaseCurrency();
   const displayMoneyContext = await getDisplayMoneyContext(currencies);
@@ -35,7 +38,7 @@ export default async function IncomePage({ searchParams }: Props) {
         </div>
       </section>
 
-      {params.error ? <div className="alert">{params.error}</div> : null}
+      {errorMessage ? <div className="alert" role="alert">{errorMessage}</div> : null}
 
       <section className="collection-summary income-summary" aria-label="Income overview"><div><span className="collection-mark" aria-hidden="true">↗</span><div><span>Recurring income</span><strong>{incomeItems.length}</strong><small>Active</small></div></div></section>
 

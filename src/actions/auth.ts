@@ -2,13 +2,18 @@
 
 import { redirect } from "next/navigation";
 import { isPasswordConfigured, setUserPassword, signIn, signOut, verifyCredentials } from "@/src/auth/session";
+import type { LoginErrorCode } from "@/src/actions/error-codes";
+
+const MIN_PASSWORD_LENGTH = 8;
 
 export async function loginAction(formData: FormData) {
-  const username = readRequiredString(formData.get("username"), "Username");
-  const password = readRequiredString(formData.get("password"), "Password");
+  const username = readRequiredString(formData.get("username"));
+  const password = readRequiredString(formData.get("password"));
 
+  // One code for "no such user" and "wrong password": the response must not
+  // reveal which usernames exist.
   if (!verifyCredentials(username, password)) {
-    redirect(`/login?error=${encodeURIComponent("Invalid username or password.")}`);
+    redirectWithLoginError("invalid-credentials");
   }
 
   await signIn();
@@ -20,20 +25,25 @@ export async function initializePasswordAction(formData: FormData) {
     redirect("/login");
   }
 
-  const password = readRequiredString(formData.get("password"), "Password");
-  const confirmPassword = readRequiredString(formData.get("confirmPassword"), "Confirm password");
+  const password = readRequiredString(formData.get("password"));
+  const confirmPassword = readRequiredString(formData.get("confirmPassword"));
 
   // eslint-disable-next-line security/detect-possible-timing-attacks -- false positive: compares two values the same user submitted in this request; no stored secret is involved. Real credential checks use crypto.timingSafeEqual in src/auth/session.ts
   if (password !== confirmPassword) {
-    redirect(`/login?error=${encodeURIComponent("Passwords do not match.")}`);
+    redirectWithLoginError("password-mismatch");
+  }
+
+  // Same rule as setUserPassword, checked here so the page can show a specific
+  // message without echoing the exception text.
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    redirectWithLoginError("weak-password");
   }
 
   try {
     setUserPassword(password);
     await signIn();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not initialize password.";
-    redirect(`/login?error=${encodeURIComponent(message)}`);
+  } catch {
+    redirectWithLoginError("setup-failed");
   }
 
   redirect("/");
@@ -44,10 +54,14 @@ export async function logoutAction() {
   redirect("/login");
 }
 
-function readRequiredString(value: FormDataEntryValue | null, label: string) {
+function readRequiredString(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || value.trim() === "") {
-    redirect(`/login?error=${encodeURIComponent(`${label} is required.`)}`);
+    redirectWithLoginError("missing-field");
   }
 
   return value.trim();
+}
+
+function redirectWithLoginError(code: LoginErrorCode): never {
+  redirect(`/login?error=${code}`);
 }

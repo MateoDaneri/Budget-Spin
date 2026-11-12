@@ -1,33 +1,36 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { decideAccess, LOGIN_PATH } from "@/src/auth/access-policy";
 
 const AUTH_COOKIE_NAME = "budgetspin_session";
 const AUTH_USER_ID = "mdaneri";
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  const isLogin = pathname === "/login";
   const session = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   const isAuthenticated = session ? await verifySession(session) : false;
 
-  if (isLogin) {
-    if (isAuthenticated) {
+  switch (decideAccess(pathname, isAuthenticated)) {
+    case "allow":
+      return NextResponse.next();
+    case "redirect-home":
       return NextResponse.redirect(new URL("/", request.url));
+    case "unauthorized":
+      // API clients (fetch, schedulers) get JSON they can handle, not a
+      // redirect to an HTML login page.
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    case "redirect-login": {
+      const loginUrl = new URL(LOGIN_PATH, request.url);
+      loginUrl.searchParams.set("next", `${pathname}${search}`);
+      return NextResponse.redirect(loginUrl);
     }
-
-    return NextResponse.next();
   }
-
-  if (!isAuthenticated) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", `${pathname}${search}`);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  return NextResponse.next();
 }
 
+// Only build output and the favicon skip the proxy. `/api` is no longer
+// excluded: every API route goes through decideAccess, which lets through only
+// the exact token-authenticated ingest paths (src/auth/access-policy.ts).
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"]
 };
 
 async function verifySession(value: string) {
