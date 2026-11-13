@@ -272,7 +272,7 @@
       <div class="callout sec" id="trust-boundary">
         <h4>Trust boundary — bank e-mails: sender authentication recorded, not enforced</h4>
         <p style="margin:0 0 8px;">A notice is accepted as a bank notice when its single <code class="inline">From</code> address is in the bank's domain and its subject matches a known pattern (<code class="inline">isItauAviso</code>, <code class="inline">isItauTransfer</code>). Anyone able to deliver mail to the mailbox can forge such a notice; it is imported as <code class="inline">pending</code> and <strong>counted in observed spending until someone discards it</strong> on <code class="inline">/transactions</code>. Mailbox authentication does not change this: it authenticates access to the mailbox, not the sender.</p>
-        <p style="margin:0 0 8px;">On branch <code class="inline">claude/feature-autenticidad-avisos</code> (not merged; <a href="MEJORAS-APP.html#mej-002">MEJ-002</a> in observation mode):</p>
+        <p style="margin:0 0 8px;">Merged via PR 65 and deployed on 2026-11-11 (<a href="MEJORAS-APP.html#mej-002">MEJ-002</a> in observation mode):</p>
         <ul style="margin:0;">
           <li><strong>Recorded now:</strong> each imported notice gets <code class="inline">transactions.sender_auth</code> = <code class="inline">pass</code> | <code class="inline">fail</code> | <code class="inline">none</code> (NULL for rows imported earlier), computed by <code class="inline">src/ingest/sender-auth.ts</code> from the <code class="inline">Authentication-Results</code> header of the receiving mailbox provider. The header itself is not stored.</li>
           <li><strong>Which header is trusted:</strong> with <code class="inline">ITAU_IMAP_AUTHSERV_ID</code> set, the topmost instance carrying that authserv-id; instances with any other authserv-id are never used. Unset, only the topmost instance (weaker: it relies on the provider always adding its own header above anything the sender wrote).</li>
@@ -283,7 +283,7 @@
       </div>
       <ul>
         <li>Other boundaries in the code: the trigger token can only start a pass (it never reads data); provider error text is not persisted (fixed strings in <code class="inline">ingest_runs</code>); quarantine stores locators and reason codes, never bodies; credential files must be owner-only or they are rejected.</li>
-        <li>Closed on branch <code class="inline">claude/fix-endurecimiento-seguridad</code> (not merged): <code class="inline">/api/fx-rate</code> now requires a session and the proxy no longer skips <code class="inline">api*</code> paths (<a href="MEJORAS-APP.html#mej-006">MEJ-006</a>); <code class="inline">?error=</code> carries fixed codes, not free text (<a href="MEJORAS-APP.html#mej-007">MEJ-007</a>).</li>
+        <li>Closed by PR 63 (merged into main and deployed on 2026-11-11): <code class="inline">/api/fx-rate</code> now requires a session and the proxy no longer skips <code class="inline">api*</code> paths (<a href="MEJORAS-APP.html#mej-006">MEJ-006</a>); <code class="inline">?error=</code> carries fixed codes, not free text (<a href="MEJORAS-APP.html#mej-007">MEJ-007</a>).</li>
       </ul>
     </section>
 

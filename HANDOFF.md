@@ -193,7 +193,7 @@ notice; it is imported as `pending` and **counted in observed spending until
 someone discards it** on `/transactions`. Mailbox authentication does not change
 this: it authenticates access to the mailbox, not the sender.
 
-On branch `claude/feature-autenticidad-avisos` (not merged; MEJ-002 in
+Merged via PR 65 and deployed on 2026-11-11 (MEJ-002 in
 observation mode):
 
 - **Recorded now:** each imported notice gets `transactions.sender_auth` =
@@ -221,7 +221,7 @@ observation mode):
   never reads data); provider error text is not persisted (fixed strings in
   `ingest_runs`); quarantine stores locators and reason codes, never bodies;
   credential files must be owner-only or they are rejected.
-- Closed on branch `claude/fix-endurecimiento-seguridad` (not merged):
+- Closed by PR 63 (merged into main and deployed on 2026-11-11):
   `/api/fx-rate` now requires a session and the proxy no longer skips `api*`
   paths (MEJ-006); `?error=` carries fixed codes, not free text (MEJ-007).
 
