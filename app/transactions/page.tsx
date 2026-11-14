@@ -1,5 +1,5 @@
-import { makeRecurringAction, reviewTransactionAction } from "@/src/actions/transactions";
-import { getBaseCurrency, latestExpenseFxRate, latestItauIngestRun, listCategories, listCurrencies, listRecurringMatchKeys, listTransactions, type Category } from "@/src/db/repository";
+import { deleteContactAction, makeRecurringAction, reviewTransactionAction, saveContactAction } from "@/src/actions/transactions";
+import { getBaseCurrency, latestExpenseFxRate, latestItauIngestRun, listCategories, listContacts, listCurrencies, listRecurringMatchKeys, listTransactions, type Category, type Contact } from "@/src/db/repository";
 import { recurringMatchKey } from "@/src/finance/recurring-match";
 import { ImportCategory } from "@/app/components/ImportCategory";
 import { formatMoney } from "@/src/finance/money";
@@ -15,7 +15,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   "Invalid category.": "That category could not be applied. Please try again.",
   "Could not save category.": "Could not save the category. Please try again.",
   "Could not make recurring.": "Could not make it recurring. Check the name, category and FX rate.",
-  "Already recurring.": "That merchant or transfer is already a recurring expense."
+  "Already recurring.": "That merchant or transfer is already a recurring expense.",
+  "Could not save contact.": "Could not save the contact. Check the name."
 };
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
@@ -35,6 +36,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
   const currencies = new Map(listCurrencies().map((currency) => [currency.code, currency]));
   const baseCode = getBaseCurrency().code;
   const recurringKeys = listRecurringMatchKeys();
+  const contacts = new Map(listContacts().map((contact) => [contact.last4, contact]));
   const fxDefaults = new Map([...currencies.keys()].filter((code) => code !== baseCode).map((code) => [code, latestExpenseFxRate(code)]));
   const error = errorMessage(params.error);
   const unverifiedPending = transactions.filter((transaction) => transaction.status === "pending" && (transaction.senderAuth === "fail" || transaction.senderAuth === "none")).length;
@@ -73,7 +75,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
                       <span>
                         {kind} · <time dateTime={transaction.txnDate}>{transaction.txnDate.replace("T", " ").replace(/\.\d{3}Z$/, " UTC")}</time>
                         {cardLabel(transaction) ? <> · {cardLabel(transaction)}</> : null}
-                        {transaction.counterpartyBank && transaction.counterpartyLast4 ? <> · {transaction.counterpartyBank} ***{transaction.counterpartyLast4}</> : null}
+                        {transaction.counterpartyLast4 ? <> · {destinationLabel(transaction, contacts.get(transaction.counterpartyLast4))}</> : null}
                       </span>
                     </div>
                     <strong>{amount}</strong>
@@ -83,6 +85,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
                     {transaction.senderAuth && Object.hasOwn(SENDER_AUTH_LABELS, transaction.senderAuth) ? <span className="status-pill status-warning">{SENDER_AUTH_LABELS[transaction.senderAuth]}</span> : null}
                     {transaction.kind === "purchase" ? <ImportCategory source="transaction" id={transaction.id} categoryId={transaction.categoryId} categories={categories} /> : null}
                     <TransactionActions transaction={transaction} />
+                    <ContactEditor transaction={transaction} contact={transaction.counterpartyLast4 ? contacts.get(transaction.counterpartyLast4) : undefined} />
                     <Recurring transaction={transaction} recurringKeys={recurringKeys} categories={categories} baseCode={baseCode} fxDefault={fxDefaults.get(transaction.currencyCode) ?? null} />
                   </div>
                 </article>
@@ -150,6 +153,37 @@ function Recurring({ transaction, recurringKeys, categories, baseCode, fxDefault
           </div>
         ) : null}
         <button className="button" type="submit">Save monthly</button>
+      </form>
+    </details>
+  );
+}
+
+/** A named destination shows its name ("own" for the owner's accounts); otherwise bank and last digits. */
+function destinationLabel(transaction: { counterpartyBank: string | null; counterpartyLast4: string | null }, contact: Contact | undefined): string {
+  if (contact) return contact.isOwn ? `${contact.name} (own)` : contact.name;
+  return `${transaction.counterpartyBank ?? "Account"} ***${transaction.counterpartyLast4}`;
+}
+
+/** "Name" on transfers with a known destination: one compact form; removing a contact is in the same place. */
+function ContactEditor({ transaction, contact }: { transaction: ReturnType<typeof listTransactions>[number]; contact: Contact | undefined }) {
+  if (transaction.kind !== "transfer_out" || !transaction.counterpartyLast4) return null;
+  const prefix = `contact-${transaction.id}`;
+  return (
+    <details className="recurring-make">
+      <summary aria-label={`Name the destination ***${transaction.counterpartyLast4}`}>{contact ? "Edit name" : "Name"}</summary>
+      <form action={saveContactAction} className="form-grid">
+        <input type="hidden" name="id" value={transaction.id} />
+        <div className="field span-2">
+          <label htmlFor={`${prefix}-name`}>Name for ***{transaction.counterpartyLast4}</label>
+          <input id={`${prefix}-name`} name="name" maxLength={80} defaultValue={contact?.name ?? ""} placeholder="Accountant" required />
+        </div>
+        <label className="field-check" htmlFor={`${prefix}-own`}>
+          <input id={`${prefix}-own`} type="checkbox" name="isOwn" value="yes" defaultChecked={contact?.isOwn ?? false} /> My own account
+        </label>
+        <button className="button" type="submit">Save</button>
+        {contact ? (
+          <button className="button button-secondary" type="submit" formAction={deleteContactAction} formNoValidate name="contactId" value={contact.id}>Remove name</button>
+        ) : null}
       </form>
     </details>
   );

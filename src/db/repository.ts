@@ -404,6 +404,18 @@ export function migrate() {
       paid_at TEXT NOT NULL,
       PRIMARY KEY (bill_id, month)
     );
+    -- Named transfer destinations. Keyed by the account's last digits only: Itaú prints the bank name
+    -- inconsistently, and one account can move pesos and dollars. is_own marks the owner's own accounts.
+    CREATE TABLE IF NOT EXISTS contacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      last4 TEXT NOT NULL CHECK (length(last4) BETWEEN 3 AND 4 AND last4 NOT GLOB '*[^0-9]*'),
+      name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 80),
+      is_own INTEGER NOT NULL DEFAULT 0 CHECK (is_own IN (0, 1)),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (user_id, last4)
+    );
     -- One-time data steps that must not repeat (e.g. backfills). Schema changes stay idempotent DDL.
     CREATE TABLE IF NOT EXISTS schema_migrations (
       name TEXT PRIMARY KEY,
@@ -1878,4 +1890,30 @@ export function latestExpenseFxRate(currencyCode: string): number | null {
     .prepare("SELECT fx_rate_to_base FROM recurring_expenses WHERE user_id = ? AND is_active = 1 AND currency_code = ? AND fx_rate_to_base > 0 ORDER BY updated_at DESC LIMIT 1")
     .get(LOCAL_USER_ID, currencyCode) as { fx_rate_to_base: number } | undefined;
   return row?.fx_rate_to_base ?? null;
+}
+
+export type Contact = { id: number; last4: string; name: string; isOwn: boolean };
+
+export function listContacts(): Contact[] {
+  migrate();
+  const rows = getDb().prepare("SELECT id, last4, name, is_own FROM contacts WHERE user_id = ? ORDER BY name").all(LOCAL_USER_ID) as Array<{ id: number; last4: string; name: string; is_own: number }>;
+  return rows.map((row) => ({ id: row.id, last4: row.last4, name: row.name, isOwn: row.is_own === 1 }));
+}
+
+/** Names the destination of a stored outgoing transfer. The digits are re-read from the transfer, never from the form. */
+export function saveContactForTransaction(transactionId: number, name: string, isOwn: boolean): void {
+  migrate();
+  const db = getDb();
+  const row = db.prepare("SELECT counterparty_last4 FROM transactions WHERE id = ? AND user_id = ? AND kind = 'transfer_out'").get(transactionId, LOCAL_USER_ID) as { counterparty_last4: string | null } | undefined;
+  if (!row?.counterparty_last4) throw new Error("Transfer without destination.");
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO contacts (user_id, last4, name, is_own, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, last4) DO UPDATE SET name = excluded.name, is_own = excluded.is_own, updated_at = excluded.updated_at
+  `).run(LOCAL_USER_ID, row.counterparty_last4, name, isOwn ? 1 : 0, now, now);
+}
+
+export function deleteContact(id: number): void {
+  migrate();
+  getDb().prepare("DELETE FROM contacts WHERE id = ? AND user_id = ?").run(id, LOCAL_USER_ID);
 }

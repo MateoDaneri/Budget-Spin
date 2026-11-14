@@ -1764,3 +1764,4 @@ section.panel + section.panel { margin-top: 16px; }
 .recurring-make summary:hover { color: var(--accent-dark); }
 .recurring-make[open] { flex-basis: 100%; }
 .recurring-make[open] form { margin-top: 10px; }
+.field-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--foreground); }

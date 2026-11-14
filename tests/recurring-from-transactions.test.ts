@@ -23,9 +23,9 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/src/auth/session", () => ({ getCurrentSession: vi.fn() }));
 
 import { getCurrentSession } from "@/src/auth/session";
-import { makeRecurringAction } from "@/src/actions/transactions";
+import { deleteContactAction, makeRecurringAction, saveContactAction } from "@/src/actions/transactions";
 import { closeDb } from "@/src/db/client";
-import { insertImportedTransaction, listCategories, listRecurringExpenses, listRecurringMatchKeys, listTransactions, migrate } from "@/src/db/repository";
+import { insertImportedTransaction, listCategories, listContacts, listRecurringExpenses, listRecurringMatchKeys, listTransactions, migrate } from "@/src/db/repository";
 import { recurringMatchKey } from "@/src/finance/recurring-match";
 
 describe("recurringMatchKey", () => {
@@ -136,6 +136,28 @@ describe("make recurring", () => {
   it("never stores a destination on a purchase", () => {
     const id = movement("<p@example.test>", { counterpartyBank: "Banco Ejemplo", counterpartyLast4: "1234" });
     expect(listTransactions().find((row) => row.id === id)).toMatchObject({ counterpartyBank: null, counterpartyLast4: null });
+  });
+
+  it("names a transfer destination from the stored transfer, updates it, and removes it", async () => {
+    const id = movement("<c@example.test>", { kind: "transfer_out", description: "Transferencia enviada", currencyCode: "UYU", amountMinor: 1000, cardNetwork: null, cardLast4: null, counterpartyBank: "Banco Ejemplo", counterpartyLast4: "1234" });
+    expect(await redirectedTo(saveContactAction(form({ id, name: " Friend ", last4: "9999" })))).toBe("/transactions");
+    expect(listContacts()).toEqual([expect.objectContaining({ last4: "1234", name: "Friend", isOwn: false })]);
+    await redirectedTo(saveContactAction(form({ id, name: "Mine", isOwn: "yes" })));
+    const [contact] = listContacts();
+    expect(contact).toMatchObject({ last4: "1234", name: "Mine", isOwn: true });
+    expect(listContacts()).toHaveLength(1);
+    await redirectedTo(deleteContactAction(form({ contactId: contact.id })));
+    expect(listContacts()).toEqual([]);
+  });
+
+  it("refuses contacts without a session, without a destination or without a name", async () => {
+    const purchase = movement("<p2@example.test>");
+    const transfer = movement("<t2@example.test>", { kind: "transfer_out", description: "Transferencia enviada", currencyCode: "UYU", amountMinor: 1000, cardNetwork: null, cardLast4: null, counterpartyBank: "Banco Ejemplo", counterpartyLast4: "1234" });
+    expect(await redirectedTo(saveContactAction(form({ id: purchase, name: "X" })))).toBe("/transactions?error=Could+not+save+contact.");
+    expect(await redirectedTo(saveContactAction(form({ id: transfer, name: " " })))).toBe("/transactions?error=Could+not+save+contact.");
+    vi.mocked(getCurrentSession).mockResolvedValue(null);
+    expect(await redirectedTo(saveContactAction(form({ id: transfer, name: "X" })))).toBe("/login");
+    expect(listContacts()).toEqual([]);
   });
 
   it("rejects missing FX for a foreign currency, an income category, a bad id and an empty name", async () => {
