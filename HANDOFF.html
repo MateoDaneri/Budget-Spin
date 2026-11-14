@@ -222,7 +222,7 @@
       <h3>New tables</h3>
       <table>
         <tr><th>Table</th><th>Holds</th></tr>
-        <tr><td><code class="inline">transactions</code></td><td>Imported notices; <code class="inline">kind</code> purchase / transfer_out / transfer_in; unique per user + Message-ID.</td></tr>
+        <tr><td><code class="inline">transactions</code></td><td>Imported notices; <code class="inline">kind</code> purchase / transfer_out / transfer_in; <code class="inline">payment_method</code> credit / debit for purchases (from the notice subject; rows imported before the column existed were backfilled once: card details → credit, none → debit; null when unknown); unique per user + Message-ID.</td></tr>
         <tr><td><code class="inline">transaction_reviews</code></td><td>Confirm/discard decision per transaction; the original import row is kept, the effective status is the decision if any.</td></tr>
         <tr><td><code class="inline">ingest_cursors</code>, <code class="inline">ingest_runs</code></td><td>IMAP cursor per mailbox identity hash; one row per ingest pass (counts, <code class="inline">ok</code>/<code class="inline">error</code>, fixed error text).</td></tr>
         <tr><td><code class="inline">splitwise_sync_account</code>, <code class="inline">splitwise_imports</code></td><td>Pinned Splitwise account + last sync time, update watermark (<code class="inline">updated_watermark</code>) and last full pass (<code class="inline">full_synced_at</code>); expenses by account and expense ID (shares as decimal strings).</td></tr>

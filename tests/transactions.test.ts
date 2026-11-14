@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { closeDb } from "@/src/db/client";
+import { closeDb, getDb } from "@/src/db/client";
 import {
   insertImportedTransaction,
   listTransactions,
@@ -89,5 +89,46 @@ describe("imported transactions", () => {
     // No reader API yet; assert it persisted via a direct count.
     const rows = listTransactions();
     expect(rows).toBeDefined();
+  });
+});
+
+describe("payment method", () => {
+  it("stores the method for purchases and never for transfers", () => {
+    insertImportedTransaction({ ...sample, messageId: "<credit@example.test>", cardNetwork: "VISA", cardLast4: "1234", paymentMethod: "credit" });
+    insertImportedTransaction({ ...sample, messageId: "<debit@example.test>", cardNetwork: null, cardLast4: null, paymentMethod: "debit" });
+    insertImportedTransaction({ ...sample, messageId: "<unknown@example.test>" });
+    insertImportedTransaction({ ...sample, messageId: "<transfer@example.test>", kind: "transfer_out", paymentMethod: "debit" });
+    const byId = Object.fromEntries(listTransactions().map((row) => [row.messageId, row.paymentMethod]));
+    expect(byId).toEqual({ "<credit@example.test>": "credit", "<debit@example.test>": "debit", "<unknown@example.test>": null, "<transfer@example.test>": null });
+  });
+
+  it("backfills existing purchases once, by card details, without touching any other field", () => {
+    insertImportedTransaction({ ...sample, messageId: "<old-credit@example.test>", cardNetwork: "VISA", cardLast4: "1234" });
+    insertImportedTransaction({ ...sample, messageId: "<old-debit@example.test>", cardNetwork: null, cardLast4: null });
+    insertImportedTransaction({ ...sample, messageId: "<old-transfer@example.test>", cardNetwork: null, cardLast4: null, kind: "transfer_out" });
+    const db = getDb();
+    db.exec("ALTER TABLE transactions DROP COLUMN payment_method");
+    const before = db.prepare("SELECT * FROM transactions ORDER BY id").all();
+
+    migrate();
+
+    const after = db.prepare("SELECT * FROM transactions ORDER BY id").all() as Array<Record<string, unknown>>;
+    expect(after.map((row) => [row.message_id, row.payment_method])).toEqual([
+      ["<old-credit@example.test>", "credit"],
+      ["<old-debit@example.test>", "debit"],
+      ["<old-transfer@example.test>", null]
+    ]);
+    const withoutMethod = after.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== "payment_method")));
+    expect(withoutMethod).toEqual(before);
+
+    // A later purchase without a stated method stays unknown: the backfill runs only when the column is created.
+    insertImportedTransaction({ ...sample, messageId: "<new-unknown@example.test>", cardNetwork: null, cardLast4: null });
+    migrate();
+    expect(listTransactions().find((row) => row.messageId === "<new-unknown@example.test>")?.paymentMethod).toBeNull();
+  });
+
+  it("rejects a value outside credit and debit", () => {
+    insertImportedTransaction({ ...sample, messageId: "<check@example.test>" });
+    expect(() => getDb().prepare("UPDATE transactions SET payment_method = 'cash'").run()).toThrow();
   });
 });

@@ -16,5 +16,5 @@ export function parseItauTransfer(input: ItauEmailInput) {
   const codes: Record<string, string> = { URGP: "UYU", "US.D": "USD", UYU: "UYU", USD: "USD" };
   const currencyCode = codes[match[2].toUpperCase()];
   if (!currencyCode) return null;
-  return { messageId: input.messageId, txnDateIso: input.date.toISOString(), merchant: "Transferencia enviada", amountRaw: match[1], currencyCode, cardNetwork: null, cardLast4: null, rawExcerpt: `${match[1]} ${currencyCode} · Transferencia enviada`, kind: "transfer_out" as const };
+  return { messageId: input.messageId, txnDateIso: input.date.toISOString(), merchant: "Transferencia enviada", amountRaw: match[1], currencyCode, cardNetwork: null, cardLast4: null, paymentMethod: null, rawExcerpt: `${match[1]} ${currencyCode} · Transferencia enviada`, kind: "transfer_out" as const };
 }
