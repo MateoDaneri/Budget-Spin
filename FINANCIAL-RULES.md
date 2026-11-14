@@ -7,8 +7,9 @@
 **Status:** this logic was merged into main via PR 58 and deployed on 2026-11-10. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data. Everything below describes what the code says, not observed
 results. Suggestions and manual confirmation (section 7) were added by PR 66;
 lint, typecheck, 188 tests and the build passed on the server on 2026-11-11.
-The real net and the running balance (section 9) are on branch
-`claude/feature-neto-y-saldo`, not merged or deployed yet.
+The real net and the running balance (section 9) were merged via PR 70
+(`792588d`) and deployed on 2026-11-14 after lint, typecheck, 258 tests and
+the build passed on the server; not yet checked against real data.
 
 ## 1. What observed spending is — and is not
 
