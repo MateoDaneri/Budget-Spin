@@ -108,6 +108,7 @@ describe("payment method", () => {
     insertImportedTransaction({ ...sample, messageId: "<old-transfer@example.test>", cardNetwork: null, cardLast4: null, kind: "transfer_out" });
     const db = getDb();
     db.exec("ALTER TABLE transactions DROP COLUMN payment_method");
+    db.exec("DELETE FROM schema_migrations WHERE name = 'payment_method_backfill'");
     const before = db.prepare("SELECT * FROM transactions ORDER BY id").all();
 
     migrate();
@@ -125,6 +126,19 @@ describe("payment method", () => {
     insertImportedTransaction({ ...sample, messageId: "<new-unknown@example.test>", cardNetwork: null, cardLast4: null });
     migrate();
     expect(listTransactions().find((row) => row.messageId === "<new-unknown@example.test>")?.paymentMethod).toBeNull();
+  });
+
+  it("completes an interrupted backfill on the next start (column added, marker missing)", () => {
+    insertImportedTransaction({ ...sample, messageId: "<late-credit@example.test>", cardNetwork: "VISA", cardLast4: "1234" });
+    insertImportedTransaction({ ...sample, messageId: "<late-debit@example.test>", cardNetwork: null, cardLast4: null });
+    const db = getDb();
+    db.exec("DELETE FROM schema_migrations WHERE name = 'payment_method_backfill'");
+
+    migrate();
+
+    const methods = Object.fromEntries(listTransactions().map((row) => [row.messageId, row.paymentMethod]));
+    expect(methods).toEqual({ "<late-credit@example.test>": "credit", "<late-debit@example.test>": "debit" });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM schema_migrations WHERE name = 'payment_method_backfill'").get()).toEqual({ n: 1 });
   });
 
   it("rejects a value outside credit and debit", () => {

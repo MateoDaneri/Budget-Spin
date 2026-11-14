@@ -378,6 +378,11 @@ export function migrate() {
       updated_at TEXT NOT NULL,
       PRIMARY KEY (user_id, currency_code)
     );
+    -- One-time data steps that must not repeat (e.g. backfills). Schema changes stay idempotent DDL.
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      name TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL
+    );
     -- Manual corrections to the running balance. Added or deleted, never edited; the note is the trail.
     CREATE TABLE IF NOT EXISTS balance_adjustments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -393,22 +398,17 @@ export function migrate() {
   ensureColumn("transactions", "kind", "TEXT NOT NULL DEFAULT 'purchase' CHECK (kind IN ('purchase', 'transfer_out', 'transfer_in'))");
   // Observation only (MEJ-002): nullable so older rows stay NULL ("not recorded").
   ensureColumn("transactions", "sender_auth", "TEXT CHECK (sender_auth IS NULL OR sender_auth IN ('pass', 'fail', 'none'))");
-  // Column and one-time backfill commit together: an interrupted migration cannot leave old purchases unset.
-  // Before the column existed the method was not stored; the owner confirmed that, in the imported history,
-  // purchases with card details are credit and those without are debit. Later rows are set from the notice
-  // subject at import and are never rewritten here.
-  // The transaction opens only when the column is missing (first start of this version), so the usual
-  // migrate() call from inside other transactions never nests a BEGIN.
-  if (!hasColumn("transactions", "payment_method")) {
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      ensureColumn("transactions", "payment_method", "TEXT CHECK (payment_method IS NULL OR payment_method IN ('credit', 'debit'))");
-      db.exec(`UPDATE transactions SET payment_method = CASE WHEN card_last4 IS NOT NULL THEN 'credit' ELSE 'debit' END WHERE kind = 'purchase'`);
-      db.exec("COMMIT");
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
-    }
+  // Credit/debit per purchase. Before the column existed the method was not stored; the owner confirmed that,
+  // in the imported history, purchases with card details are credit and those without are debit. Later rows
+  // are set from the notice subject at import and are never rewritten here.
+  // No transaction on purpose: on the production setup (SQLite 3.53 in WAL mode on btrfs) an ALTER with CHECK
+  // followed by an UPDATE inside one transaction fails with "disk I/O error" (BITACORA-OBSTACULOS). Instead the
+  // backfill is resumable: it runs until its marker exists, so an interruption between the ALTER and the
+  // UPDATE is completed on the next start. migrate.mjs runs before the server, so no import can interleave.
+  ensureColumn("transactions", "payment_method", "TEXT CHECK (payment_method IS NULL OR payment_method IN ('credit', 'debit'))");
+  if (!migrationApplied("payment_method_backfill")) {
+    db.exec(`UPDATE transactions SET payment_method = CASE WHEN card_last4 IS NOT NULL THEN 'credit' ELSE 'debit' END WHERE kind = 'purchase' AND payment_method IS NULL`);
+    markMigrationApplied("payment_method_backfill");
   }
   ensureColumn("splitwise_imports", "category_id", "INTEGER REFERENCES categories(id)");
   // Incremental Splitwise sync: latest provider updated_at committed, and the last full pass.
@@ -595,6 +595,14 @@ function ensureRecurringExpensesGroupColumn() {
     SET group_id = ?
     WHERE user_id = ? AND group_id IS NULL
   `).run(defaultGroupId, LOCAL_USER_ID);
+}
+
+function migrationApplied(name: string): boolean {
+  return getDb().prepare("SELECT 1 FROM schema_migrations WHERE name = ?").get(name) !== undefined;
+}
+
+function markMigrationApplied(name: string) {
+  getDb().prepare("INSERT OR IGNORE INTO schema_migrations (name, applied_at) VALUES (?, ?)").run(name, nowIso());
 }
 
 function hasColumn(tableName: string, columnName: string): boolean {
