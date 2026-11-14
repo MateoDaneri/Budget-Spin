@@ -50,7 +50,9 @@ export default async function BalancePage({ searchParams }: Props) {
             <h2>Opening balance</h2>
             <p className="muted">
               The amount you had at the end of the chosen day. Income, spending and adjustments after that day move it.
-              To stop an income, set its end date instead of deleting it: deleting removes it from past balances.
+              Days are UTC days, like the imported notices: a day ends at 21:00 Uruguay time.
+              To stop or change an income (for example a raise), set an end date on it and add a new one: editing or
+              deleting an income rewrites past balances.
             </p>
           </div>
         </div>

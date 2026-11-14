@@ -118,15 +118,18 @@ describe("FX provider parsing", () => {
 });
 
 describe("parseSignedMoneyToMinor", () => {
-  it("accepts a leading minus and trailing zeros", () => {
+  it("accepts a leading minus and either decimal separator", () => {
     expect(parseSignedMoneyToMinor("-12.5", 2)).toBe(-1250);
     expect(parseSignedMoneyToMinor("12.50", 2)).toBe(1250);
-    expect(parseSignedMoneyToMinor("12,340", 2)).toBe(1234);
-    expect(parseSignedMoneyToMinor("1500.00", 0)).toBe(1500);
+    expect(parseSignedMoneyToMinor("12,5", 2)).toBe(1250);
+    expect(parseSignedMoneyToMinor("1500", 0)).toBe(1500);
   });
 
-  it("rejects extra precision instead of truncating", () => {
+  it("rejects any digits beyond the currency's decimals, so a thousands separator is never read as decimals", () => {
+    expect(() => parseSignedMoneyToMinor("1.000", 2)).toThrow();
+    expect(() => parseSignedMoneyToMinor("1,000", 2)).toThrow();
     expect(() => parseSignedMoneyToMinor("12.345", 2)).toThrow();
+    expect(() => parseSignedMoneyToMinor("1500.00", 0)).toThrow();
     expect(() => parseSignedMoneyToMinor("600.5", 0)).toThrow();
   });
 

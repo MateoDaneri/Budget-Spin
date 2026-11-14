@@ -208,9 +208,15 @@ Bank notices are reviewed separately on `/transactions` (confirm or discard).
 - A changed or deleted Splitwise record is recalculated after the next
   successful snapshot; records missing from a provider response are kept, not
   assumed deleted.
-- **Deleting an income rewrites past balances.** Only active incomes are
-  listed, so a deleted income disappears from every month, including those
-  already in the running balance. End an income with an end date instead.
+- **Editing or deleting an income rewrites past balances.** Incomes have no
+  history: an edit changes every past occurrence (a raise entered by editing
+  the amount adds the difference to months already in the balance), and a
+  deleted income disappears from every month. To change or stop an income, set
+  an end date on it and add a new one.
+- **The opening date is a UTC day.** It ends at 21:00 Uruguay time (UTC−3),
+  like every other date here. A purchase after 21:00 local on the opening day
+  is dated the next UTC day and counts; take the bank balance at 21:00 or
+  enter the difference as an adjustment.
 - **A false pending notice lowers the balance** until it is discarded on
   `/transactions`, because pending notices count (section 2) and the sender
   check is in observation mode. The "provisional" count is the cue to review.
@@ -235,7 +241,8 @@ ten characters of the stored timestamp, as in section 8).
 | Balance today | opening balance + income − observed spending + adjustments | after the opening date, up to and including today (UTC date) |
 
 - **Opening balance:** one per currency, set on `/balance` with an amount
-  (negative allowed) and a date. It is the amount at the **end** of that day,
+  (negative allowed) and a date. It is the amount at the **end** of that UTC
+  day (21:00 Uruguay time),
   so movements on the opening date itself are not counted again. A currency
   without an opening balance shows no balance. An opening date after today
   shows the opening amount unchanged.
@@ -249,6 +256,6 @@ ten characters of the stored timestamp, as in section 8).
   earliest opening date (the first month may include notices dated before the
   opening date, so it errs towards flagging).
 - **Input checks** (server side): known currency; a real date not after today;
-  amounts with at most the currency's decimals (extra non-zero digits are
-  rejected, not truncated); adjustments different from zero.
+  amounts with at most the currency's decimals (any extra digit is rejected,
+  so `1.000` is not read as 1.00); adjustments different from zero.
 

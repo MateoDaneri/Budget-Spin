@@ -16,8 +16,8 @@ export function parseMoneyToMinor(value: string, minorUnit: number) {
 
 /**
  * Signed decimal → integer minor units, for balances and adjustments. Accepts one leading "-" and a
- * "," or "." separator. Digits beyond the currency's minor unit are accepted only when they are
- * zeros: anything finer is rejected, never truncated or rounded.
+ * "," or "." decimal separator. Any digit beyond the currency's minor unit is rejected, never truncated:
+ * "1.000" (one thousand, written with a thousands separator) must not become 1.00.
  */
 export function parseSignedMoneyToMinor(value: string, minorUnit: number): number {
   const normalized = value.trim().replace(",", ".");
@@ -27,10 +27,10 @@ export function parseSignedMoneyToMinor(value: string, minorUnit: number): numbe
     throw new RangeError("Amount must be a decimal number.");
   }
   const [, sign, whole, fraction = ""] = match;
-  if (/[^0]/.test(fraction.slice(minorUnit))) {
+  if (fraction.length > minorUnit) {
     throw new RangeError("Amount has more decimals than the currency allows.");
   }
-  const magnitude = Number(whole + fraction.slice(0, minorUnit).padEnd(minorUnit, "0"));
+  const magnitude = Number(whole + fraction.padEnd(minorUnit, "0"));
   if (!Number.isSafeInteger(magnitude)) {
     throw new RangeError("Amount is too large.");
   }

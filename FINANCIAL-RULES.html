@@ -426,7 +426,8 @@
         <li><strong>Pending imports are counted.</strong> A notice that was never reviewed — including one that is not genuine — is in the total until discarded. Bank e-mails are accepted by sender address and subject only; there is no sender authentication (see <a href="HANDOFF.html">HANDOFF</a>).</li>
         <li>Categories (saved per normalised description and editable on the source screens) never change the monetary calculation.</li>
         <li>A changed or deleted Splitwise record is recalculated after the next successful snapshot; records missing from a provider response are kept, not assumed deleted.</li>
-        <li><strong>Deleting an income rewrites past balances.</strong> Only active incomes are listed, so a deleted income disappears from every month, including those already in the running balance. End an income with an end date instead.</li>
+        <li><strong>Editing or deleting an income rewrites past balances.</strong> Incomes have no history: an edit changes every past occurrence (a raise entered by editing the amount adds the difference to months already in the balance), and a deleted income disappears from every month. To change or stop an income, set an end date on it and add a new one.</li>
+        <li><strong>The opening date is a UTC day.</strong> It ends at 21:00 Uruguay time (UTC−3), like every other date here. A purchase after 21:00 local on the opening day is dated the next UTC day and counts; take the bank balance at 21:00 or enter the difference as an adjustment.</li>
         <li><strong>A false pending notice lowers the balance</strong> until it is discarded on <code>/transactions</code>, because pending notices count (<a href="#inputs">section 2</a>) and the sender check is in observation mode. The “provisional” count is the cue to review.</li>
         <li><strong>Transfers do not count</strong> in the net or the balance. Money sent by bank transfer must be entered as an adjustment until bill payments are modelled.</li>
       </ul>
@@ -475,11 +476,11 @@
         </svg>
       </figure>
       <ul>
-        <li><strong>Opening balance:</strong> one per currency, set on <code>/balance</code> with an amount (negative allowed) and a date. It is the amount at the <strong>end</strong> of that day, so movements on the opening date itself are not counted again. A currency without an opening balance shows no balance. An opening date after today shows the opening amount unchanged.</li>
+        <li><strong>Opening balance:</strong> one per currency, set on <code>/balance</code> with an amount (negative allowed) and a date. It is the amount at the <strong>end</strong> of that UTC day (21:00 Uruguay time), so movements on the opening date itself are not counted again. A currency without an opening balance shows no balance. An opening date after today shows the opening amount unchanged.</li>
         <li><strong>Income:</strong> the configured incomes (<code>/income</code>), each counted on the dates its recurrence produces. It is not confirmed by any notice.</li>
         <li><strong>Adjustments:</strong> signed amounts with a mandatory note, for anything the notices miss (cash, other banks, transfers, refunds). They can be added or deleted, not edited.</li>
         <li><strong>Provisional:</strong> the net shows the month's pending, ambiguous and omitted counts; the balance shows the same counts summed over every month since the earliest opening date (the first month may include notices dated before the opening date, so it errs towards flagging).</li>
-        <li><strong>Input checks</strong> (server side): known currency; a real date not after today; amounts with at most the currency's decimals (extra non-zero digits are rejected, not truncated); adjustments different from zero.</li>
+        <li><strong>Input checks</strong> (server side): known currency; a real date not after today; amounts with at most the currency's decimals (any extra digit is rejected, so <code>1.000</code> is not read as 1.00); adjustments different from zero.</li>
       </ul>
     </section>
   </main>
