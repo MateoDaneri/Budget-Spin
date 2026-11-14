@@ -36,6 +36,13 @@ describe("recurringMatchKey", () => {
     expect(b).toBe(a);
   });
 
+  it("keys outgoing transfers by destination and currency when the destination is known", () => {
+    const base = { kind: "transfer_out" as const, description: "Transferencia enviada", currencyCode: "UYU", counterpartyBank: "Banco  Ejemplo", counterpartyLast4: "1234" };
+    expect(recurringMatchKey({ ...base, amountMinor: 390000 })).toBe("transfer-to:banco ejemplo:1234:UYU");
+    expect(recurringMatchKey({ ...base, amountMinor: 420000 })).toBe("transfer-to:banco ejemplo:1234:UYU");
+    expect(recurringMatchKey({ ...base, currencyCode: "USD", amountMinor: 1 })).toBe("transfer-to:banco ejemplo:1234:USD");
+  });
+
   it("keys outgoing transfers by currency and exact amount, and gives no key otherwise", () => {
     expect(recurringMatchKey({ kind: "transfer_out", description: "Transferencia enviada", currencyCode: "UYU", amountMinor: 150000 })).toBe("transfer:UYU:150000");
     expect(recurringMatchKey({ kind: "transfer_in", description: "x", currencyCode: "UYU", amountMinor: 1 })).toBeNull();
@@ -116,6 +123,18 @@ describe("make recurring", () => {
     const id = movement("<t@example.test>", { kind: "transfer_out", description: "Transferencia enviada", currencyCode: "UYU", amountMinor: 150000, cardNetwork: null, cardLast4: null });
     await redirectedTo(makeRecurringAction(form({ id, name: "Parking", categoryId: subscriptions(), fxRateToBase: "99" })));
     expect(listRecurringExpenses()[0]).toMatchObject({ currencyCode: "UYU", amountMinor: 150000, fxRateToBase: null, matchKey: "transfer:UYU:150000" });
+  });
+
+  it("links a transfer with a known destination by destination, not amount", async () => {
+    const id = movement("<d@example.test>", { kind: "transfer_out", description: "Transferencia enviada", currencyCode: "UYU", amountMinor: 390000, cardNetwork: null, cardLast4: null, counterpartyBank: "Banco Ejemplo", counterpartyLast4: "1234" });
+    await redirectedTo(makeRecurringAction(form({ id, name: "Parking", categoryId: subscriptions() })));
+    expect(listRecurringExpenses()[0]).toMatchObject({ amountMinor: 390000, matchKey: "transfer-to:banco ejemplo:1234:UYU" });
+    expect(listTransactions().find((row) => row.id === id)).toMatchObject({ counterpartyBank: "Banco Ejemplo", counterpartyLast4: "1234" });
+  });
+
+  it("never stores a destination on a purchase", () => {
+    const id = movement("<p@example.test>", { counterpartyBank: "Banco Ejemplo", counterpartyLast4: "1234" });
+    expect(listTransactions().find((row) => row.id === id)).toMatchObject({ counterpartyBank: null, counterpartyLast4: null });
   });
 
   it("rejects missing FX for a foreign currency, an income category, a bad id and an empty name", async () => {

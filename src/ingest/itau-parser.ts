@@ -58,6 +58,9 @@ export type ParsedItauAviso = {
   cardLast4: string | null;
   /** From the notice subject ("…con tarjeta de crédito" / "…de débito"); null when the subject names neither. */
   paymentMethod: PaymentMethod | null;
+  /** Transfers only: destination bank and last four account digits as Itaú prints them; null otherwise. */
+  counterpartyBank?: string | null;
+  counterpartyLast4?: string | null;
   /** Human-readable one-line summary, stored for audit. */
   rawExcerpt: string;
 };
