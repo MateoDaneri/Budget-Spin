@@ -1,9 +1,9 @@
 import type { CustomRecurrenceAnchor, CustomRecurrenceUnit, Frequency } from "@/src/db/repository";
-import { monthBounds, parseDateOnly } from "./dates";
+import { dateOnly, monthBounds, parseDateOnly } from "./dates";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function countOccurrencesInMonth(input: {
+export type RecurrenceSchedule = {
   frequency: Frequency;
   customInterval?: number | null;
   customUnit?: CustomRecurrenceUnit | null;
@@ -12,44 +12,51 @@ export function countOccurrencesInMonth(input: {
   customDayOfWeek?: number | null;
   startDate: string;
   endDate: string | null;
-  month: string;
-}) {
-  const { start: monthStart, end: monthEnd } = monthBounds(input.month);
-  const start = parseDateOnly(input.startDate);
-  const configuredEnd = input.endDate ? parseDateOnly(input.endDate) : null;
-  const end = configuredEnd && configuredEnd < monthEnd ? configuredEnd : monthEnd;
+};
 
-  if (start > monthEnd || end < monthStart) {
-    return 0;
-  }
-
-  if (input.frequency === "custom") {
-    return countCustomOccurrencesInMonth({
-      start,
-      end,
-      monthStart,
-      monthEnd,
-      interval: requireCustomNumber(input.customInterval, "custom interval"),
-      unit: requireCustomValue(input.customUnit, "custom unit"),
-      anchor: requireCustomValue(input.customAnchor, "custom anchor"),
-      dayOfMonth: input.customDayOfMonth ?? null,
-      dayOfWeek: input.customDayOfWeek ?? null
-    });
-  }
-
-  if (input.frequency === "weekly" || input.frequency === "biweekly") {
-    return countDayIntervalOccurrences(start, end, monthStart, input.frequency === "weekly" ? 7 : 14);
-  }
-
-  const monthStep = input.frequency === "monthly" ? 1 : input.frequency === "quarterly" ? 3 : 12;
-  return countMonthIntervalOccurrences(start, end, monthStart, monthEnd, monthStep);
+export function countOccurrencesInMonth(input: RecurrenceSchedule & { month: string }) {
+  const { start, end } = monthBounds(input.month);
+  return listOccurrences(input, dateOnly(start), dateOnly(end)).length;
 }
 
-function countCustomOccurrencesInMonth(input: {
+/** Occurrence dates (YYYY-MM-DD, ascending) inside [from, to] and inside the schedule's start/end dates. */
+export function listOccurrences(schedule: RecurrenceSchedule, from: string, to: string): string[] {
+  const rangeStart = parseDateOnly(from);
+  const rangeEnd = parseDateOnly(to);
+  const start = parseDateOnly(schedule.startDate);
+  const configuredEnd = schedule.endDate ? parseDateOnly(schedule.endDate) : null;
+  const end = configuredEnd && configuredEnd < rangeEnd ? configuredEnd : rangeEnd;
+
+  if (start > rangeEnd || end < rangeStart || end < start) {
+    return [];
+  }
+
+  let dates: Date[];
+  if (schedule.frequency === "custom") {
+    dates = collectCustomOccurrences({
+      start,
+      end,
+      rangeStart,
+      interval: requireCustomNumber(schedule.customInterval, "custom interval"),
+      unit: requireCustomValue(schedule.customUnit, "custom unit"),
+      anchor: requireCustomValue(schedule.customAnchor, "custom anchor"),
+      dayOfMonth: schedule.customDayOfMonth ?? null,
+      dayOfWeek: schedule.customDayOfWeek ?? null
+    });
+  } else if (schedule.frequency === "weekly" || schedule.frequency === "biweekly") {
+    dates = collectDayIntervalOccurrences(start, end, rangeStart, schedule.frequency === "weekly" ? 7 : 14);
+  } else {
+    const monthStep = schedule.frequency === "monthly" ? 1 : schedule.frequency === "quarterly" ? 3 : 12;
+    dates = collectMonthIntervalOccurrences(start, end, rangeStart, monthStep);
+  }
+
+  return dates.map(dateOnly);
+}
+
+function collectCustomOccurrences(input: {
   start: Date;
   end: Date;
-  monthStart: Date;
-  monthEnd: Date;
+  rangeStart: Date;
   interval: number;
   unit: CustomRecurrenceUnit;
   anchor: CustomRecurrenceAnchor;
@@ -61,10 +68,10 @@ function countCustomOccurrencesInMonth(input: {
       throw new Error("Custom weekly recurrence requires a day of week.");
     }
 
-    return countDayIntervalOccurrences(
+    return collectDayIntervalOccurrences(
       firstWeekdayOnOrAfter(input.start, requireDayOfWeek(input.dayOfWeek)),
       input.end,
-      input.monthStart,
+      input.rangeStart,
       input.interval * 7
     );
   }
@@ -72,71 +79,64 @@ function countCustomOccurrencesInMonth(input: {
   const monthStep = input.unit === "months" ? input.interval : input.interval * 12;
 
   if (input.anchor === "day_of_month") {
-    return countCustomMonthDayOccurrences(
+    return collectCustomMonthDayOccurrences(
       input.start,
       input.end,
-      input.monthStart,
-      input.monthEnd,
+      input.rangeStart,
       monthStep,
       requireDayOfMonth(input.dayOfMonth)
     );
   }
 
-  return countCustomMonthWeekdayOccurrences(
+  return collectCustomMonthWeekdayOccurrences(
     input.start,
     input.end,
-    input.monthStart,
-    input.monthEnd,
+    input.rangeStart,
     monthStep,
     requireDayOfWeek(input.dayOfWeek)
   );
 }
 
-function countDayIntervalOccurrences(start: Date, end: Date, monthStart: Date, dayStep: number) {
+/** `end` is already clamped to both the schedule end and the range end. */
+function collectDayIntervalOccurrences(start: Date, end: Date, rangeStart: Date, dayStep: number) {
   let occurrence = new Date(start);
-  let count = 0;
+  const dates: Date[] = [];
 
-  if (occurrence < monthStart) {
-    const daysBeforeMonth = Math.floor((monthStart.getTime() - occurrence.getTime()) / DAY_MS);
-    const intervalsToSkip = Math.floor(daysBeforeMonth / dayStep);
+  if (occurrence < rangeStart) {
+    const daysBeforeRange = Math.floor((rangeStart.getTime() - occurrence.getTime()) / DAY_MS);
+    const intervalsToSkip = Math.floor(daysBeforeRange / dayStep);
     occurrence = new Date(occurrence.getTime() + intervalsToSkip * dayStep * DAY_MS);
 
-    while (occurrence < monthStart) {
+    while (occurrence < rangeStart) {
       occurrence = new Date(occurrence.getTime() + dayStep * DAY_MS);
     }
   }
 
   while (occurrence <= end) {
-    count += 1;
+    dates.push(occurrence);
     occurrence = new Date(occurrence.getTime() + dayStep * DAY_MS);
   }
 
-  return count;
+  return dates;
 }
 
-function countMonthIntervalOccurrences(
-  start: Date,
-  end: Date,
-  monthStart: Date,
-  monthEnd: Date,
-  monthStep: number
-) {
-  let count = 0;
+function collectMonthIntervalOccurrences(start: Date, end: Date, rangeStart: Date, monthStep: number) {
+  const dates: Date[] = [];
   let index = 0;
   let occurrence = occurrenceFromStart(start, index * monthStep);
 
-  while (occurrence < monthStart) {
+  while (occurrence < rangeStart) {
     index += 1;
     occurrence = occurrenceFromStart(start, index * monthStep);
   }
 
-  while (occurrence <= monthEnd && occurrence <= end) {
-    count += 1;
+  while (occurrence <= end) {
+    dates.push(occurrence);
     index += 1;
     occurrence = occurrenceFromStart(start, index * monthStep);
   }
 
-  return count;
+  return dates;
 }
 
 function occurrenceFromStart(start: Date, monthsFromStart: number) {
@@ -148,56 +148,42 @@ function occurrenceFromStart(start: Date, monthsFromStart: number) {
   return new Date(Date.UTC(year, month, Math.min(anchorDay, lastDay)));
 }
 
-function countCustomMonthDayOccurrences(
-  start: Date,
-  end: Date,
-  monthStart: Date,
-  monthEnd: Date,
-  monthStep: number,
-  dayOfMonth: number
-) {
-  let count = 0;
+function collectCustomMonthDayOccurrences(start: Date, end: Date, rangeStart: Date, monthStep: number, dayOfMonth: number) {
+  const dates: Date[] = [];
 
-  for (let monthIndex = firstEligibleMonthIndex(start, monthStart, monthStep); monthIndex <= monthIndexFromDate(monthEnd); monthIndex += monthStep) {
+  for (let monthIndex = firstEligibleMonthIndex(start, rangeStart, monthStep); monthIndex <= monthIndexFromDate(end); monthIndex += monthStep) {
     const occurrence = occurrenceFromMonthIndex(monthIndex, dayOfMonth);
 
-    if (occurrence >= start && occurrence >= monthStart && occurrence <= monthEnd && occurrence <= end) {
-      count += 1;
+    if (occurrence >= start && occurrence >= rangeStart && occurrence <= end) {
+      dates.push(occurrence);
     }
   }
 
-  return count;
+  return dates;
 }
 
-function countCustomMonthWeekdayOccurrences(
-  start: Date,
-  end: Date,
-  monthStart: Date,
-  monthEnd: Date,
-  monthStep: number,
-  dayOfWeek: number
-) {
-  let count = 0;
+function collectCustomMonthWeekdayOccurrences(start: Date, end: Date, rangeStart: Date, monthStep: number, dayOfWeek: number) {
+  const dates: Date[] = [];
 
-  for (let monthIndex = firstEligibleMonthIndex(start, monthStart, monthStep); monthIndex <= monthIndexFromDate(monthEnd); monthIndex += monthStep) {
+  for (let monthIndex = firstEligibleMonthIndex(start, rangeStart, monthStep); monthIndex <= monthIndexFromDate(end); monthIndex += monthStep) {
     const { start: selectedMonthStart, end: selectedMonthEnd } = monthBoundsFromIndex(monthIndex);
     let occurrence = firstWeekdayOnOrAfter(selectedMonthStart, dayOfWeek);
 
     while (occurrence <= selectedMonthEnd) {
-      if (occurrence >= start && occurrence >= monthStart && occurrence <= monthEnd && occurrence <= end) {
-        count += 1;
+      if (occurrence >= start && occurrence >= rangeStart && occurrence <= end) {
+        dates.push(occurrence);
       }
 
       occurrence = new Date(occurrence.getTime() + 7 * DAY_MS);
     }
   }
 
-  return count;
+  return dates;
 }
 
-function firstEligibleMonthIndex(start: Date, monthStart: Date, monthStep: number) {
+function firstEligibleMonthIndex(start: Date, rangeStart: Date, monthStep: number) {
   const startIndex = monthIndexFromDate(start);
-  const targetIndex = monthIndexFromDate(monthStart);
+  const targetIndex = monthIndexFromDate(rangeStart);
 
   if (targetIndex <= startIndex) {
     return startIndex;

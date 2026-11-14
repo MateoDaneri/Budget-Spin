@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Currency } from "@/src/db/repository";
 import { formatDisplayMoney, formatDisplayMoneyFromBase, formatDisplayMoneyFromUyu } from "@/src/finance/display-money";
 import { parseFrankfurterRate } from "@/src/finance/fx-rate";
-import { parseMoneyToMinor, toBaseMinor } from "@/src/finance/money";
+import { parseMoneyToMinor, parseSignedMoneyToMinor, toBaseMinor } from "@/src/finance/money";
 
 const uyu: Currency = {
   code: "UYU",
@@ -114,5 +114,28 @@ describe("FX provider parsing", () => {
     expect(() => parseFrankfurterRate({ date: "2026-05-29", base: "USD", quote: "EUR", rate: 0.9 }, "USD", "UYU")).toThrow(
       "unavailable"
     );
+  });
+});
+
+describe("parseSignedMoneyToMinor", () => {
+  it("accepts a leading minus and either decimal separator", () => {
+    expect(parseSignedMoneyToMinor("-12.5", 2)).toBe(-1250);
+    expect(parseSignedMoneyToMinor("12.50", 2)).toBe(1250);
+    expect(parseSignedMoneyToMinor("12,5", 2)).toBe(1250);
+    expect(parseSignedMoneyToMinor("1500", 0)).toBe(1500);
+  });
+
+  it("rejects any digits beyond the currency's decimals, so a thousands separator is never read as decimals", () => {
+    expect(() => parseSignedMoneyToMinor("1.000", 2)).toThrow();
+    expect(() => parseSignedMoneyToMinor("1,000", 2)).toThrow();
+    expect(() => parseSignedMoneyToMinor("12.345", 2)).toThrow();
+    expect(() => parseSignedMoneyToMinor("1500.00", 0)).toThrow();
+    expect(() => parseSignedMoneyToMinor("600.5", 0)).toThrow();
+  });
+
+  it("rejects malformed and unsafe values", () => {
+    for (const value of ["abc", "", "--1", "-", "1e3", "99999999999999999"]) {
+      expect(() => parseSignedMoneyToMinor(value, 2)).toThrow();
+    }
   });
 });

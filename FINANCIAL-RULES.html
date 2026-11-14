@@ -139,17 +139,18 @@
         <a href="#dashboard">Dashboard figures</a>
         <a href="#review">Reviewing pairs</a>
         <a href="#limits">Limitations</a>
+        <a href="#balance">Real net and balance</a>
       </nav>
     </div>
   </header>
 
   <main id="content" class="wrap">
-    <p class="status" role="note"><strong>Status:</strong> this logic was merged into main via PR 58 and deployed on 2026-11-10. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit <code>b71b5de</code>; the logic has not been checked against real bank or Splitwise data. Everything below describes what the code says (<code>src/finance/actual-spending.ts</code>, used by <code>app/page.tsx</code>), not observed results. Suggestions and manual confirmation (<a href="#review">section 7</a>) were added by PR 66; lint, typecheck, 188 tests and the build passed on the server on 2026-11-11.</p>
+    <p class="status" role="note"><strong>Status:</strong> this logic was merged into main via PR 58 and deployed on 2026-11-10. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit <code>b71b5de</code>; the logic has not been checked against real bank or Splitwise data. Everything below describes what the code says (<code>src/finance/actual-spending.ts</code>, used by <code>app/page.tsx</code>), not observed results. Suggestions and manual confirmation (<a href="#review">section 7</a>) were added by PR 66; lint, typecheck, 188 tests and the build passed on the server on 2026-11-11. The real net and the running balance (<a href="#balance">section 9</a>) are on branch <code>claude/feature-neto-y-saldo</code>, not merged or deployed yet.</p>
 
     <section class="card" id="what" aria-labelledby="what-h">
       <h2 id="what-h">1. What observed spending is — and is not</h2>
       <ul>
-        <li>The recurring budget is a <strong>projection</strong>. Observed spending is a separate, <strong>incomplete estimate</strong> for one month, shown next to the plan and never subtracted from it.</li>
+        <li>The recurring budget is a <strong>projection</strong>. Observed spending is a separate, <strong>incomplete estimate</strong> for one month, shown next to the planned expenses and never subtracted from them. The only place where planned and observed figures meet is <a href="#balance">section 9</a>: the fixed <strong>income</strong> minus observed spending.</li>
         <li>It is not a bank statement and not a cash balance. An e-mail notice does not prove that a payment settled, and these rules do not check whether a notice is authentic.</li>
         <li>Totals are kept <strong>per original currency</strong>. No exchange rate is applied or invented.</li>
         <li>What each amount means: a bank purchase is cash that left the account; a Splitwise <em>paid share</em> is what the user fronted; an <em>owed share</em> is the user's own consumption. A settlement between people changes a debt, not the expense, so it is never counted again as spending.</li>
@@ -425,6 +426,61 @@
         <li><strong>Pending imports are counted.</strong> A notice that was never reviewed — including one that is not genuine — is in the total until discarded. Bank e-mails are accepted by sender address and subject only; there is no sender authentication (see <a href="HANDOFF.html">HANDOFF</a>).</li>
         <li>Categories (saved per normalised description and editable on the source screens) never change the monetary calculation.</li>
         <li>A changed or deleted Splitwise record is recalculated after the next successful snapshot; records missing from a provider response are kept, not assumed deleted.</li>
+        <li><strong>Editing or deleting an income rewrites past balances.</strong> Incomes have no history: an edit changes every past occurrence (a raise entered by editing the amount adds the difference to months already in the balance), and a deleted income disappears from every month. To change or stop an income, set an end date on it and add a new one.</li>
+        <li><strong>The opening date is a UTC day.</strong> It ends at 21:00 Uruguay time (UTC−3), like every other date here. A purchase after 21:00 local on the opening day is dated the next UTC day and counts; take the bank balance at 21:00 or enter the difference as an adjustment.</li>
+        <li><strong>A false pending notice lowers the balance</strong> until it is discarded on <code>/transactions</code>, because pending notices count (<a href="#inputs">section 2</a>) and the sender check is in observation mode. The “provisional” count is the cue to review.</li>
+        <li><strong>Transfers do not count</strong> in the net or the balance. Money sent by bank transfer must be entered as an adjustment until bill payments are modelled.</li>
+      </ul>
+    </section>
+
+    <section class="card" id="balance" aria-labelledby="balance-h">
+      <h2 id="balance-h">9. Real net and balance</h2>
+      <p>Implemented in <code>src/finance/cash-position.ts</code> (pure functions) and shown in the “Real net and balance” block of the dashboard. <strong>Nothing is stored</strong>: both figures are recomputed from their sources on every page load, so discarding a notice or confirming a pair changes them immediately.</p>
+      <p>Both use the observed spending of this document <strong>per original currency</strong>, with no exchange rate. Each counted amount carries a date: the bank date for a purchase or a pair, the Splitwise date for an unpaid shared expense (the first ten characters of the stored timestamp, as in <a href="#limits">section 8</a>).</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Figure</th><th scope="col">Formula</th><th scope="col">Window</th></tr></thead>
+          <tbody>
+            <tr><td>Net this month</td><td>fixed income of the month − observed spending of the month</td><td>the whole selected month; income dated later in the current month counts (it is fixed)</td></tr>
+            <tr><td>Balance today</td><td>opening balance + income − observed spending + adjustments</td><td>after the opening date, up to and including today (UTC date)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="flow">
+        <h3 id="balance-window-t">Which movements enter the balance</h3>
+        <p><span class="tag-conceptual">Conceptual diagram</span> Example dates, not real data.</p>
+        <svg viewBox="0 0 640 170" role="img" aria-labelledby="balance-window-t balance-window-d" style="max-width: 640px">
+          <desc id="balance-window-d">Timeline. The opening balance is set at the end of 31 October. A purchase on 31 October is outside the window. The income on 1 November, a purchase on 11 November and an adjustment on 12 November are inside the window, which ends today, 14 November. An income on 15 November is in the future and outside the window.</desc>
+          <defs>
+            <marker id="arrow-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="fd-m" d="M0 0 L10 5 L0 10 z" /></marker>
+          </defs>
+          <rect class="fd-good" x="150" y="40" width="370" height="60" rx="8" opacity=".55" />
+          <text class="fd-h" x="335" y="30" text-anchor="middle">counted: after opening date, up to today</text>
+          <line class="fd-a" x1="20" y1="100" x2="625" y2="100" marker-end="url(#arrow-w)" />
+          <line class="fd-a" x1="150" y1="40" x2="150" y2="118" />
+          <text class="fd-t" x="150" y="134" text-anchor="middle">31 Oct · opening</text>
+          <line class="fd-a" x1="520" y1="40" x2="520" y2="118" />
+          <text class="fd-t" x="520" y="134" text-anchor="middle">14 Nov · today</text>
+          <rect class="fd-drop" x="96" y="60" width="50" height="26" rx="6" />
+          <text class="fd-t" x="121" y="78" text-anchor="middle">−10</text>
+          <rect class="fd-full" x="170" y="60" width="60" height="26" rx="6" />
+          <text class="fd-t" x="200" y="78" text-anchor="middle">+1000</text>
+          <rect class="fd-full" x="380" y="60" width="50" height="26" rx="6" />
+          <text class="fd-t" x="405" y="78" text-anchor="middle">−20</text>
+          <rect class="fd-warn" x="440" y="60" width="60" height="26" rx="6" />
+          <text class="fd-t" x="470" y="78" text-anchor="middle">adj −5</text>
+          <rect class="fd-drop" x="540" y="60" width="60" height="26" rx="6" />
+          <text class="fd-t" x="570" y="78" text-anchor="middle">+1000</text>
+          <text class="fd-l" x="121" y="158" text-anchor="middle">same day: out</text>
+          <text class="fd-l" x="570" y="158" text-anchor="middle">future: out</text>
+        </svg>
+      </figure>
+      <ul>
+        <li><strong>Opening balance:</strong> one per currency, set on <code>/balance</code> with an amount (negative allowed) and a date. It is the amount at the <strong>end</strong> of that UTC day (21:00 Uruguay time), so movements on the opening date itself are not counted again. A currency without an opening balance shows no balance. An opening date after today shows the opening amount unchanged.</li>
+        <li><strong>Income:</strong> the configured incomes (<code>/income</code>), each counted on the dates its recurrence produces. It is not confirmed by any notice.</li>
+        <li><strong>Adjustments:</strong> signed amounts with a mandatory note, for anything the notices miss (cash, other banks, transfers, refunds). They can be added or deleted, not edited.</li>
+        <li><strong>Provisional:</strong> the net shows the month's pending, ambiguous and omitted counts; the balance shows the same counts summed over every month since the earliest opening date (the first month may include notices dated before the opening date, so it errs towards flagging).</li>
+        <li><strong>Input checks</strong> (server side): known currency; a real date not after today; amounts with at most the currency's decimals (any extra digit is rejected, so <code>1.000</code> is not read as 1.00); adjustments different from zero.</li>
       </ul>
     </section>
   </main>

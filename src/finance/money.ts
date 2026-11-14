@@ -14,6 +14,29 @@ export function parseMoneyToMinor(value: string, minorUnit: number) {
   return Number(whole) * multiplier + Number(fraction || 0);
 }
 
+/**
+ * Signed decimal → integer minor units, for balances and adjustments. Accepts one leading "-" and a
+ * "," or "." decimal separator. Any digit beyond the currency's minor unit is rejected, never truncated:
+ * "1.000" (one thousand, written with a thousands separator) must not become 1.00.
+ */
+export function parseSignedMoneyToMinor(value: string, minorUnit: number): number {
+  const normalized = value.trim().replace(",", ".");
+  // eslint-disable-next-line security/detect-unsafe-regex -- bounded digit groups separated by a literal dot; linear backtracking.
+  const match = /^(-?)(\d{1,15})(?:\.(\d{1,12}))?$/.exec(normalized);
+  if (!match || !Number.isInteger(minorUnit) || minorUnit < 0 || minorUnit > 6) {
+    throw new RangeError("Amount must be a decimal number.");
+  }
+  const [, sign, whole, fraction = ""] = match;
+  if (fraction.length > minorUnit) {
+    throw new RangeError("Amount has more decimals than the currency allows.");
+  }
+  const magnitude = Number(whole + fraction.padEnd(minorUnit, "0"));
+  if (!Number.isSafeInteger(magnitude)) {
+    throw new RangeError("Amount is too large.");
+  }
+  return sign === "-" ? -magnitude : magnitude;
+}
+
 export function formatMoney(amountMinor: number, currency: Currency) {
   return new Intl.NumberFormat("en", {
     style: "currency",

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { MoneyStack } from "@/app/components/MoneyStack";
-import { getBaseCurrency, listCurrencies, listIncomeItems, listRecurringExpenses, listTransactions } from "@/src/db/repository";
-import { addMonths, currentMonthKey, formatMonthLabel, trailingMonths } from "@/src/finance/dates";
+import { getBaseCurrency, listBalanceAdjustments, listCurrencies, listIncomeItems, listOpeningBalances, listRecurringExpenses, listTransactions } from "@/src/db/repository";
+import { balanceByCurrency, monthlyNetByCurrency } from "@/src/finance/cash-position";
+import { addMonths, currentMonthKey, dateOnly, formatMonthLabel, trailingMonths } from "@/src/finance/dates";
 import { formatDisplayMoneyFromUyu, getDisplayMoneyContext } from "@/src/finance/display-money";
 import { calculateMonthMetrics } from "@/src/finance/metrics";
 import { calculateActualMonth, suggestPairs } from "@/src/finance/actual-spending";
@@ -54,6 +55,21 @@ export default async function DashboardPage({ searchParams }: Props) {
     return unit ? formatMoney(amountMinor, unit) : `${currency} ${amountMinor} minor units`;
   };
   const planComparison = comparePlanWithObserved(plannedExpenseByCurrency(month, expenses), actual.totals);
+  // Real net and balance: fixed income against observed spending, per currency, recomputed on every read.
+  const realNet = monthlyNetByCurrency(month, incomes, actual);
+  const { balances, quality } = balanceByCurrency({
+    today: dateOnly(new Date()),
+    openings: listOpeningBalances(),
+    incomes,
+    adjustments: listBalanceAdjustments(),
+    actualForMonth: (key) => (key === month ? actual : calculateActualMonth(key, transactions, shared, minorUnits, exclusions, confirmations))
+  });
+  const balanceByCode = new Map(balances.map((item) => [item.currency, item]));
+  const netByCode = new Map(realNet.map((item) => [item.currency, item]));
+  const realNetCurrencies = [...new Set([...netByCode.keys(), ...balanceByCode.keys()])].sort();
+  // The month's net and the balance cover different periods, so each gets its own review count.
+  const netReviewCount = actual.pending + actual.ambiguous + actual.omitted;
+  const balanceReviewCount = balances.length > 0 ? quality.pending + quality.ambiguous + quality.omitted : 0;
   const trend = trailingMonths(month, 6).map((trendMonth) =>
     calculateMonthMetrics({ month: trendMonth, incomes, expenses, currencies, baseCurrency })
   );
@@ -108,6 +124,57 @@ export default async function DashboardPage({ searchParams }: Props) {
           <div className="outlook-row expense-row"><span className="outlook-symbol" aria-hidden="true">↘</span><div><span>Committed expenses</span><strong><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.expenseBaseMinor, context: displayMoneyContext })} /></strong></div></div>
           <div className="outlook-row optional-row"><span className="outlook-symbol" aria-hidden="true">◌</span><div><span>Optional expenses</span><strong><MoneyStack values={formatDisplayMoneyFromUyu({ amountMinor: metrics.optionalExpenseBaseMinor, context: displayMoneyContext })} /></strong></div></div>
         </div>
+      </section>
+      <section className="panel real-net" id="real-net" aria-labelledby="real-net-title">
+        <div className="panel-header">
+          <h2 id="real-net-title">Real net and balance</h2>
+          <span className="actual-month">{formatMonthLabel(month)}</span>
+        </div>
+        {realNetCurrencies.length === 0 ? (
+          <p className="muted">No income, spending or opening balance yet. <Link href="/balance">Set an opening balance</Link>.</p>
+        ) : (
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Real net and balance by currency">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">Currency</th>
+                  <th scope="col">Income</th>
+                  <th scope="col">Spent</th>
+                  <th scope="col">Net this month</th>
+                  <th scope="col">Balance today</th>
+                </tr>
+              </thead>
+              <tbody>
+                {realNetCurrencies.map((code) => {
+                  const net = netByCode.get(code);
+                  const balance = balanceByCode.get(code);
+                  return (
+                    <tr key={code}>
+                      <th scope="row">{code}</th>
+                      <td data-label="Income">{showAmount(code, net?.incomeMinor ?? 0)}</td>
+                      <td data-label="Spent">{showAmount(code, net?.spentMinor ?? 0)}</td>
+                      <td data-label="Net this month"><strong>{showAmount(code, net?.netMinor ?? 0)}</strong></td>
+                      <td data-label="Balance today">
+                        {balance ? <strong title={`From ${balance.asOfDate}`}>{showAmount(code, balance.balanceMinor)}</strong> : <Link href="/balance">Set an opening balance</Link>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <ul className="count-chips" aria-label="Real net status">
+          <li className={netReviewCount > 0 ? "count-chip count-chip-warning" : "count-chip"}>
+            {netReviewCount > 0 ? <><strong>Net provisional</strong> {netReviewCount} to review this month</> : "Net: nothing to review"}
+          </li>
+          {balances.length > 0 && (
+            <li className={balanceReviewCount > 0 ? "count-chip count-chip-warning" : "count-chip"}>
+              {balanceReviewCount > 0 ? <><strong>Balance provisional</strong> {balanceReviewCount} to review since the opening date</> : "Balance: nothing to review"}
+            </li>
+          )}
+        </ul>
+        <p className="actual-links"><Link href="/balance">Opening balance and adjustments</Link></p>
       </section>
       <section className="panel actual-spending" id="actual-spending" aria-labelledby="actual-spending-title">
         {reconciliationError && <p className="alert" role="alert">{reconciliationError}</p>}
