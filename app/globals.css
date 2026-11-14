@@ -1757,3 +1757,10 @@ section.panel + section.panel { margin-top: 16px; }
   .bill-amount { grid-column: 3; grid-row: 1; }
   .bill-row > .bill-meta, .bill-edit { grid-column: 2 / -1; }
 }
+
+/* "Make recurring" on a transaction card: a quiet link that opens a compact form below the card. */
+.recurring-make summary { cursor: pointer; color: var(--muted); font-size: 12.5px; list-style: none; }
+.recurring-make summary::-webkit-details-marker { display: none; }
+.recurring-make summary:hover { color: var(--accent-dark); }
+.recurring-make[open] { flex-basis: 100%; }
+.recurring-make[open] form { margin-top: 10px; }

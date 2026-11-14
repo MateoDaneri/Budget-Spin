@@ -4,6 +4,7 @@ import { isSenderAuthVerdict, type SenderAuthVerdict } from "../ingest/sender-au
 import type { PaymentMethod } from "../ingest/itau-parser";
 import type { BalanceAdjustment, OpeningBalance } from "../finance/cash-position";
 import type { Bill, BillPayment } from "../finance/bills";
+import { recurringMatchKey } from "../finance/recurring-match";
 
 export const LOCAL_USER_ID = "mdaneri";
 const LEGACY_LOCAL_USER_ID = "local-user";
@@ -80,6 +81,8 @@ export type RecurringExpense = {
   startDate: string;
   endDate: string | null;
   isActive: boolean;
+  /** Ties the expense to the bank movements that pay it (see recurring-match.ts); null when entered by hand. */
+  matchKey: string | null;
 };
 
 export type FinancialPlan = {
@@ -436,6 +439,7 @@ export function migrate() {
   ensureColumn("splitwise_sync_account", "full_synced_at", "TEXT");
   ensureUserAuthColumns();
   migrateLegacyLocalUser();
+  ensureColumn("recurring_expenses", "match_key", "TEXT");
   ensureColumn("recurring_expenses", "is_optional", "INTEGER NOT NULL DEFAULT 0 CHECK (is_optional IN (0, 1))");
   ensureCategorySortOrder();
   ensureIncomeItemsRecurrenceColumns();
@@ -1099,7 +1103,7 @@ export function listRecurringExpenses(): RecurringExpense[] {
         e.currency_code, e.amount_minor, e.fx_rate_to_base, e.frequency,
         e.custom_interval, e.custom_unit, e.custom_anchor, e.custom_day_of_month,
         e.custom_day_of_week, e.is_optional,
-        e.start_date, e.end_date, e.is_active
+        e.start_date, e.end_date, e.is_active, e.match_key
       FROM recurring_expenses e
       JOIN categories c ON c.id = e.category_id
       LEFT JOIN expense_groups g ON g.id = e.group_id
@@ -1127,6 +1131,7 @@ export function listRecurringExpenses(): RecurringExpense[] {
     start_date: string;
     end_date: string | null;
     is_active: number;
+    match_key: string | null;
   }>;
 
   return rows.map((row) => ({
@@ -1149,7 +1154,8 @@ export function listRecurringExpenses(): RecurringExpense[] {
     isOptional: row.is_optional === 1,
     startDate: row.start_date,
     endDate: row.end_date,
-    isActive: row.is_active === 1
+    isActive: row.is_active === 1,
+    matchKey: row.match_key
   }));
 }
 
@@ -1808,4 +1814,53 @@ export function setBillPaid(billId: number, month: string, paid: boolean): void 
   } else {
     db.prepare("DELETE FROM bill_payments WHERE bill_id = ? AND month = ?").run(billId, month);
   }
+}
+
+/**
+ * Creates a monthly recurring expense from one bank movement (purchase or outgoing transfer).
+ * Amount, currency and start date are re-read from the stored movement, never taken from the form.
+ * The expense keeps the movement's match key so later movements can be recognised as its payments.
+ * Refuses when the movement has no stable key or an active expense already uses that key.
+ */
+export function createRecurringExpenseFromTransaction(input: { transactionId: number; description: string; categoryId: number; fxRateToBase: number | null }): number {
+  migrate();
+  const db = getDb();
+  const row = db
+    .prepare("SELECT kind, description, currency_code, amount_minor, txn_date FROM transactions WHERE id = ? AND user_id = ?")
+    .get(input.transactionId, LOCAL_USER_ID) as { kind: TransactionKind; description: string; currency_code: string; amount_minor: number; txn_date: string } | undefined;
+  if (!row) throw new Error("Transaction not found.");
+  const matchKey = recurringMatchKey({ kind: row.kind, description: row.description, currencyCode: row.currency_code, amountMinor: row.amount_minor });
+  if (!matchKey) throw new Error("This movement cannot become recurring.");
+  if (db.prepare("SELECT 1 FROM recurring_expenses WHERE user_id = ? AND is_active = 1 AND match_key = ?").get(LOCAL_USER_ID, matchKey)) {
+    throw new Error("Already recurring.");
+  }
+  const category = db.prepare("SELECT 1 FROM categories WHERE id = ? AND user_id = ? AND type = 'expense' AND is_active = 1").get(input.categoryId, LOCAL_USER_ID);
+  if (!category) throw new Error("Invalid category.");
+  const base = getBaseCurrency();
+  const fxRateToBase = row.currency_code === base.code ? null : input.fxRateToBase;
+  if (row.currency_code !== base.code && !(fxRateToBase && fxRateToBase > 0 && Number.isFinite(fxRateToBase))) throw new Error("FX rate required.");
+  const now = nowIso();
+  const result = db.prepare(`
+    INSERT INTO recurring_expenses (
+      user_id, category_id, group_id, description, currency_code, amount_minor, fx_rate_to_base, frequency,
+      is_optional, start_date, end_date, is_active, created_at, updated_at, match_key
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'monthly', 0, ?, NULL, 1, ?, ?, ?)
+  `).run(LOCAL_USER_ID, input.categoryId, getDefaultExpenseGroupId(), input.description, row.currency_code, row.amount_minor, fxRateToBase, row.txn_date.slice(0, 10), now, now, matchKey);
+  return Number(result.lastInsertRowid);
+}
+
+/** Active match keys, to show which movements already belong to a recurring expense. */
+export function listRecurringMatchKeys(): Set<string> {
+  migrate();
+  const rows = getDb().prepare("SELECT match_key FROM recurring_expenses WHERE user_id = ? AND is_active = 1 AND match_key IS NOT NULL").all(LOCAL_USER_ID) as Array<{ match_key: string }>;
+  return new Set(rows.map((row) => row.match_key));
+}
+
+/** Most recent FX rate used by an active expense in that currency, to prefill the form. */
+export function latestExpenseFxRate(currencyCode: string): number | null {
+  migrate();
+  const row = getDb()
+    .prepare("SELECT fx_rate_to_base FROM recurring_expenses WHERE user_id = ? AND is_active = 1 AND currency_code = ? AND fx_rate_to_base > 0 ORDER BY updated_at DESC LIMIT 1")
+    .get(LOCAL_USER_ID, currencyCode) as { fx_rate_to_base: number } | undefined;
+  return row?.fx_rate_to_base ?? null;
 }

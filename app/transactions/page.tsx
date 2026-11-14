@@ -1,5 +1,6 @@
-import { reviewTransactionAction } from "@/src/actions/transactions";
-import { latestItauIngestRun, listCategories, listCurrencies, listTransactions } from "@/src/db/repository";
+import { makeRecurringAction, reviewTransactionAction } from "@/src/actions/transactions";
+import { getBaseCurrency, latestExpenseFxRate, latestItauIngestRun, listCategories, listCurrencies, listRecurringMatchKeys, listTransactions, type Category } from "@/src/db/repository";
+import { recurringMatchKey } from "@/src/finance/recurring-match";
 import { ImportCategory } from "@/app/components/ImportCategory";
 import { formatMoney } from "@/src/finance/money";
 
@@ -12,7 +13,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   "Invalid review decision.": "That review could not be applied. Please try again.",
   "Could not save the review.": "Could not save the review. Please try again.",
   "Invalid category.": "That category could not be applied. Please try again.",
-  "Could not save category.": "Could not save the category. Please try again."
+  "Could not save category.": "Could not save the category. Please try again.",
+  "Could not make recurring.": "Could not make it recurring. Check the name, category and FX rate.",
+  "Already recurring.": "That merchant or transfer is already a recurring expense."
 };
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
@@ -30,6 +33,9 @@ export default async function TransactionsPage({ searchParams }: Props) {
   const latestRun = latestItauIngestRun();
   const categories = listCategories("expense");
   const currencies = new Map(listCurrencies().map((currency) => [currency.code, currency]));
+  const baseCode = getBaseCurrency().code;
+  const recurringKeys = listRecurringMatchKeys();
+  const fxDefaults = new Map([...currencies.keys()].filter((code) => code !== baseCode).map((code) => [code, latestExpenseFxRate(code)]));
   const error = errorMessage(params.error);
   const unverifiedPending = transactions.filter((transaction) => transaction.status === "pending" && (transaction.senderAuth === "fail" || transaction.senderAuth === "none")).length;
 
@@ -76,6 +82,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
                     {transaction.senderAuth && Object.hasOwn(SENDER_AUTH_LABELS, transaction.senderAuth) ? <span className="status-pill status-warning">{SENDER_AUTH_LABELS[transaction.senderAuth]}</span> : null}
                     {transaction.kind === "purchase" ? <ImportCategory source="transaction" id={transaction.id} categoryId={transaction.categoryId} categories={categories} /> : null}
                     <TransactionActions transaction={transaction} />
+                    <Recurring transaction={transaction} recurringKeys={recurringKeys} categories={categories} baseCode={baseCode} fxDefault={fxDefaults.get(transaction.currencyCode) ?? null} />
                   </div>
                 </article>
               );
@@ -104,4 +111,45 @@ function cardLabel(transaction: { paymentMethod: "credit" | "debit" | null; card
   const name = method ?? transaction.cardNetwork ?? (transaction.cardLast4 ? "Card" : null);
   if (!name) return null;
   return transaction.cardLast4 ? `${name} ***${transaction.cardLast4}` : name;
+}
+
+/** "Recurring" when this merchant or transfer already backs a recurring expense; otherwise a compact form to make it one. */
+function Recurring({ transaction, recurringKeys, categories, baseCode, fxDefault }: {
+  transaction: ReturnType<typeof listTransactions>[number];
+  recurringKeys: Set<string>;
+  categories: Category[];
+  baseCode: string;
+  fxDefault: number | null;
+}) {
+  if (transaction.status === "discarded") return null;
+  const key = recurringMatchKey(transaction);
+  if (!key) return null;
+  if (recurringKeys.has(key)) return <span className="status-pill status-muted">Recurring</span>;
+  const prefix = `recurring-${transaction.id}`;
+  const defaultCategory = categories.some((category) => category.id === transaction.categoryId) ? transaction.categoryId ?? undefined : categories.find((category) => category.name === "Other")?.id;
+  return (
+    <details className="recurring-make">
+      <summary aria-label={`Make ${transaction.description} recurring`}>Make recurring</summary>
+      <form action={makeRecurringAction} className="form-grid">
+        <input type="hidden" name="id" value={transaction.id} />
+        <div className="field span-2">
+          <label htmlFor={`${prefix}-name`}>Name</label>
+          <input id={`${prefix}-name`} name="name" maxLength={120} defaultValue={transaction.kind === "purchase" ? transaction.description : ""} placeholder="Parking" required />
+        </div>
+        <div className="field">
+          <label htmlFor={`${prefix}-category`}>Category</label>
+          <select id={`${prefix}-category`} name="categoryId" defaultValue={defaultCategory} required>
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+        </div>
+        {transaction.currencyCode !== baseCode ? (
+          <div className="field">
+            <label htmlFor={`${prefix}-fx`}>FX to {baseCode}</label>
+            <input id={`${prefix}-fx`} name="fxRateToBase" inputMode="decimal" defaultValue={fxDefault ?? ""} required />
+          </div>
+        ) : null}
+        <button className="button" type="submit">Save monthly</button>
+      </form>
+    </details>
+  );
 }
