@@ -112,7 +112,7 @@ function processMessage(message: ItauEmailInput, minorUnits: Map<string, number>
   if (amountMinor <= 0) throw new UnrecognizedNoticeError(`${candidateLabel} has a non-positive amount and requires review.`, "non_positive_amount");
   return insertImportedTransaction({
     txnDate: aviso.txnDateIso, description: aviso.merchant, currencyCode: aviso.currencyCode,
-    amountMinor, cardNetwork: aviso.cardNetwork, cardLast4: aviso.cardLast4, paymentMethod: aviso.paymentMethod,
+    amountMinor, cardNetwork: aviso.cardNetwork, cardLast4: aviso.cardLast4, paymentMethod: aviso.paymentMethod, counterpartyBank: aviso.counterpartyBank ?? null, counterpartyLast4: aviso.counterpartyLast4 ?? null,
     source: SOURCE, messageId: aviso.messageId, rawExcerpt: aviso.rawExcerpt,
     kind: transfer ? "transfer_out" : "purchase", status: "pending",
     // Observation mode (MEJ-002): the verdict is recorded and shown, never used

@@ -73,6 +73,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
                       <span>
                         {kind} · <time dateTime={transaction.txnDate}>{transaction.txnDate.replace("T", " ").replace(/\.\d{3}Z$/, " UTC")}</time>
                         {cardLabel(transaction) ? <> · {cardLabel(transaction)}</> : null}
+                        {transaction.counterpartyBank && transaction.counterpartyLast4 ? <> · {transaction.counterpartyBank} ***{transaction.counterpartyLast4}</> : null}
                       </span>
                     </div>
                     <strong>{amount}</strong>

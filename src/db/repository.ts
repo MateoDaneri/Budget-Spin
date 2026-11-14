@@ -125,6 +125,9 @@ export type Transaction = {
   cardLast4: string | null;
   /** Credit or debit card; null for transfers and notices that did not state it. */
   paymentMethod: PaymentMethod | null;
+  /** Outgoing transfers: destination bank and last four account digits from the notice; null otherwise. */
+  counterpartyBank: string | null;
+  counterpartyLast4: string | null;
   source: string;
   messageId: string | null;
   rawExcerpt: string | null;
@@ -440,6 +443,8 @@ export function migrate() {
   ensureUserAuthColumns();
   migrateLegacyLocalUser();
   ensureColumn("recurring_expenses", "match_key", "TEXT");
+  ensureColumn("transactions", "counterparty_bank", "TEXT CHECK (counterparty_bank IS NULL OR length(counterparty_bank) BETWEEN 1 AND 60)");
+  ensureColumn("transactions", "counterparty_last4", "TEXT CHECK (counterparty_last4 IS NULL OR (length(counterparty_last4) BETWEEN 3 AND 4 AND counterparty_last4 NOT GLOB '*[^0-9]*'))");
   ensureColumn("recurring_expenses", "is_optional", "INTEGER NOT NULL DEFAULT 0 CHECK (is_optional IN (0, 1))");
   ensureCategorySortOrder();
   ensureIncomeItemsRecurrenceColumns();
@@ -1549,6 +1554,8 @@ export function insertImportedTransaction(input: {
   cardNetwork?: string | null;
   cardLast4?: string | null;
   paymentMethod?: PaymentMethod | null;
+  counterpartyBank?: string | null;
+  counterpartyLast4?: string | null;
   source: string;
   messageId: string;
   rawExcerpt?: string | null;
@@ -1560,9 +1567,10 @@ export function insertImportedTransaction(input: {
     .prepare(`
       INSERT INTO transactions (
         user_id, txn_date, description, currency_code, amount_minor, category_id,
-        card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind, sender_auth, payment_method
+        card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind, sender_auth, payment_method,
+        counterparty_bank, counterparty_last4
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, message_id) DO NOTHING
     `)
     .run(
@@ -1581,7 +1589,9 @@ export function insertImportedTransaction(input: {
       nowIso(),
       input.kind ?? "purchase",
       input.senderAuth ?? null,
-      input.kind === "transfer_out" || input.kind === "transfer_in" ? null : input.paymentMethod ?? null
+      input.kind === "transfer_out" || input.kind === "transfer_in" ? null : input.paymentMethod ?? null,
+      input.kind === "transfer_out" ? input.counterpartyBank ?? null : null,
+      input.kind === "transfer_out" ? input.counterpartyLast4 ?? null : null
     );
 
   return { inserted: result.changes > 0 };
@@ -1593,7 +1603,8 @@ export function listTransactions(limit = 200): Transaction[] {
     .prepare(`
       SELECT t.id, t.user_id, t.txn_date, t.description, t.currency_code, t.amount_minor, t.category_id,
         t.card_network, t.card_last4, t.source, t.message_id, t.raw_excerpt, t.kind,
-        COALESCE(r.decision, t.status) AS status, t.created_at, t.sender_auth, t.payment_method
+        COALESCE(r.decision, t.status) AS status, t.created_at, t.sender_auth, t.payment_method,
+        t.counterparty_bank, t.counterparty_last4
       FROM transactions t
       LEFT JOIN transaction_reviews r ON r.transaction_id = t.id
       WHERE t.user_id = ?
@@ -1618,6 +1629,8 @@ export function listTransactions(limit = 200): Transaction[] {
     created_at: string;
     sender_auth: string | null;
     payment_method: string | null;
+    counterparty_bank: string | null;
+    counterparty_last4: string | null;
   }>;
 
   return rows.map((row) => ({
@@ -1637,7 +1650,9 @@ export function listTransactions(limit = 200): Transaction[] {
     status: row.status,
     createdAt: row.created_at,
     senderAuth: isSenderAuthVerdict(row.sender_auth) ? row.sender_auth : null,
-    paymentMethod: row.payment_method === "credit" || row.payment_method === "debit" ? row.payment_method : null
+    paymentMethod: row.payment_method === "credit" || row.payment_method === "debit" ? row.payment_method : null,
+    counterpartyBank: row.counterparty_bank,
+    counterpartyLast4: row.counterparty_last4
   }));
 }
 
@@ -1826,10 +1841,10 @@ export function createRecurringExpenseFromTransaction(input: { transactionId: nu
   migrate();
   const db = getDb();
   const row = db
-    .prepare("SELECT kind, description, currency_code, amount_minor, txn_date FROM transactions WHERE id = ? AND user_id = ?")
-    .get(input.transactionId, LOCAL_USER_ID) as { kind: TransactionKind; description: string; currency_code: string; amount_minor: number; txn_date: string } | undefined;
+    .prepare("SELECT kind, description, currency_code, amount_minor, txn_date, counterparty_bank, counterparty_last4 FROM transactions WHERE id = ? AND user_id = ?")
+    .get(input.transactionId, LOCAL_USER_ID) as { kind: TransactionKind; description: string; currency_code: string; amount_minor: number; txn_date: string; counterparty_bank: string | null; counterparty_last4: string | null } | undefined;
   if (!row) throw new Error("Transaction not found.");
-  const matchKey = recurringMatchKey({ kind: row.kind, description: row.description, currencyCode: row.currency_code, amountMinor: row.amount_minor });
+  const matchKey = recurringMatchKey({ kind: row.kind, description: row.description, currencyCode: row.currency_code, amountMinor: row.amount_minor, counterpartyBank: row.counterparty_bank, counterpartyLast4: row.counterparty_last4 });
   if (!matchKey) throw new Error("This movement cannot become recurring.");
   if (db.prepare("SELECT 1 FROM recurring_expenses WHERE user_id = ? AND is_active = 1 AND match_key = ?").get(LOCAL_USER_ID, matchKey)) {
     throw new Error("Already recurring.");
