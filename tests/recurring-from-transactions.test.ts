@@ -36,11 +36,12 @@ describe("recurringMatchKey", () => {
     expect(b).toBe(a);
   });
 
-  it("keys outgoing transfers by destination and currency when the destination is known", () => {
+  it("keys outgoing transfers by destination digits and currency, whatever the amount or bank spelling", () => {
     const base = { kind: "transfer_out" as const, description: "Transferencia enviada", currencyCode: "UYU", counterpartyBank: "Banco  Ejemplo", counterpartyLast4: "1234" };
-    expect(recurringMatchKey({ ...base, amountMinor: 390000 })).toBe("transfer-to:banco ejemplo:1234:UYU");
-    expect(recurringMatchKey({ ...base, amountMinor: 420000 })).toBe("transfer-to:banco ejemplo:1234:UYU");
-    expect(recurringMatchKey({ ...base, currencyCode: "USD", amountMinor: 1 })).toBe("transfer-to:banco ejemplo:1234:USD");
+    expect(recurringMatchKey({ ...base, amountMinor: 390000 })).toBe("transfer-to:1234:UYU");
+    expect(recurringMatchKey({ ...base, amountMinor: 420000 })).toBe("transfer-to:1234:UYU");
+    expect(recurringMatchKey({ ...base, counterpartyBank: "Ejemplo", amountMinor: 1 })).toBe("transfer-to:1234:UYU");
+    expect(recurringMatchKey({ ...base, currencyCode: "USD", amountMinor: 1 })).toBe("transfer-to:1234:USD");
   });
 
   it("keys outgoing transfers by currency and exact amount, and gives no key otherwise", () => {
@@ -128,7 +129,7 @@ describe("make recurring", () => {
   it("links a transfer with a known destination by destination, not amount", async () => {
     const id = movement("<d@example.test>", { kind: "transfer_out", description: "Transferencia enviada", currencyCode: "UYU", amountMinor: 390000, cardNetwork: null, cardLast4: null, counterpartyBank: "Banco Ejemplo", counterpartyLast4: "1234" });
     await redirectedTo(makeRecurringAction(form({ id, name: "Parking", categoryId: subscriptions() })));
-    expect(listRecurringExpenses()[0]).toMatchObject({ amountMinor: 390000, matchKey: "transfer-to:banco ejemplo:1234:UYU" });
+    expect(listRecurringExpenses()[0]).toMatchObject({ amountMinor: 390000, matchKey: "transfer-to:1234:UYU" });
     expect(listTransactions().find((row) => row.id === id)).toMatchObject({ counterpartyBank: "Banco Ejemplo", counterpartyLast4: "1234" });
   });
 
