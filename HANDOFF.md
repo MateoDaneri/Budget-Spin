@@ -227,7 +227,7 @@ observation mode):
 
 ## Real net and balance — branch `claude/feature-neto-y-saldo`
 
-> **State: in review, not merged or deployed.** The rules are in `FINANCIAL-RULES` section 9; this section only maps the code.
+> **State: merged via PR 70 (`792588d`) and deployed on 2026-11-14.** Migration rehearsal added only the two new tables and the previous image left the migrated database unchanged. The rules are in `FINANCIAL-RULES` section 9; this section only maps the code.
 
 Adds, per currency and without exchange rates, the month's **real net**
 (fixed income − observed spending) and a **running balance** from an opening
