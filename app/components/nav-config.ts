@@ -1,4 +1,4 @@
-export type NavIconKey = "overview" | "income" | "expenses" | "plans" | "categories" | "transactions" | "splitwise" | "setup";
+export type NavIconKey = "overview" | "income" | "expenses" | "plans" | "categories" | "transactions" | "splitwise" | "balance" | "setup";
 
 export type NavLinkConfig = {
   href: string;
@@ -10,6 +10,7 @@ export const navLinks: NavLinkConfig[] = [
   { href: "/", label: "Overview", icon: "overview" },
   { href: "/income", label: "Income", icon: "income" },
   { href: "/expenses", label: "Expenses", icon: "expenses" },
+  { href: "/balance", label: "Balance", icon: "balance" },
   { href: "/transactions", label: "Transactions", icon: "transactions" },
   { href: "/splitwise", label: "Splitwise", icon: "splitwise" },
   { href: "/plans", label: "Plans", icon: "plans" },

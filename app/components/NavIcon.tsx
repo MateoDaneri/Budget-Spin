@@ -30,6 +30,12 @@ const paths: Record<NavIconKey, React.ReactNode> = {
   transactions: <path d="M4 5h16v14H4z M7 9h10 M7 13h10 M7 17h6" />,
   splitwise: <path d="M4 7h10m-3-3 3 3-3 3M20 17H10m3-3-3 3 3 3" />,
   categories: <path d="M4 5h16M4 12h16M4 19h10" />,
+  balance: (
+    <>
+      <rect x="3" y="6" width="18" height="13" rx="2" />
+      <path d="M3 10h18M16 14.5h2" />
+    </>
+  ),
   setup: (
     <>
       <circle cx="12" cy="12" r="3" />
