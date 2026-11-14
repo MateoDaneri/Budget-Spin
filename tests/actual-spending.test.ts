@@ -62,3 +62,16 @@ describe("dated contributions", () => {
     expect(result.omitted).toBe(1);
   });
 });
+
+describe("refunds", () => {
+  it("subtracts a refund on its date and never pairs it", () => {
+    const result = compute([bank(1, { description: "Ride Example", amountMinor: 53096 }), bank(2, { description: "Ride Example", amountMinor: 53096, isRefund: true, txnDate: "2026-11-06T01:00:00Z" })], [shared(3, { description: "ride example", paid: "530.96", owed: "200.00", total: "530.96" })]);
+    expect(result.totals).toEqual([{ currency: "UYU", amountMinor: 20000 - 53096 }]);
+    expect(result.contributions).toContainEqual({ date: "2026-11-06", currency: "UYU", amountMinor: -53096, source: "bank", refId: 2 });
+    expect(result.pairs.map((pair) => pair.bankId)).toEqual([1]);
+  });
+
+  it("ignores a discarded refund", () => {
+    expect(compute([bank(1, { amountMinor: 1000, isRefund: true, status: "discarded" })], []).totals).toEqual([]);
+  });
+});

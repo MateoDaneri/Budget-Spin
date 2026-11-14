@@ -16,7 +16,7 @@ export type ActualMonth = {
   pairs: Array<{ bankId: number; splitwiseId: number; description: string; currency: string; paidMinor: number; owedMinor: number; manual: boolean }>;
 };
 
-type Bank = Pick<Transaction, "id" | "txnDate" | "description" | "currencyCode" | "amountMinor" | "kind" | "status">;
+type Bank = Pick<Transaction, "id" | "txnDate" | "description" | "currencyCode" | "amountMinor" | "kind" | "status"> & Partial<Pick<Transaction, "isRefund">>;
 type Shared = Pick<SavedSplitwiseExpense, "id" | "date" | "description" | "currency" | "paid" | "owed" | "total" | "payment" | "deleted">;
 
 export type ActualBank = Bank;
@@ -70,7 +70,9 @@ const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 function assertMonth(month: string): void { if (!MONTH.test(month)) throw new Error("Invalid month."); }
 // Splitwise amounts use the same configured minor unit as bank amounts, so sums share one scale.
 function converter(minorUnits: ReadonlyMap<string, number>): ToMinor { return (value, currency) => minor(value, minorUnits.get(currency)); }
-function inMonthPurchase(month: string, b: Bank): boolean { return b.kind === "purchase" && b.status !== "discarded" && b.amountMinor > 0 && b.txnDate.startsWith(month); }
+function inMonthPurchase(month: string, b: Bank): boolean { return b.kind === "purchase" && !b.isRefund && b.status !== "discarded" && b.amountMinor > 0 && b.txnDate.startsWith(month); }
+/** A reversed purchase subtracts its amount on its own date; it never takes part in Splitwise pairing. */
+function inMonthRefund(month: string, b: Bank): boolean { return b.kind === "purchase" && b.isRefund === true && b.status !== "discarded" && b.amountMinor > 0 && b.txnDate.startsWith(month); }
 function inMonthExpense(month: string, s: Shared): boolean { return !s.deleted && !s.payment && s.date.startsWith(month); }
 function listed(entries: readonly PairRef[], b: Bank, s: Shared): boolean { return entries.some((entry) => entry.bankId === b.id && entry.splitwiseId === s.id); }
 /** Same currency and the user's paid share equals the bank amount (> 0). */
@@ -144,6 +146,7 @@ export function calculateActualMonth(month: string, bank: Bank[], shared: Shared
     if (paid === 0 && !resemblesBank) contributions.push({ date: day(s.date), currency: s.currency, amountMinor: owed, source: "splitwise", refId: s.id });
     else if (owed > 0 || paid > 0) ambiguous++;
   }
+  for (const r of bank.filter((x) => inMonthRefund(month, x))) fromBank(r, -r.amountMinor);
   contributions.sort((a, b) => a.date.localeCompare(b.date) || a.source.localeCompare(b.source) || a.refId - b.refId);
   return { totals: totalsOf(contributions), contributions, matched, ambiguous, omitted, pending: purchases.filter((x) => x.status === "pending").length, pairs };
 }

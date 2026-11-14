@@ -761,6 +761,17 @@ failed to calculate checksum of ref ...: "/app/public": not found</pre>
       </div>
     </article>
 
+    <!-- ====================== ENTRADA #13 ====================== -->
+    <article class="entry" id="obs-013">
+      <div class="entry-head"><div class="meta"><span class="id">OBS-013</span><span class="tag phase">Importación de correo · Itaú</span><span class="tag sec">Integridad de datos</span><span class="tag ok">Resuelto</span></div><h2>Los reembolsos de la tarjeta se importaban como compras</h2><p>2026-11-14 · <code class="inline">src/ingest/itau-parser.ts</code>, <code class="inline">src/finance/actual-spending.ts</code></p></div>
+      <section class="block"><h3>Contexto y síntoma</h3><p>La importación acepta como candidato cualquier mail de Itaú cuyo asunto contenga “aviso de consumo”. Un viaje cobrado, devuelto y vuelto a cobrar aparecía como tres compras, y el gasto observado y el saldo quedaban inflados por el monto devuelto.</p></section>
+      <div class="callout evidence"><h4>Evidencia</h4><p>En producción, el aviso “Aviso de consumo reembolsado con tarjeta de crédito” —mismo cuerpo que una compra: tarjeta, importe, comercio— estaba guardado como <code class="inline">kind = purchase</code> con monto positivo. Había 3 casos en el buzón.</p></div>
+      <div class="callout root"><h4>Causa raíz</h4><p>El filtro por subcadena del asunto no distinguía “aprobado” de “reembolsado”, y el parser leía el cuerpo igual en ambos casos: el tipo de movimiento se decidía por la forma del cuerpo, no por el asunto.</p></div>
+      <section class="block"><h3>Comportamiento esperado</h3><p>Un reembolso resta del gasto en su fecha y no se empareja con Splitwise ni se vuelve recurrente.</p></section>
+      <section class="block"><h3>Resolución</h3><p>Columna <code class="inline">is_refund</code> tomada del asunto, aporte negativo en el gasto observado, etiqueta “Refund” con monto negativo en <code class="inline">/transactions</code> y sin “Make recurring”. Los 3 reembolsos ya importados se marcaron releyendo sus mails.</p></section>
+      <div class="callout lesson"><h4>Lección</h4><ul><li>Cuando un proveedor usa el mismo cuerpo para operaciones de signo opuesto, el signo vive en el asunto: clasificar por el asunto completo, no por una subcadena.</li><li>Un parser tolerante que “acepta lo parecido” convierte un formato nuevo en un dato equivocado en vez de en una cuarentena.</li></ul></div>
+    </article>
+
   </main>
 
   <footer>

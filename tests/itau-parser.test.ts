@@ -33,6 +33,12 @@ describe("parseItauAviso", () => {
     });
   });
 
+  it("reads a refund notice as a reversed credit purchase", () => {
+    const parsed = parseItauAviso(baseInput({ subject: "Aviso de consumo reembolsado con tarjeta de crédito" }));
+    expect(parsed).toMatchObject({ amountRaw: "199.0", currencyCode: "UYU", isRefund: true, paymentMethod: "credit" });
+    expect(parseItauAviso(baseInput())).toMatchObject({ isRefund: false });
+  });
+
   it("takes the payment method from the subject only", () => {
     expect(paymentMethodFromSubject("Aviso de consumo aprobado con tarjeta de crédito")).toBe("credit");
     expect(paymentMethodFromSubject(" aviso de consumo aprobado con tarjeta de credito ")).toBe("credit");

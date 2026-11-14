@@ -134,3 +134,14 @@ Base de datos · SQLite/btrfs · Integridad de datos · Resuelto, verificado en 
 - **Esperado:** agregar la columna y completar las compras viejas sin errores, y que una interrupción no deje el completado a medias.
 - **Resolución:** sin transacción y **reanudable**: `ALTER` (idempotente) y `UPDATE … WHERE payment_method IS NULL` corren por separado, y al final se graba la marca `payment_method_backfill` en una tabla nueva `schema_migrations`. Si el proceso se corta antes de la marca, el próximo arranque completa lo que falta. `migrate.mjs` corre antes del servidor, así que ninguna importación se intercala. Verificado en copia de producción sobre btrfs: migración ok, chequeo estricto ok (solo cambian la columna y la marca), 394 crédito / 45 débito / 40 transferencias sin método, `integrity_check` ok, y la imagen anterior migra encima sin cambiar nada.
 - **Lección:** el ensayo sobre una copia real, en el mismo disco y con la misma imagen, es lo que detectó esto: los tests en otro sistema de archivos pasaban. Cuando un `ROLLBACK` falla, el error visible no es el original: reproducir paso a paso. Atomicidad no es la única forma de integridad: un paso idempotente con marca de completado logra lo mismo sin depender de un comportamiento frágil.
+
+## OBS-013 — Los reembolsos de la tarjeta se importaban como compras
+Importación de correo · Itaú · Integridad de datos · Resuelto · 2026-11-14 · `src/ingest/itau-parser.ts`, `src/finance/actual-spending.ts`
+
+- **Contexto:** la importación acepta como candidato cualquier mail de Itaú cuyo asunto contenga "aviso de consumo".
+- **Síntoma:** un viaje cobrado, devuelto y vuelto a cobrar aparecía como tres compras. El gasto observado y el saldo quedaban inflados por el monto devuelto.
+- **Evidencia:** en producción, el aviso "Aviso de consumo reembolsado con tarjeta de crédito" (mismo cuerpo que una compra: tarjeta, importe, comercio) estaba guardado como `kind = purchase` con monto positivo; 3 casos en el buzón.
+- **Causa raíz:** el filtro por subcadena del asunto no distinguía "aprobado" de "reembolsado", y el parser leía el cuerpo igual en ambos casos. El tipo de movimiento se decidía por la forma del cuerpo, no por el asunto.
+- **Esperado:** un reembolso resta del gasto en su fecha y no se empareja con Splitwise ni se vuelve recurrente.
+- **Resolución:** columna `is_refund` (desde el asunto), aporte negativo en el gasto observado, etiqueta "Refund" con monto negativo en `/transactions`, sin "Make recurring". Los 3 reembolsos ya importados se marcaron releyendo sus mails.
+- **Lección:** cuando un proveedor usa el mismo cuerpo para operaciones de signo opuesto, el signo vive en el asunto: clasificar por el asunto completo, no por una subcadena. Un parser tolerante que "acepta lo parecido" convierte un formato nuevo en un dato equivocado en vez de en una cuarentena.

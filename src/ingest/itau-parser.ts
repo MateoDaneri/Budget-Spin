@@ -58,6 +58,8 @@ export type ParsedItauAviso = {
   cardLast4: string | null;
   /** From the notice subject ("…con tarjeta de crédito" / "…de débito"); null when the subject names neither. */
   paymentMethod: PaymentMethod | null;
+  /** True for "consumo reembolsado" notices: money returned for an earlier purchase. */
+  isRefund?: boolean;
   /** Transfers only: destination bank and last four account digits as Itaú prints them; null otherwise. */
   counterpartyBank?: string | null;
   counterpartyLast4?: string | null;
@@ -72,9 +74,14 @@ export type PaymentMethod = "credit" | "debit";
 /** The card type is stated only in the subject; the body is not used to guess it. */
 export function paymentMethodFromSubject(subject: string): PaymentMethod | null {
   const normalized = subject.trim();
-  if (/^aviso de consumo aprobado con tarjeta de cr[eé]dito$/i.test(normalized)) return "credit";
-  if (/^aviso de consumo aprobado con tarjeta de d[eé]bito$/i.test(normalized)) return "debit";
+  if (/^aviso de consumo (aprobado|reembolsado) con tarjeta de cr[eé]dito$/i.test(normalized)) return "credit";
+  if (/^aviso de consumo (aprobado|reembolsado) con tarjeta de d[eé]bito$/i.test(normalized)) return "debit";
   return null;
+}
+
+/** "Aviso de consumo reembolsado …": Itaú reversed an earlier purchase. Same body layout as a purchase. */
+export function isRefundSubject(subject: string): boolean {
+  return /^aviso de consumo reembolsado con tarjeta de (cr[eé]dito|d[eé]bito)$/i.test(subject.trim());
 }
 
 /**
@@ -112,6 +119,7 @@ export function parseItauAviso(input: ItauEmailInput): ParsedItauAviso | null {
     cardNetwork: card?.network ?? null,
     cardLast4: card?.last4 ?? null,
     paymentMethod: paymentMethodFromSubject(input.subject),
+    isRefund: isRefundSubject(input.subject),
     rawExcerpt: `${amount.amountRaw} ${amount.currencyCode} · ${merchant}${card ? ` · ${card.network} ***${card.last4}` : ""}`
   };
 }

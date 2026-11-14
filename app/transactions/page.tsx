@@ -65,8 +65,9 @@ export default async function TransactionsPage({ searchParams }: Props) {
           <div className="transaction-cards">
             {transactions.map((transaction) => {
               const currency = currencies.get(transaction.currencyCode);
-              const amount = currency ? formatMoney(transaction.amountMinor, currency) : `${transaction.currencyCode} ${transaction.amountMinor}`;
-              const kind = transaction.kind === "purchase" ? "Purchase" : transaction.kind === "transfer_out" ? "Transfer sent" : "Transfer received";
+              const formatted = currency ? formatMoney(transaction.amountMinor, currency) : `${transaction.currencyCode} ${transaction.amountMinor}`;
+              const amount = transaction.isRefund ? `−${formatted}` : formatted;
+              const kind = transaction.isRefund ? "Refund" : transaction.kind === "purchase" ? "Purchase" : transaction.kind === "transfer_out" ? "Transfer sent" : "Transfer received";
               return (
                 <article className="transaction-card" key={transaction.id}>
                   <div className="transaction-card-top">
@@ -125,7 +126,7 @@ function Recurring({ transaction, recurringKeys, categories, baseCode, fxDefault
   baseCode: string;
   fxDefault: number | null;
 }) {
-  if (transaction.status === "discarded") return null;
+  if (transaction.status === "discarded" || transaction.isRefund) return null;
   const key = recurringMatchKey(transaction);
   if (!key) return null;
   if (recurringKeys.has(key)) return <span className="status-pill status-muted">Recurring</span>;

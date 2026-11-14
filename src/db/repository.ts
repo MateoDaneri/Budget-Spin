@@ -125,6 +125,8 @@ export type Transaction = {
   cardLast4: string | null;
   /** Credit or debit card; null for transfers and notices that did not state it. */
   paymentMethod: PaymentMethod | null;
+  /** A reversed purchase ("consumo reembolsado"): same merchant and card, amount returned to the owner. */
+  isRefund: boolean;
   /** Outgoing transfers: destination bank and last four account digits from the notice; null otherwise. */
   counterpartyBank: string | null;
   counterpartyLast4: string | null;
@@ -455,6 +457,7 @@ export function migrate() {
   ensureUserAuthColumns();
   migrateLegacyLocalUser();
   ensureColumn("recurring_expenses", "match_key", "TEXT");
+  ensureColumn("transactions", "is_refund", "INTEGER NOT NULL DEFAULT 0 CHECK (is_refund IN (0, 1))");
   ensureColumn("transactions", "counterparty_bank", "TEXT CHECK (counterparty_bank IS NULL OR length(counterparty_bank) BETWEEN 1 AND 60)");
   ensureColumn("transactions", "counterparty_last4", "TEXT CHECK (counterparty_last4 IS NULL OR (length(counterparty_last4) BETWEEN 3 AND 4 AND counterparty_last4 NOT GLOB '*[^0-9]*'))");
   ensureColumn("recurring_expenses", "is_optional", "INTEGER NOT NULL DEFAULT 0 CHECK (is_optional IN (0, 1))");
@@ -1568,6 +1571,7 @@ export function insertImportedTransaction(input: {
   paymentMethod?: PaymentMethod | null;
   counterpartyBank?: string | null;
   counterpartyLast4?: string | null;
+  isRefund?: boolean;
   source: string;
   messageId: string;
   rawExcerpt?: string | null;
@@ -1580,9 +1584,9 @@ export function insertImportedTransaction(input: {
       INSERT INTO transactions (
         user_id, txn_date, description, currency_code, amount_minor, category_id,
         card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind, sender_auth, payment_method,
-        counterparty_bank, counterparty_last4
+        counterparty_bank, counterparty_last4, is_refund
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, message_id) DO NOTHING
     `)
     .run(
@@ -1603,7 +1607,8 @@ export function insertImportedTransaction(input: {
       input.senderAuth ?? null,
       input.kind === "transfer_out" || input.kind === "transfer_in" ? null : input.paymentMethod ?? null,
       input.kind === "transfer_out" ? input.counterpartyBank ?? null : null,
-      input.kind === "transfer_out" ? input.counterpartyLast4 ?? null : null
+      input.kind === "transfer_out" ? input.counterpartyLast4 ?? null : null,
+      (input.kind ?? "purchase") === "purchase" && input.isRefund ? 1 : 0
     );
 
   return { inserted: result.changes > 0 };
@@ -1616,7 +1621,7 @@ export function listTransactions(limit = 200): Transaction[] {
       SELECT t.id, t.user_id, t.txn_date, t.description, t.currency_code, t.amount_minor, t.category_id,
         t.card_network, t.card_last4, t.source, t.message_id, t.raw_excerpt, t.kind,
         COALESCE(r.decision, t.status) AS status, t.created_at, t.sender_auth, t.payment_method,
-        t.counterparty_bank, t.counterparty_last4
+        t.counterparty_bank, t.counterparty_last4, t.is_refund
       FROM transactions t
       LEFT JOIN transaction_reviews r ON r.transaction_id = t.id
       WHERE t.user_id = ?
@@ -1643,6 +1648,7 @@ export function listTransactions(limit = 200): Transaction[] {
     payment_method: string | null;
     counterparty_bank: string | null;
     counterparty_last4: string | null;
+    is_refund: number;
   }>;
 
   return rows.map((row) => ({
@@ -1664,7 +1670,8 @@ export function listTransactions(limit = 200): Transaction[] {
     senderAuth: isSenderAuthVerdict(row.sender_auth) ? row.sender_auth : null,
     paymentMethod: row.payment_method === "credit" || row.payment_method === "debit" ? row.payment_method : null,
     counterpartyBank: row.counterparty_bank,
-    counterpartyLast4: row.counterparty_last4
+    counterpartyLast4: row.counterparty_last4,
+    isRefund: row.is_refund === 1
   }));
 }
 
@@ -1853,7 +1860,7 @@ export function createRecurringExpenseFromTransaction(input: { transactionId: nu
   migrate();
   const db = getDb();
   const row = db
-    .prepare("SELECT kind, description, currency_code, amount_minor, txn_date, counterparty_bank, counterparty_last4 FROM transactions WHERE id = ? AND user_id = ?")
+    .prepare("SELECT kind, description, currency_code, amount_minor, txn_date, counterparty_bank, counterparty_last4 FROM transactions WHERE id = ? AND user_id = ? AND is_refund = 0")
     .get(input.transactionId, LOCAL_USER_ID) as { kind: TransactionKind; description: string; currency_code: string; amount_minor: number; txn_date: string; counterparty_bank: string | null; counterparty_last4: string | null } | undefined;
   if (!row) throw new Error("Transaction not found.");
   const matchKey = recurringMatchKey({ kind: row.kind, description: row.description, currencyCode: row.currency_code, amountMinor: row.amount_minor, counterpartyBank: row.counterparty_bank, counterpartyLast4: row.counterparty_last4 });
