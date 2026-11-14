@@ -85,3 +85,38 @@ describe("balanceByCurrency", () => {
     expect(balances[0]).toMatchObject({ incomeMinor: 0, spentMinor: 0, balanceMinor: 700 });
   });
 });
+
+describe("balance against the real database", () => {
+  it("changes when a notice is discarded, with nothing stored to refresh", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const { closeDb } = await import("@/src/db/client");
+    const repo = await import("@/src/db/repository");
+    const { calculateActualMonth } = await import("@/src/finance/actual-spending");
+    const dbPath = path.join(os.tmpdir(), `cash-${crypto.randomUUID()}.sqlite`);
+    process.env.DATABASE_PATH = dbPath;
+    closeDb();
+    try {
+      repo.migrate();
+      repo.setOpeningBalance({ currencyCode: "UYU", amountMinor: 50000, asOfDate: "2026-11-01" });
+      repo.insertImportedTransaction({ txnDate: "2026-11-05T12:00:00.000Z", description: "COMERCIO PRUEBA", currencyCode: "UYU", amountMinor: 10000, source: "itau_email", messageId: "<cash@example.test>" });
+      const units = new Map(repo.listCurrencies().map((currency) => [currency.code, currency.minorUnit]));
+      const balance = () =>
+        balanceByCurrency({
+          today: "2026-11-14",
+          openings: repo.listOpeningBalances(),
+          incomes: [],
+          adjustments: repo.listBalanceAdjustments(),
+          actualForMonth: (key) => calculateActualMonth(key, repo.listTransactions(), [], units)
+        }).balances[0].balanceMinor;
+      expect(balance()).toBe(40000);
+      repo.reviewImportedTransaction(repo.listTransactions()[0].id, "discarded");
+      expect(balance()).toBe(50000);
+    } finally {
+      closeDb();
+      for (const suffix of ["", "-shm", "-wal"]) fs.rmSync(dbPath + suffix, { force: true });
+      delete process.env.DATABASE_PATH;
+    }
+  });
+});
