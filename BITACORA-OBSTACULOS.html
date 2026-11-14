@@ -732,6 +732,35 @@ failed to calculate checksum of ref ...: "/app/public": not found</pre>
       </div>
     </article>
 
+    <!-- ====================== ENTRADA #12 ====================== -->
+    <article class="entry" id="obs-012">
+      <div class="entry-head"><div class="meta"><span class="id">OBS-012</span><span class="tag phase">Base de datos · SQLite/btrfs</span><span class="tag sec">Integridad de datos</span><span class="tag ok">Resuelto · verificado en copia de producción</span></div><h2>La migración de crédito/débito fallaba con <code class="inline">disk I/O error</code> solo sobre el disco del servidor</h2><p>2026-11-14 · <code class="inline">src/db/repository.ts</code> (<code class="inline">migrate()</code>)</p></div>
+      <section class="block"><h3>Contexto y síntoma</h3><p>La release de <code class="inline">payment_method</code> (PR 72) agrega una columna con <code class="inline">CHECK</code> y completa una vez las compras ya importadas (con tarjeta → crédito, sin tarjeta → débito), con el <code class="inline">ALTER</code> y el <code class="inline">UPDATE</code> en una sola transacción. El ensayo previo al deploy, sobre una copia de solo lectura de producción, terminó en <code class="inline">candidate migration failed</code> con <code class="inline">cannot rollback - no transaction is active</code>, que tapaba el error real. Producción no se tocó.</p></section>
+      <div class="callout evidence"><h4>Evidencia</h4>
+        <p>Paso a paso sobre copias de la base: <code class="inline">BEGIN</code> ok → <code class="inline">ALTER</code> ok → <code class="inline">UPDATE</code> <strong>disk I/O error</strong>, 3 de 3 veces. SQLite 3.53.1, base en WAL.</p>
+        <table>
+          <thead><tr><th scope="col">Variante</th><th scope="col">Resultado</th></tr></thead>
+          <tbody>
+            <tr><td>btrfs + transacción + <code class="inline">CHECK</code></td><td><strong>falla</strong></td></tr>
+            <tr><td>tmpfs + transacción + <code class="inline">CHECK</code></td><td>ok</td></tr>
+            <tr><td>btrfs + transacción, sin <code class="inline">CHECK</code></td><td>ok</td></tr>
+            <tr><td>btrfs + <code class="inline">CHECK</code>, sin transacción</td><td>ok</td></tr>
+            <tr><td>btrfs + journal <code class="inline">DELETE</code></td><td>ok</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout root"><h4>Causa raíz</h4><p>Combinación de SQLite 3.53.1 en WAL sobre btrfs con <code class="inline">ALTER … ADD COLUMN … CHECK</code> seguido de <code class="inline">UPDATE</code> en la misma transacción. Las condiciones son un hecho reproducible; el mecanismo interno de SQLite queda sin verificar.</p></div>
+      <section class="block"><h3>Comportamiento esperado</h3><p>Agregar la columna y completar las compras viejas sin errores, sin que una interrupción deje el completado a medias.</p></section>
+      <section class="block"><h3>Resolución</h3><p>Sin transacción y <strong>reanudable</strong>: <code class="inline">ALTER</code> idempotente, <code class="inline">UPDATE … WHERE payment_method IS NULL</code> y, al final, la marca <code class="inline">payment_method_backfill</code> en la tabla nueva <code class="inline">schema_migrations</code>. Si el proceso se corta antes de la marca, el próximo arranque completa lo que falta; <code class="inline">migrate.mjs</code> corre antes del servidor, así que ninguna importación se intercala. Verificado en copia de producción sobre btrfs: migración ok, chequeo estricto ok, 394 crédito / 45 débito / 40 transferencias sin método, <code class="inline">integrity_check</code> ok, y la imagen anterior migra encima sin cambiar nada.</p></section>
+      <div class="callout lesson"><h4>Lección</h4>
+        <ul>
+          <li>El ensayo sobre una copia real, en el mismo disco y con la misma imagen, detectó lo que los tests en otro sistema de archivos no podían.</li>
+          <li>Cuando un <code class="inline">ROLLBACK</code> falla, el error visible no es el original: reproducir paso a paso.</li>
+          <li>Atomicidad no es la única forma de integridad: un paso idempotente con marca de completado logra lo mismo sin depender de un comportamiento frágil.</li>
+        </ul>
+      </div>
+    </article>
+
   </main>
 
   <footer>

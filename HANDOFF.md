@@ -141,6 +141,7 @@ imported but only purchases enter the calculation.
 | Table | Holds |
 |---|---|
 | `transactions` | Imported notices; `kind` purchase / transfer_out / transfer_in; `payment_method` credit / debit for purchases (from the notice subject; rows imported before the column existed were backfilled once: card details → credit, none → debit; null when unknown); unique per user + Message-ID |
+| `schema_migrations` | Markers of one-time data steps that must not repeat (today: `payment_method_backfill`); see BITACORA OBS-012 |
 | `transaction_reviews` | Confirm/discard decision per transaction; the original import row is kept, the effective status is the decision if any |
 | `ingest_cursors`, `ingest_runs` | IMAP cursor per mailbox identity hash; one row per ingest pass (counts, `ok`/`error`, fixed error text) |
 | `splitwise_sync_account`, `splitwise_imports` | Pinned Splitwise account + last sync time, update watermark (`updated_watermark`) and last full pass (`full_synced_at`); expenses by account and expense ID (shares as decimal strings) |
