@@ -1,6 +1,7 @@
 import { getDb } from "./client";
 import { merchantKey } from "../finance/merchant-key";
 import { isSenderAuthVerdict, type SenderAuthVerdict } from "../ingest/sender-auth";
+import type { BalanceAdjustment, OpeningBalance } from "../finance/cash-position";
 
 export const LOCAL_USER_ID = "mdaneri";
 const LEGACY_LOCAL_USER_ID = "local-user";
@@ -363,6 +364,26 @@ export function migrate() {
       account_id INTEGER PRIMARY KEY,
       first_observed_at TEXT NOT NULL,
       last_observed_at TEXT NOT NULL
+    );
+    -- Starting point of the running balance, one per currency: the amount at the END of as_of_date.
+    -- Balances themselves are never stored; they are recomputed from sources on every read.
+    CREATE TABLE IF NOT EXISTS opening_balances (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      currency_code TEXT NOT NULL REFERENCES currencies(code),
+      amount_minor INTEGER NOT NULL,
+      as_of_date TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, currency_code)
+    );
+    -- Manual corrections to the running balance. Added or deleted, never edited; the note is the trail.
+    CREATE TABLE IF NOT EXISTS balance_adjustments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      currency_code TEXT NOT NULL REFERENCES currencies(code),
+      amount_minor INTEGER NOT NULL CHECK (amount_minor <> 0),
+      adjustment_date TEXT NOT NULL,
+      note TEXT NOT NULL,
+      created_at TEXT NOT NULL
     );
   `);
 
@@ -1622,4 +1643,54 @@ export function latestItauIngestRun(): { finishedAt: string | null; status: stri
   // Only IMAP runs (`itau_email`). Rows from the removed Gmail API path (`gmail_api`) stay in the table but are not read.
   const row = getDb().prepare("SELECT finished_at, status, messages_seen, inserted, skipped FROM ingest_runs WHERE source = ? ORDER BY id DESC LIMIT 1").get("itau_email") as { finished_at: string | null; status: string; messages_seen: number; inserted: number; skipped: number } | undefined;
   return row ? { finishedAt: row.finished_at, status: row.status, messagesSeen: row.messages_seen, inserted: row.inserted, skipped: row.skipped } : null;
+}
+
+export function listOpeningBalances(): OpeningBalance[] {
+  migrate();
+  const rows = getDb()
+    .prepare("SELECT currency_code, amount_minor, as_of_date FROM opening_balances WHERE user_id = ? ORDER BY currency_code")
+    .all(LOCAL_USER_ID) as Array<{ currency_code: string; amount_minor: number; as_of_date: string }>;
+  return rows.map((row) => ({ currencyCode: row.currency_code, amountMinor: row.amount_minor, asOfDate: row.as_of_date }));
+}
+
+/** One opening balance per currency: saving again replaces it. */
+export function setOpeningBalance(input: OpeningBalance): void {
+  migrate();
+  getDb().prepare(`
+    INSERT INTO opening_balances (user_id, currency_code, amount_minor, as_of_date, updated_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, currency_code) DO UPDATE SET amount_minor = excluded.amount_minor, as_of_date = excluded.as_of_date, updated_at = excluded.updated_at
+  `).run(LOCAL_USER_ID, input.currencyCode, input.amountMinor, input.asOfDate, nowIso());
+}
+
+export function clearOpeningBalance(currencyCode: string): void {
+  migrate();
+  getDb().prepare("DELETE FROM opening_balances WHERE user_id = ? AND currency_code = ?").run(LOCAL_USER_ID, currencyCode);
+}
+
+export function listBalanceAdjustments(): BalanceAdjustment[] {
+  migrate();
+  const rows = getDb()
+    .prepare("SELECT id, currency_code, amount_minor, adjustment_date, note, created_at FROM balance_adjustments WHERE user_id = ? ORDER BY adjustment_date DESC, id DESC")
+    .all(LOCAL_USER_ID) as Array<{ id: number; currency_code: string; amount_minor: number; adjustment_date: string; note: string; created_at: string }>;
+  return rows.map((row) => ({
+    id: row.id,
+    currencyCode: row.currency_code,
+    amountMinor: row.amount_minor,
+    adjustmentDate: row.adjustment_date,
+    note: row.note,
+    createdAt: row.created_at
+  }));
+}
+
+export function addBalanceAdjustment(input: Omit<BalanceAdjustment, "id" | "createdAt">): number {
+  migrate();
+  const result = getDb()
+    .prepare("INSERT INTO balance_adjustments (user_id, currency_code, amount_minor, adjustment_date, note, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(LOCAL_USER_ID, input.currencyCode, input.amountMinor, input.adjustmentDate, input.note, nowIso());
+  return Number(result.lastInsertRowid);
+}
+
+export function deleteBalanceAdjustment(id: number): void {
+  migrate();
+  getDb().prepare("DELETE FROM balance_adjustments WHERE id = ? AND user_id = ?").run(id, LOCAL_USER_ID);
 }

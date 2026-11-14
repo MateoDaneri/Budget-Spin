@@ -6,6 +6,12 @@ import { isPasswordConfigured, setUserPassword, verifyCredentials } from "@/src/
 import { closeDb, getDb } from "@/src/db/client";
 import {
   LOCAL_USER_ID,
+  addBalanceAdjustment,
+  clearOpeningBalance,
+  deleteBalanceAdjustment,
+  listBalanceAdjustments,
+  listOpeningBalances,
+  setOpeningBalance,
   listCategories,
   listCurrencies,
   listExpenseGroups,
@@ -418,5 +424,41 @@ describe("repository CRUD and metrics", () => {
     expect(projection.monthlyRequiredBaseMinor).toBe(2666667);
     expect(projection.committedAvailableBaseMinor).toBe(18000000);
     expect(projection.committedGapBaseMinor).toBe(10000000);
+  });
+});
+
+describe("opening balances and adjustments", () => {
+  it("migrates twice without errors and starts empty", () => {
+    migrate();
+    expect(listOpeningBalances()).toEqual([]);
+    expect(listBalanceAdjustments()).toEqual([]);
+  });
+
+  it("keeps one opening balance per currency and clears it", () => {
+    setOpeningBalance({ currencyCode: "UYU", amountMinor: 1000, asOfDate: "2026-11-01" });
+    setOpeningBalance({ currencyCode: "UYU", amountMinor: -250, asOfDate: "2026-11-05" });
+    setOpeningBalance({ currencyCode: "USD", amountMinor: 300, asOfDate: "2026-11-02" });
+    expect(listOpeningBalances()).toEqual([
+      { currencyCode: "USD", amountMinor: 300, asOfDate: "2026-11-02" },
+      { currencyCode: "UYU", amountMinor: -250, asOfDate: "2026-11-05" }
+    ]);
+    clearOpeningBalance("UYU");
+    expect(listOpeningBalances().map((item) => item.currencyCode)).toEqual(["USD"]);
+  });
+
+  it("rejects a zero adjustment and an unknown currency", () => {
+    expect(() => addBalanceAdjustment({ currencyCode: "UYU", amountMinor: 0, adjustmentDate: "2026-11-01", note: "x" })).toThrow();
+    expect(() => addBalanceAdjustment({ currencyCode: "XXX", amountMinor: 5, adjustmentDate: "2026-11-01", note: "x" })).toThrow();
+    expect(() => setOpeningBalance({ currencyCode: "XXX", amountMinor: 5, asOfDate: "2026-11-01" })).toThrow();
+  });
+
+  it("lists adjustments newest first and deletes only the chosen one", () => {
+    const first = addBalanceAdjustment({ currencyCode: "UYU", amountMinor: -500, adjustmentDate: "2026-11-03", note: "cash" });
+    const second = addBalanceAdjustment({ currencyCode: "UYU", amountMinor: 200, adjustmentDate: "2026-11-03", note: "refund" });
+    const third = addBalanceAdjustment({ currencyCode: "USD", amountMinor: 100, adjustmentDate: "2026-11-01", note: "fix" });
+    expect(listBalanceAdjustments().map((item) => item.id)).toEqual([second, first, third]);
+    expect(listBalanceAdjustments()[0]).toMatchObject({ currencyCode: "UYU", amountMinor: 200, adjustmentDate: "2026-11-03", note: "refund" });
+    deleteBalanceAdjustment(first);
+    expect(listBalanceAdjustments().map((item) => item.id)).toEqual([second, third]);
   });
 });

@@ -16,7 +16,9 @@ export const FORM_ERROR_MESSAGES = {
   "invalid-amount": "Amount must be a positive decimal number.",
   "invalid-fx-rate": "Enter an FX rate greater than zero for the selected currency.",
   "invalid-recurrence": "The custom recurrence is not valid. Check the interval (1 to 120) and the day.",
-  "general-family-locked": "The General expense family cannot be deactivated."
+  "general-family-locked": "The General expense family cannot be deactivated.",
+  "invalid-signed-amount": "Enter a decimal amount. Use a leading minus for money out.",
+  "invalid-date": "Enter a valid date that is not in the future."
 } as const;
 
 export type FormErrorCode = keyof typeof FORM_ERROR_MESSAGES | "unexpected";

@@ -278,3 +278,27 @@ export const splitwiseActivitySync = sqliteTable("splitwise_activity_sync", {
   firstObservedAt: text("first_observed_at").notNull(),
   lastObservedAt: text("last_observed_at").notNull()
 });
+
+export const openingBalances = sqliteTable(
+  "opening_balances",
+  {
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    currencyCode: text("currency_code").notNull().references(() => currencies.code),
+    amountMinor: integer("amount_minor").notNull(),
+    asOfDate: text("as_of_date").notNull(),
+    updatedAt: text("updated_at").notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.currencyCode] })
+  })
+);
+
+export const balanceAdjustments = sqliteTable("balance_adjustments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  currencyCode: text("currency_code").notNull().references(() => currencies.code),
+  amountMinor: integer("amount_minor").notNull(),
+  adjustmentDate: text("adjustment_date").notNull(),
+  note: text("note").notNull(),
+  createdAt: text("created_at").notNull()
+});
