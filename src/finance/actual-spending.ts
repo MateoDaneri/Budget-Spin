@@ -1,9 +1,14 @@
 import type { Transaction } from "@/src/db/repository";
 import type { SavedSplitwiseExpense } from "@/src/splitwise/store";
 
-/** An observed amount is not a bank statement and is never mixed with a plan. */
+/** One amount that enters the observed total, dated by the stored timestamp's YYYY-MM-DD prefix. */
+export type ActualContribution = { date: string; currency: string; amountMinor: number; source: "bank" | "splitwise"; refId: number };
+
+/** An observed amount is not a bank statement and is never mixed with planned expenses. */
 export type ActualMonth = {
+  /** Per-currency sum of `contributions`; never computed separately. */
   totals: Array<{ currency: string; amountMinor: number }>;
+  contributions: ActualContribution[];
   matched: number;
   ambiguous: number;
   omitted: number;
@@ -90,8 +95,8 @@ export function calculateActualMonth(month: string, bank: Bank[], shared: Shared
   const toMinor = converter(minorUnits);
   const purchases = bank.filter((x) => inMonthPurchase(month, x));
   const expenses = shared.filter((x) => inMonthExpense(month, x));
-  const sums = new Map<string, number>();
-  const add = (currency: string, amount: number) => sums.set(currency, (sums.get(currency) ?? 0) + amount);
+  const contributions: ActualContribution[] = [];
+  const fromBank = (b: Bank, amountMinor: number) => contributions.push({ date: day(b.txnDate), currency: b.currencyCode, amountMinor, source: "bank", refId: b.id });
   let matched = 0, ambiguous = 0, omitted = 0;
   const used = new Set<number>();
   const lockedBank = new Set<number>();
@@ -106,13 +111,13 @@ export function calculateActualMonth(month: string, bank: Bank[], shared: Shared
     if (s) used.add(s.id);
     const owed = b && s ? pairedShare(b, s, toMinor) : null;
     if (b && s && owed !== null) {
-      add(b.currencyCode, owed); matched++;
+      fromBank(b, owed); matched++;
       pairs.push({ bankId: b.id, splitwiseId: s.id, description: b.description, currency: b.currencyCode, paidMinor: b.amountMinor, owedMinor: owed, manual: true });
       continue;
     }
     // Stale confirmation (amounts changed, or one side left the month): never applied, never guessed.
     omitted++;
-    if (b) add(b.currencyCode, b.amountMinor);
+    if (b) fromBank(b, b.amountMinor);
   }
   const free = purchases.filter((x) => !lockedBank.has(x.id));
   const open = expenses.filter((x) => !used.has(x.id));
@@ -124,11 +129,11 @@ export function calculateActualMonth(month: string, bank: Bank[], shared: Shared
       const candidate = eligible[0];
       const owed = pairedShare(b, candidate, toMinor);
       if (owed !== null && free.filter((other) => matches(other, candidate)).length === 1) {
-        add(b.currencyCode, owed); used.add(candidate.id); matched++;
+        fromBank(b, owed); used.add(candidate.id); matched++;
         pairs.push({ bankId: b.id, splitwiseId: candidate.id, description: b.description, currency: b.currencyCode, paidMinor: b.amountMinor, owedMinor: owed, manual: false }); continue;
       }
     }
-    add(b.currencyCode, b.amountMinor);
+    fromBank(b, b.amountMinor);
   }
   for (const s of expenses) {
     if (used.has(s.id)) continue;
@@ -136,10 +141,17 @@ export function calculateActualMonth(month: string, bank: Bank[], shared: Shared
     // Unconfigured currencies and amounts finer than the currency's minor unit are omitted, never guessed.
     if (owed === null || paid === null || total === null || owed > total || paid > total) { omitted++; continue; }
     const resemblesBank = purchases.some((b) => b.currencyCode === s.currency && day(b.txnDate) === day(s.date) && keyName(b.description) === keyName(s.description));
-    if (paid === 0 && !resemblesBank) add(s.currency, owed);
+    if (paid === 0 && !resemblesBank) contributions.push({ date: day(s.date), currency: s.currency, amountMinor: owed, source: "splitwise", refId: s.id });
     else if (owed > 0 || paid > 0) ambiguous++;
   }
-  return { totals: [...sums].sort(([a], [b]) => a.localeCompare(b)).map(([currency, amountMinor]) => ({ currency, amountMinor })), matched, ambiguous, omitted, pending: purchases.filter((x) => x.status === "pending").length, pairs };
+  contributions.sort((a, b) => a.date.localeCompare(b.date) || a.source.localeCompare(b.source) || a.refId - b.refId);
+  return { totals: totalsOf(contributions), contributions, matched, ambiguous, omitted, pending: purchases.filter((x) => x.status === "pending").length, pairs };
+}
+
+function totalsOf(contributions: readonly ActualContribution[]): ActualMonth["totals"] {
+  const sums = new Map<string, number>();
+  for (const item of contributions) sums.set(item.currency, (sums.get(item.currency) ?? 0) + item.amountMinor);
+  return [...sums].sort(([a], [b]) => a.localeCompare(b)).map(([currency, amountMinor]) => ({ currency, amountMinor }));
 }
 
 /**
