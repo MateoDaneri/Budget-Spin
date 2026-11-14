@@ -225,6 +225,30 @@ observation mode):
   `/api/fx-rate` now requires a session and the proxy no longer skips `api*`
   paths (MEJ-006); `?error=` carries fixed codes, not free text (MEJ-007).
 
+## Real net and balance — branch `claude/feature-neto-y-saldo`
+
+> **State: in review, not merged or deployed.** The rules are in `FINANCIAL-RULES` section 9; this section only maps the code.
+
+Adds, per currency and without exchange rates, the month's **real net**
+(fixed income − observed spending) and a **running balance** from an opening
+balance. Both are computed on every read; no balance is stored, so they can
+never drift from their sources.
+
+Refactors that came with it (one rule, one implementation):
+- `src/finance/recurrence.ts`: `listOccurrences(schedule, from, to)` returns
+  dates; `countOccurrencesInMonth` is now its length.
+- `src/finance/actual-spending.ts`: `calculateActualMonth` returns dated
+  `contributions`; `totals` is derived from them.
+
+| Path / table | Role |
+|---|---|
+| `src/finance/cash-position.ts` | `monthlyNetByCurrency`, `balanceByCurrency` (pure) |
+| `src/actions/balance.ts` | Server actions: session check, server-side parsing (`parseSignedMoneyToMinor` rejects extra precision), fixed error codes |
+| `app/balance` | Opening balance per currency and adjustments; nav entry "Balance" |
+| `app/page.tsx` | "Real net and balance" block with provisional counts |
+| `opening_balances` | One row per user + currency: amount at the end of `as_of_date` |
+| `balance_adjustments` | Signed, non-zero amount, date and mandatory note; add or delete only |
+
 ## Data ownership & volumes
 | Location | Volume / file | Role |
 |---|---|---|

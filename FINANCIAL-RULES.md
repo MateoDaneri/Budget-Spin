@@ -7,12 +7,16 @@
 **Status:** this logic was merged into main via PR 58 and deployed on 2026-11-10. Lint, typecheck, the test suite (126 tests) and the production build passed under Node 24 on 2026-11-10 at commit `b71b5de`; the logic has not been checked against real bank or Splitwise data. Everything below describes what the code says, not observed
 results. Suggestions and manual confirmation (section 7) were added by PR 66;
 lint, typecheck, 188 tests and the build passed on the server on 2026-11-11.
+The real net and the running balance (section 9) are on branch
+`claude/feature-neto-y-saldo`, not merged or deployed yet.
 
 ## 1. What observed spending is — and is not
 
 - The recurring budget is a **projection**. Observed spending is a separate,
-  **incomplete estimate** for one month. It is shown next to the plan and is
-  never subtracted from it.
+  **incomplete estimate** for one month. It is shown next to the planned
+  expenses and is never subtracted from them. The only place where planned
+  and observed figures meet is section 9: the fixed **income** minus observed
+  spending.
 - It is not a bank statement and not a cash balance. An e-mail notice does not
   prove that a payment settled, and the rules below do not check whether a
   notice is authentic.
@@ -204,3 +208,47 @@ Bank notices are reviewed separately on `/transactions` (confirm or discard).
 - A changed or deleted Splitwise record is recalculated after the next
   successful snapshot; records missing from a provider response are kept, not
   assumed deleted.
+- **Deleting an income rewrites past balances.** Only active incomes are
+  listed, so a deleted income disappears from every month, including those
+  already in the running balance. End an income with an end date instead.
+- **A false pending notice lowers the balance** until it is discarded on
+  `/transactions`, because pending notices count (section 2) and the sender
+  check is in observation mode. The "provisional" count is the cue to review.
+- **Transfers do not count** in the net or the balance. Money sent by bank
+  transfer must be entered as an adjustment until bill payments are modelled.
+
+## 9. Real net and balance
+
+Implemented in `src/finance/cash-position.ts` (pure functions) and shown in
+the "Real net and balance" block of the dashboard. Nothing is stored: both
+figures are recomputed from their sources on every page load, so discarding a
+notice or confirming a pair changes them immediately.
+
+Both use the observed spending of this document **per original currency**,
+with no exchange rate. Each counted amount carries a date: the bank date for a
+purchase or a pair, the Splitwise date for an unpaid shared expense (the first
+ten characters of the stored timestamp, as in section 8).
+
+| Figure | Formula | Window |
+|---|---|---|
+| Net this month | fixed income of the month − observed spending of the month | the whole selected month; income dated later in the current month counts (it is fixed) |
+| Balance today | opening balance + income − observed spending + adjustments | after the opening date, up to and including today (UTC date) |
+
+- **Opening balance:** one per currency, set on `/balance` with an amount
+  (negative allowed) and a date. It is the amount at the **end** of that day,
+  so movements on the opening date itself are not counted again. A currency
+  without an opening balance shows no balance. An opening date after today
+  shows the opening amount unchanged.
+- **Income:** the configured incomes (`/income`), each counted on the dates its
+  recurrence produces. It is not confirmed by any notice.
+- **Adjustments:** signed amounts with a mandatory note, for anything the
+  notices miss (cash, other banks, transfers, refunds). They can be added or
+  deleted, not edited.
+- **Provisional:** the net shows the month's pending, ambiguous and omitted
+  counts; the balance shows the same counts summed over every month since the
+  earliest opening date (the first month may include notices dated before the
+  opening date, so it errs towards flagging).
+- **Input checks** (server side): known currency; a real date not after today;
+  amounts with at most the currency's decimals (extra non-zero digits are
+  rejected, not truncated); adjustments different from zero.
+

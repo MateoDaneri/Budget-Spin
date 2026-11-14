@@ -287,6 +287,31 @@
       </ul>
     </section>
 
+    <section class="card" id="real-net-balance">
+      <h2>Real net and balance — branch <code class="inline">claude/feature-neto-y-saldo</code></h2>
+      <div class="callout note">
+        <h4>State</h4>
+        <strong>In review, not merged or deployed.</strong> The rules are in <a href="FINANCIAL-RULES.html#balance">FINANCIAL-RULES section 9</a>; this section only maps the code.
+      </div>
+      <p>Adds, per currency and without exchange rates, the month's <strong>real net</strong> (fixed income − observed spending) and a <strong>running balance</strong> from an opening balance. Both are computed on every read; no balance is stored, so they can never drift from their sources.</p>
+      <p>Refactors that came with it (one rule, one implementation):</p>
+      <ul>
+        <li><code class="inline">src/finance/recurrence.ts</code>: <code class="inline">listOccurrences(schedule, from, to)</code> returns dates; <code class="inline">countOccurrencesInMonth</code> is now its length.</li>
+        <li><code class="inline">src/finance/actual-spending.ts</code>: <code class="inline">calculateActualMonth</code> returns dated <code class="inline">contributions</code>; <code class="inline">totals</code> is derived from them.</li>
+      </ul>
+      <table>
+        <thead><tr><th>Path / table</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><code class="inline">src/finance/cash-position.ts</code></td><td><code class="inline">monthlyNetByCurrency</code>, <code class="inline">balanceByCurrency</code> (pure)</td></tr>
+          <tr><td><code class="inline">src/actions/balance.ts</code></td><td>Server actions: session check, server-side parsing (<code class="inline">parseSignedMoneyToMinor</code> rejects extra precision), fixed error codes</td></tr>
+          <tr><td><code class="inline">app/balance</code></td><td>Opening balance per currency and adjustments; nav entry “Balance”</td></tr>
+          <tr><td><code class="inline">app/page.tsx</code></td><td>“Real net and balance” block with provisional counts</td></tr>
+          <tr><td><code class="inline">opening_balances</code></td><td>One row per user + currency: amount at the end of <code class="inline">as_of_date</code></td></tr>
+          <tr><td><code class="inline">balance_adjustments</code></td><td>Signed, non-zero amount, date and mandatory note; add or delete only</td></tr>
+        </tbody>
+      </table>
+    </section>
+
     <section class="card">
       <h2>Data ownership &amp; volumes</h2>
       <table>
