@@ -3,6 +3,7 @@ import { merchantKey } from "../finance/merchant-key";
 import { isSenderAuthVerdict, type SenderAuthVerdict } from "../ingest/sender-auth";
 import type { PaymentMethod } from "../ingest/itau-parser";
 import type { BalanceAdjustment, OpeningBalance } from "../finance/cash-position";
+import type { Bill, BillPayment } from "../finance/bills";
 
 export const LOCAL_USER_ID = "mdaneri";
 const LEGACY_LOCAL_USER_ID = "local-user";
@@ -377,6 +378,25 @@ export function migrate() {
       as_of_date TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (user_id, currency_code)
+    );
+    -- Bills the owner pays by hand each month (checklist). A bill repeats monthly; paid is per bill + month.
+    CREATE TABLE IF NOT EXISTS bills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 120),
+      amount_minor INTEGER CHECK (amount_minor IS NULL OR amount_minor > 0),
+      currency_code TEXT REFERENCES currencies(code),
+      due_day INTEGER CHECK (due_day IS NULL OR due_day BETWEEN 1 AND 31),
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      CHECK ((amount_minor IS NULL) = (currency_code IS NULL))
+    );
+    CREATE TABLE IF NOT EXISTS bill_payments (
+      bill_id INTEGER NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+      month TEXT NOT NULL,
+      paid_at TEXT NOT NULL,
+      PRIMARY KEY (bill_id, month)
     );
     -- One-time data steps that must not repeat (e.g. backfills). Schema changes stay idempotent DDL.
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -1727,4 +1747,65 @@ export function addBalanceAdjustment(input: Omit<BalanceAdjustment, "id" | "crea
 export function deleteBalanceAdjustment(id: number): void {
   migrate();
   getDb().prepare("DELETE FROM balance_adjustments WHERE id = ? AND user_id = ?").run(id, LOCAL_USER_ID);
+}
+
+export function listBills(): Bill[] {
+  migrate();
+  const rows = getDb()
+    .prepare("SELECT id, name, amount_minor, currency_code, due_day, is_active, created_at FROM bills WHERE user_id = ? ORDER BY id")
+    .all(LOCAL_USER_ID) as Array<{ id: number; name: string; amount_minor: number | null; currency_code: string | null; due_day: number | null; is_active: number; created_at: string }>;
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    amountMinor: row.amount_minor,
+    currencyCode: row.currency_code,
+    dueDay: row.due_day,
+    isActive: row.is_active === 1,
+    createdAt: row.created_at
+  }));
+}
+
+/** Creates a bill (no id) or updates an active one. Amount and currency go together or not at all. */
+export function upsertBill(input: { id?: number; name: string; amountMinor: number | null; currencyCode: string | null; dueDay: number | null }): number {
+  migrate();
+  const db = getDb();
+  const now = nowIso();
+  if (input.id === undefined) {
+    const result = db
+      .prepare("INSERT INTO bills (user_id, name, amount_minor, currency_code, due_day, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(LOCAL_USER_ID, input.name, input.amountMinor, input.currencyCode, input.dueDay, now, now);
+    return Number(result.lastInsertRowid);
+  }
+  const result = db
+    .prepare("UPDATE bills SET name = ?, amount_minor = ?, currency_code = ?, due_day = ?, updated_at = ? WHERE id = ? AND user_id = ? AND is_active = 1")
+    .run(input.name, input.amountMinor, input.currencyCode, input.dueDay, now, input.id, LOCAL_USER_ID);
+  if (result.changes !== 1) throw new Error("Bill not found.");
+  return input.id;
+}
+
+/** Removes a bill from future months; months where it was paid keep showing it. */
+export function archiveBill(id: number): void {
+  migrate();
+  getDb().prepare("UPDATE bills SET is_active = 0, updated_at = ? WHERE id = ? AND user_id = ?").run(nowIso(), id, LOCAL_USER_ID);
+}
+
+export function listBillPayments(month: string): BillPayment[] {
+  migrate();
+  const rows = getDb()
+    .prepare("SELECT p.bill_id, p.month, p.paid_at FROM bill_payments p JOIN bills b ON b.id = p.bill_id WHERE b.user_id = ? AND p.month = ?")
+    .all(LOCAL_USER_ID, month) as Array<{ bill_id: number; month: string; paid_at: string }>;
+  return rows.map((row) => ({ billId: row.bill_id, month: row.month, paidAt: row.paid_at }));
+}
+
+/** Marks or unmarks a bill as paid for a month. Only the owner's bills; paid_at is set by the server. */
+export function setBillPaid(billId: number, month: string, paid: boolean): void {
+  migrate();
+  const db = getDb();
+  const owned = db.prepare("SELECT 1 FROM bills WHERE id = ? AND user_id = ?").get(billId, LOCAL_USER_ID);
+  if (!owned) throw new Error("Bill not found.");
+  if (paid) {
+    db.prepare("INSERT INTO bill_payments (bill_id, month, paid_at) VALUES (?, ?, ?) ON CONFLICT(bill_id, month) DO NOTHING").run(billId, month, nowIso());
+  } else {
+    db.prepare("DELETE FROM bill_payments WHERE bill_id = ? AND month = ?").run(billId, month);
+  }
 }
