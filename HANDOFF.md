@@ -141,6 +141,7 @@ imported but only purchases enter the calculation.
 | Table | Holds |
 |---|---|
 | `transactions` | Imported notices; `kind` purchase / transfer_out / transfer_in; `payment_method` credit / debit for purchases (from the notice subject; rows imported before the column existed were backfilled once: card details → credit, none → debit; null when unknown); unique per user + Message-ID |
+| `bills`, `bill_payments` | Monthly checklist of bills paid by hand (`/bills`): a bill repeats every month (optional amount + currency together, optional due day 1-31); paid is one row per bill + month with a server timestamp. Removing a bill hides it from later months but keeps months where it was paid. Never enters the real net or balance (the money is counted by notices and adjustments) |
 | `schema_migrations` | Markers of one-time data steps that must not repeat (today: `payment_method_backfill`); see BITACORA OBS-012 |
 | `transaction_reviews` | Confirm/discard decision per transaction; the original import row is kept, the effective status is the decision if any |
 | `ingest_cursors`, `ingest_runs` | IMAP cursor per mailbox identity hash; one row per ingest pass (counts, `ok`/`error`, fixed error text) |
