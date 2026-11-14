@@ -146,3 +146,13 @@ describe("payment method", () => {
     expect(() => getDb().prepare("UPDATE transactions SET payment_method = 'cash'").run()).toThrow();
   });
 });
+
+describe("refunds", () => {
+  it("stores the refund flag for purchases only", () => {
+    insertImportedTransaction({ ...sample, messageId: "<refund@example.test>", isRefund: true });
+    insertImportedTransaction({ ...sample, messageId: "<buy@example.test>" });
+    insertImportedTransaction({ ...sample, messageId: "<tr@example.test>", kind: "transfer_out", isRefund: true, cardNetwork: null, cardLast4: null });
+    const flags = Object.fromEntries(listTransactions().map((row) => [row.messageId, row.isRefund]));
+    expect(flags).toEqual({ "<refund@example.test>": true, "<buy@example.test>": false, "<tr@example.test>": false });
+  });
+});

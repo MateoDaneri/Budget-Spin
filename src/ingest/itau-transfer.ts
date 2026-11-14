@@ -32,5 +32,5 @@ export function parseItauTransfer(input: ItauEmailInput) {
   if (!currencyCode) return null;
   const destination = matchDestination(text);
   const to = destination ? ` · ${destination.bank} ***${destination.last4}` : "";
-  return { messageId: input.messageId, txnDateIso: input.date.toISOString(), merchant: "Transferencia enviada", amountRaw: match[1], currencyCode, cardNetwork: null, cardLast4: null, paymentMethod: null, counterpartyBank: destination?.bank ?? null, counterpartyLast4: destination?.last4 ?? null, rawExcerpt: `${match[1]} ${currencyCode} · Transferencia enviada${to}`, kind: "transfer_out" as const };
+  return { messageId: input.messageId, txnDateIso: input.date.toISOString(), merchant: "Transferencia enviada", amountRaw: match[1], currencyCode, cardNetwork: null, cardLast4: null, paymentMethod: null, isRefund: false, counterpartyBank: destination?.bank ?? null, counterpartyLast4: destination?.last4 ?? null, rawExcerpt: `${match[1]} ${currencyCode} · Transferencia enviada${to}`, kind: "transfer_out" as const };
 }
