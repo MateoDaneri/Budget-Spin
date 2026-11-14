@@ -66,7 +66,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
                       <strong>{transaction.description}</strong>
                       <span>
                         {kind} · <time dateTime={transaction.txnDate}>{transaction.txnDate.replace("T", " ").replace(/\.\d{3}Z$/, " UTC")}</time>
-                        {transaction.cardNetwork || transaction.cardLast4 ? <> · {transaction.cardNetwork ?? "Card"}{transaction.cardLast4 ? ` ***${transaction.cardLast4}` : ""}</> : null}
+                        {cardLabel(transaction) ? <> · {cardLabel(transaction)}</> : null}
                       </span>
                     </div>
                     <strong>{amount}</strong>
@@ -96,4 +96,12 @@ function TransactionActions({ transaction }: { transaction: ReturnType<typeof li
       {transaction.status !== "discarded" ? <button className="button button-danger" type="submit" name="decision" value="discarded" aria-label={`Discard ${transaction.description}`}>Discard</button> : null}
     </form>
   );
+}
+
+/** "Credit ***5011", "Debit", or the card as before when the notice did not state the type. */
+function cardLabel(transaction: { paymentMethod: "credit" | "debit" | null; cardNetwork: string | null; cardLast4: string | null }): string | null {
+  const method = transaction.paymentMethod === "credit" ? "Credit" : transaction.paymentMethod === "debit" ? "Debit" : null;
+  const name = method ?? transaction.cardNetwork ?? (transaction.cardLast4 ? "Card" : null);
+  if (!name) return null;
+  return transaction.cardLast4 ? `${name} ***${transaction.cardLast4}` : name;
 }

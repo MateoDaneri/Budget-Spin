@@ -56,11 +56,23 @@ export type ParsedItauAviso = {
   currencyCode: string;
   cardNetwork: string | null;
   cardLast4: string | null;
+  /** From the notice subject ("…con tarjeta de crédito" / "…de débito"); null when the subject names neither. */
+  paymentMethod: PaymentMethod | null;
   /** Human-readable one-line summary, stored for audit. */
   rawExcerpt: string;
 };
 
 const AVISO_SUBJECT_HINT = "aviso de consumo";
+
+export type PaymentMethod = "credit" | "debit";
+
+/** The card type is stated only in the subject; the body is not used to guess it. */
+export function paymentMethodFromSubject(subject: string): PaymentMethod | null {
+  const normalized = subject.trim();
+  if (/^aviso de consumo aprobado con tarjeta de cr[eé]dito$/i.test(normalized)) return "credit";
+  if (/^aviso de consumo aprobado con tarjeta de d[eé]bito$/i.test(normalized)) return "debit";
+  return null;
+}
 
 /**
  * Returns the parsed transaction, or null when the message is not an Itaú
@@ -96,6 +108,7 @@ export function parseItauAviso(input: ItauEmailInput): ParsedItauAviso | null {
     currencyCode: amount.currencyCode,
     cardNetwork: card?.network ?? null,
     cardLast4: card?.last4 ?? null,
+    paymentMethod: paymentMethodFromSubject(input.subject),
     rawExcerpt: `${amount.amountRaw} ${amount.currencyCode} · ${merchant}${card ? ` · ${card.network} ***${card.last4}` : ""}`
   };
 }

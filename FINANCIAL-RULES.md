@@ -205,7 +205,9 @@ Bank notices are reviewed separately on `/transactions` (confirm or discard).
   accepted by sender address and subject only; there is no sender
   authentication (see `HANDOFF`).
 - Categories (saved per normalised description and editable on the source
-  screens) never change the monetary calculation.
+  screens) and the payment method (credit or debit, shown on `/transactions`)
+  never change the monetary calculation: a purchase counts on its date either
+  way.
 - A changed or deleted Splitwise record is recalculated after the next
   successful snapshot; records missing from a provider response are kept, not
   assumed deleted.

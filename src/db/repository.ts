@@ -1,6 +1,7 @@
 import { getDb } from "./client";
 import { merchantKey } from "../finance/merchant-key";
 import { isSenderAuthVerdict, type SenderAuthVerdict } from "../ingest/sender-auth";
+import type { PaymentMethod } from "../ingest/itau-parser";
 import type { BalanceAdjustment, OpeningBalance } from "../finance/cash-position";
 
 export const LOCAL_USER_ID = "mdaneri";
@@ -118,6 +119,8 @@ export type Transaction = {
   kind: TransactionKind;
   cardNetwork: string | null;
   cardLast4: string | null;
+  /** Credit or debit card; null for transfers and notices that did not state it. */
+  paymentMethod: PaymentMethod | null;
   source: string;
   messageId: string | null;
   rawExcerpt: string | null;
@@ -390,6 +393,23 @@ export function migrate() {
   ensureColumn("transactions", "kind", "TEXT NOT NULL DEFAULT 'purchase' CHECK (kind IN ('purchase', 'transfer_out', 'transfer_in'))");
   // Observation only (MEJ-002): nullable so older rows stay NULL ("not recorded").
   ensureColumn("transactions", "sender_auth", "TEXT CHECK (sender_auth IS NULL OR sender_auth IN ('pass', 'fail', 'none'))");
+  // Column and one-time backfill commit together: an interrupted migration cannot leave old purchases unset.
+  // Before the column existed the method was not stored; the owner confirmed that, in the imported history,
+  // purchases with card details are credit and those without are debit. Later rows are set from the notice
+  // subject at import and are never rewritten here.
+  // The transaction opens only when the column is missing (first start of this version), so the usual
+  // migrate() call from inside other transactions never nests a BEGIN.
+  if (!hasColumn("transactions", "payment_method")) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      ensureColumn("transactions", "payment_method", "TEXT CHECK (payment_method IS NULL OR payment_method IN ('credit', 'debit'))");
+      db.exec(`UPDATE transactions SET payment_method = CASE WHEN card_last4 IS NOT NULL THEN 'credit' ELSE 'debit' END WHERE kind = 'purchase'`);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   ensureColumn("splitwise_imports", "category_id", "INTEGER REFERENCES categories(id)");
   // Incremental Splitwise sync: latest provider updated_at committed, and the last full pass.
   ensureColumn("splitwise_sync_account", "updated_watermark", "TEXT");
@@ -577,12 +597,14 @@ function ensureRecurringExpensesGroupColumn() {
   `).run(defaultGroupId, LOCAL_USER_ID);
 }
 
-function ensureColumn(tableName: string, columnName: string, definition: string) {
-  const db = getDb();
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+function hasColumn(tableName: string, columnName: string): boolean {
+  const columns = getDb().prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  return columns.some((column) => column.name === columnName);
+}
 
-  if (!columns.some((column) => column.name === columnName)) {
-    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+function ensureColumn(tableName: string, columnName: string, definition: string) {
+  if (!hasColumn(tableName, columnName)) {
+    getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
   }
 }
 
@@ -1492,6 +1514,7 @@ export function insertImportedTransaction(input: {
   kind?: TransactionKind;
   cardNetwork?: string | null;
   cardLast4?: string | null;
+  paymentMethod?: PaymentMethod | null;
   source: string;
   messageId: string;
   rawExcerpt?: string | null;
@@ -1503,9 +1526,9 @@ export function insertImportedTransaction(input: {
     .prepare(`
       INSERT INTO transactions (
         user_id, txn_date, description, currency_code, amount_minor, category_id,
-        card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind, sender_auth
+        card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind, sender_auth, payment_method
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, message_id) DO NOTHING
     `)
     .run(
@@ -1523,7 +1546,8 @@ export function insertImportedTransaction(input: {
       input.status ?? "confirmed",
       nowIso(),
       input.kind ?? "purchase",
-      input.senderAuth ?? null
+      input.senderAuth ?? null,
+      input.kind === "transfer_out" || input.kind === "transfer_in" ? null : input.paymentMethod ?? null
     );
 
   return { inserted: result.changes > 0 };
@@ -1535,7 +1559,7 @@ export function listTransactions(limit = 200): Transaction[] {
     .prepare(`
       SELECT t.id, t.user_id, t.txn_date, t.description, t.currency_code, t.amount_minor, t.category_id,
         t.card_network, t.card_last4, t.source, t.message_id, t.raw_excerpt, t.kind,
-        COALESCE(r.decision, t.status) AS status, t.created_at, t.sender_auth
+        COALESCE(r.decision, t.status) AS status, t.created_at, t.sender_auth, t.payment_method
       FROM transactions t
       LEFT JOIN transaction_reviews r ON r.transaction_id = t.id
       WHERE t.user_id = ?
@@ -1559,6 +1583,7 @@ export function listTransactions(limit = 200): Transaction[] {
     status: TransactionStatus;
     created_at: string;
     sender_auth: string | null;
+    payment_method: string | null;
   }>;
 
   return rows.map((row) => ({
@@ -1577,7 +1602,8 @@ export function listTransactions(limit = 200): Transaction[] {
     rawExcerpt: row.raw_excerpt,
     status: row.status,
     createdAt: row.created_at,
-    senderAuth: isSenderAuthVerdict(row.sender_auth) ? row.sender_auth : null
+    senderAuth: isSenderAuthVerdict(row.sender_auth) ? row.sender_auth : null,
+    paymentMethod: row.payment_method === "credit" || row.payment_method === "debit" ? row.payment_method : null
   }));
 }
 

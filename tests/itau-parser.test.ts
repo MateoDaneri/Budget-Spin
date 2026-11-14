@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseItauAviso, type ItauEmailInput } from "@/src/ingest/itau-parser";
+import { parseItauAviso, paymentMethodFromSubject, type ItauEmailInput } from "@/src/ingest/itau-parser";
 
 const html = readFileSync(path.resolve(__dirname, "fixtures/itau-aviso-consumo.html"), "utf8");
 
@@ -28,8 +28,18 @@ describe("parseItauAviso", () => {
       currencyCode: "UYU",
       merchant: "COMERCIO DE PRUEBA*TEST*00 ABCDE",
       cardNetwork: "VISA",
-      cardLast4: "1234"
+      cardLast4: "1234",
+      paymentMethod: "credit"
     });
+  });
+
+  it("takes the payment method from the subject only", () => {
+    expect(paymentMethodFromSubject("Aviso de consumo aprobado con tarjeta de crédito")).toBe("credit");
+    expect(paymentMethodFromSubject(" aviso de consumo aprobado con tarjeta de credito ")).toBe("credit");
+    expect(paymentMethodFromSubject("Aviso de consumo aprobado con tarjeta de débito")).toBe("debit");
+    expect(paymentMethodFromSubject("Aviso de consumo")).toBeNull();
+    expect(paymentMethodFromSubject("Aviso de consumo aprobado con tarjeta de crédito y débito")).toBeNull();
+    expect(parseItauAviso(baseInput({ subject: "Aviso de consumo" }))).toMatchObject({ cardLast4: "1234", paymentMethod: null });
   });
 
   it("does not let the merchant bleed into the following sentence", () => {

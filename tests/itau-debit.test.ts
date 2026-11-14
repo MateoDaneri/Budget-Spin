@@ -7,7 +7,7 @@ const html = readFileSync(path.resolve(__dirname, "fixtures/itau-debit-synthetic
 const input: ItauEmailInput = { subject: "Aviso de consumo aprobado con tarjeta de débito", from: "avisos@itau.com.uy", date: new Date("2026-01-01T12:00:00Z"), messageId: "<debit-synthetic@example.com>", html };
 describe("synthetic Itaú debit purchase notices", () => {
   it("extracts the merchant and peso amount with grouped thousands", () => {
-    expect(parseItauAviso(input)).toMatchObject({ merchant: "MERCADO DE PRUEBA 9", amountRaw: "1234.56", currencyCode: "UYU", messageId: input.messageId });
+    expect(parseItauAviso(input)).toMatchObject({ merchant: "MERCADO DE PRUEBA 9", amountRaw: "1234.56", currencyCode: "UYU", messageId: input.messageId, paymentMethod: "debit", cardLast4: null });
   });
   it("maps the observed dollars format without changing the amount", () => {
     expect(parseItauAviso({ ...input, html: html.replace("1,234.56 pesos", "12.34 dólares") })).toMatchObject({ amountRaw: "12.34", currencyCode: "USD" });
