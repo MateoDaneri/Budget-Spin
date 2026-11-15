@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { archiveBillAction, saveBillAction, setBillPaidAction } from "@/src/actions/bills";
 import { formErrorMessage } from "@/src/actions/error-codes";
-import { listBillPayments, listBills, listCurrencies, type Currency } from "@/src/db/repository";
-import { billsForMonth, type BillRow } from "@/src/finance/bills";
+import { listBillPayments, listBills, listCardPayments, listCurrencies, listTransactions, type Currency } from "@/src/db/repository";
+import { billsForMonth, suggestedPayment, type BillRow, type PaymentCandidate } from "@/src/finance/bills";
 import { addMonths, currentMonthKey, formatMonthLabel } from "@/src/finance/dates";
 import { formatMoney, minorToInputValue } from "@/src/finance/money";
 
@@ -22,6 +22,10 @@ export default async function BillsPage({ searchParams }: Props) {
   const currencies = listCurrencies();
   const rows = billsForMonth(month, listBills(), listBillPayments(month));
   const paidCount = rows.filter((row) => row.paidAt).length;
+  const itauPagos: PaymentCandidate[] = listTransactions(Number.MAX_SAFE_INTEGER)
+    .filter((txn) => txn.isBillPayment && txn.status !== "discarded" && txn.txnDate.startsWith(month))
+    .map((txn) => ({ date: txn.txnDate, currencyCode: txn.currencyCode, amountMinor: txn.amountMinor }));
+  const cardPaidOn = listCardPayments(month).map((paidAt) => shortDate(paidAt));
 
   return (
     <>
@@ -30,6 +34,7 @@ export default async function BillsPage({ searchParams }: Props) {
           <h1>Bills</h1>
           <p className="muted">
             {formatMonthLabel(month)} · {rows.length === 0 ? "nothing to pay yet" : `${paidCount} of ${rows.length} paid`}
+            {cardPaidOn.length ? ` · card statement paid ${cardPaidOn.join(", ")}` : ""}
           </p>
         </div>
         <nav className="month-picker" aria-label="Choose month">
@@ -47,7 +52,7 @@ export default async function BillsPage({ searchParams }: Props) {
         ) : (
           <ul className="bill-list">
             {rows.map((row) => (
-              <BillItem key={row.id} row={row} month={month} currencies={currencies} />
+              <BillItem key={row.id} row={row} month={month} currencies={currencies} suggestion={suggestedPayment(row, month, itauPagos)} />
             ))}
           </ul>
         )}
@@ -65,7 +70,11 @@ export default async function BillsPage({ searchParams }: Props) {
   );
 }
 
-function BillItem({ row, month, currencies }: { row: BillRow; month: string; currencies: Currency[] }) {
+function shortDate(iso: string) {
+  return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(iso));
+}
+
+function BillItem({ row, month, currencies, suggestion }: { row: BillRow; month: string; currencies: Currency[]; suggestion: PaymentCandidate | null }) {
   const currency = currencies.find((item) => item.code === row.currencyCode);
   const amount = row.amountMinor !== null && currency ? formatMoney(row.amountMinor, currency) : null;
   const paidOn = row.paidAt ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(row.paidAt)) : null;
@@ -85,7 +94,16 @@ function BillItem({ row, month, currencies }: { row: BillRow; month: string; cur
       <span className="bill-name" id={labelId}>{row.name}</span>
       <span className="bill-meta">{row.dueDay ? `day ${row.dueDay}` : ""}</span>
       <span className="bill-amount">{amount ?? "—"}</span>
-      <span className="bill-meta">{paidOn ? `paid ${paidOn}` : ""}</span>
+      {suggestion ? (
+        <form action={setBillPaidAction} className="bill-meta">
+          <input type="hidden" name="id" value={row.id} />
+          <input type="hidden" name="month" value={month} />
+          <input type="hidden" name="paid" value="yes" />
+          <button type="submit" className="link-button" aria-describedby={labelId}>Itaú Pagos {shortDate(suggestion.date)}? Mark paid</button>
+        </form>
+      ) : (
+        <span className="bill-meta">{paidOn ? `paid ${paidOn}` : ""}</span>
+      )}
       {row.isActive ? (
         <details className="bill-edit">
           <summary aria-label={`Edit ${row.name}`}>Edit</summary>

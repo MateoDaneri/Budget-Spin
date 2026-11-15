@@ -165,7 +165,7 @@
         <table>
           <thead><tr><th scope="col">Source</th><th scope="col">Included</th><th scope="col">Excluded before any matching</th></tr></thead>
           <tbody>
-            <tr><td>Bank notices (<code>transactions</code>)</td><td><code>kind = purchase</code>, amount &gt; 0, status <code>pending</code> or <code>confirmed</code>; a <strong>refund</strong> (<code>is_refund</code>, from “Aviso de consumo reembolsado”) <strong>subtracts</strong> its amount on its own date and never takes part in pairing</td><td>transfers (<code>transfer_out</code>/<code>transfer_in</code>), notices reviewed as <code>discarded</code>, zero amounts</td></tr>
+            <tr><td>Bank notices (<code>transactions</code>)</td><td><code>kind = purchase</code>, amount &gt; 0, status <code>pending</code> or <code>confirmed</code>; a <strong>refund</strong> (<code>is_refund</code>, from “Aviso de consumo reembolsado”) <strong>subtracts</strong> its amount on its own date and never takes part in pairing; an <strong>Itaú Pagos</strong> payment (“Pago realizado”, <code>is_bill_payment</code>) counts like a purchase. A <strong>card statement payment</strong> notice is recorded by date only (<code>card_payments</code>) and never counts: the purchases it pays were already counted</td><td>transfers (<code>transfer_out</code>/<code>transfer_in</code>), notices reviewed as <code>discarded</code>, zero amounts</td></tr>
             <tr><td>Splitwise (<code>splitwise_imports</code>, current account only)</td><td>expenses that are not payments and not deleted</td><td>payments (settlements) and deleted records</td></tr>
           </tbody>
         </table>

@@ -1765,3 +1765,5 @@ section.panel + section.panel { margin-top: 16px; }
 .recurring-make[open] { flex-basis: 100%; }
 .recurring-make[open] form { margin-top: 10px; }
 .field-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--foreground); }
+.link-button { background: none; border: 0; padding: 0; color: var(--accent-dark); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.link-button:focus-visible { outline: none; box-shadow: var(--ring); border-radius: 2px; }

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "@/src/db/client";
-import { getIngestCursor, insertImportedTransaction, listCurrencies, listTransactions, migrate } from "@/src/db/repository";
+import { getIngestCursor, insertImportedTransaction, listCardPayments, listCurrencies, listTransactions, migrate } from "@/src/db/repository";
 import { calculateActualMonth } from "@/src/finance/actual-spending";
 import { runItauIngest } from "@/src/ingest/ingest-itau";
 import { mailboxCursorKey, readImapConfigFromEnv } from "@/src/ingest/imap";
@@ -70,6 +70,16 @@ describe("runItauIngest", () => {
     const rows = listTransactions();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ amountMinor: 19900, currencyCode: "UYU", status: "pending" });
+  });
+
+  it("imports an Itaú Pagos payment as a bill payment and a card statement payment by date only", async () => {
+    const pago = aviso({ subject: "Pago realizado", messageId: "<pago@example.test>", date: new Date("2026-11-01T02:28:24Z"), html: "PAGO REALIZADO.<br>Cuenta origen terminada en ...0000.<br>Monto: USD 21.37.<br>Pago a RED EJEMPLO.<br>" });
+    const tarjeta = aviso({ subject: "Aviso de pago de tarjeta de credito", messageId: "<card@example.test>", date: new Date("2026-11-07T16:19:33Z"), html: "<img src='cid:x'>" });
+    const summary = await runItauIngest({ fetcher: async () => batch([pago, tarjeta, tarjeta]) });
+    expect(summary).toEqual({ messagesSeen: 3, inserted: 2, skipped: 1 });
+    expect(listTransactions()).toEqual([expect.objectContaining({ description: "RED EJEMPLO", currencyCode: "USD", amountMinor: 2137, isBillPayment: true, isRefund: false, paymentMethod: null, kind: "purchase" })]);
+    expect(listCardPayments("2026-11")).toEqual(["2026-11-07T16:19:33.000Z"]);
+    expect(lastRun()).toMatchObject({ status: "ok" });
   });
 
   it("skips non-aviso mail without crashing the run", async () => {

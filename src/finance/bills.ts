@@ -21,6 +21,18 @@ export type BillPayment = { billId: number; month: string; paidAt: string };
 
 export type BillRow = Bill & { paidAt: string | null };
 
+/** A movement that may have paid a bill (Itaú Pagos): only date, currency and amount are known. */
+export type PaymentCandidate = { date: string; currencyCode: string; amountMinor: number };
+
+/**
+ * For an unpaid bill with an expected amount, the first payment in the month with the same currency and
+ * exact amount. A suggestion only: the network name (e.g. SISTARBANC) does not say which biller was paid.
+ */
+export function suggestedPayment(row: BillRow, month: string, payments: PaymentCandidate[]): PaymentCandidate | null {
+  if (row.paidAt || row.amountMinor === null || row.currencyCode === null) return null;
+  return payments.find((payment) => payment.date.startsWith(month) && payment.currencyCode === row.currencyCode && payment.amountMinor === row.amountMinor) ?? null;
+}
+
 /**
  * Bills shown for a month: active bills created on or before that month, plus removed bills that were
  * paid in it (so history is kept). Ordered by due day (bills without one last), then by name.

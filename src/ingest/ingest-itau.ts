@@ -1,8 +1,9 @@
-import { getIngestCursor, insertImportedTransaction, listCurrencies, recordIngestRun, saveIngestCursor } from "@/src/db/repository";
+import { getIngestCursor, insertCardPayment, insertImportedTransaction, listCurrencies, recordIngestRun, saveIngestCursor } from "@/src/db/repository";
 import { parseMoneyToMinor } from "@/src/finance/money";
 import { fetchQuarantinedMail, fetchRecentMail, mailboxCursorKey, readImapConfigFromEnv, type ImapConfig, type IngestCursor, type MailBatch } from "./imap";
 import { isItauAviso, parseItauAviso, UnrecognizedNoticeError, type ItauEmailInput } from "./itau-parser";
 import { isItauTransfer, parseItauTransfer } from "./itau-transfer";
+import { isItauBillPayment, isItauCardPayment, parseItauBillPayment } from "./itau-payments";
 import { ImapQuarantine } from "./imap-quarantine";
 import { readTrustedAuthservId, senderAuthVerdict } from "./sender-auth";
 
@@ -94,10 +95,15 @@ export async function runItauIngest(options?: {
 }
 
 function processMessage(message: ItauEmailInput, minorUnits: Map<string, number>, trustedAuthservId: string | null): boolean {
-  const transfer = isItauTransfer(message);
-  if (!transfer && !isItauAviso(message)) return false;
   const candidateLabel = message.uid === undefined ? "Candidate notification" : `Candidate notification UID ${message.uid}`;
-  const aviso = transfer ? parseItauTransfer(message) : parseItauAviso(message);
+  if (isItauCardPayment(message)) {
+    if (!message.messageId || !Number.isFinite(message.date.getTime())) throw new UnrecognizedNoticeError(`${candidateLabel} has no Message-ID or date.`);
+    return insertCardPayment(message.messageId, message.date.toISOString()).inserted;
+  }
+  const transfer = isItauTransfer(message);
+  const billPayment = isItauBillPayment(message);
+  if (!transfer && !billPayment && !isItauAviso(message)) return false;
+  const aviso = transfer ? parseItauTransfer(message) : billPayment ? parseItauBillPayment(message) : parseItauAviso(message);
   if (!aviso || !aviso.messageId) throw new UnrecognizedNoticeError(`${candidateLabel} could not be parsed or has no Message-ID.`);
   const minorUnit = minorUnits.get(aviso.currencyCode);
   // Every failure below is a property of this one message: it is retained with a
@@ -112,7 +118,7 @@ function processMessage(message: ItauEmailInput, minorUnits: Map<string, number>
   if (amountMinor <= 0) throw new UnrecognizedNoticeError(`${candidateLabel} has a non-positive amount and requires review.`, "non_positive_amount");
   return insertImportedTransaction({
     txnDate: aviso.txnDateIso, description: aviso.merchant, currencyCode: aviso.currencyCode,
-    amountMinor, cardNetwork: aviso.cardNetwork, cardLast4: aviso.cardLast4, paymentMethod: aviso.paymentMethod, isRefund: aviso.isRefund ?? false, counterpartyBank: aviso.counterpartyBank ?? null, counterpartyLast4: aviso.counterpartyLast4 ?? null,
+    amountMinor, cardNetwork: aviso.cardNetwork, cardLast4: aviso.cardLast4, paymentMethod: aviso.paymentMethod, isRefund: aviso.isRefund ?? false, isBillPayment: billPayment, counterpartyBank: aviso.counterpartyBank ?? null, counterpartyLast4: aviso.counterpartyLast4 ?? null,
     source: SOURCE, messageId: aviso.messageId, rawExcerpt: aviso.rawExcerpt,
     kind: transfer ? "transfer_out" : "purchase", status: "pending",
     // Observation mode (MEJ-002): the verdict is recorded and shown, never used

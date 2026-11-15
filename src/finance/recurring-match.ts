@@ -16,6 +16,7 @@ export type MatchableMovement = {
   amountMinor: number;
   counterpartyBank?: string | null;
   counterpartyLast4?: string | null;
+  isBillPayment?: boolean;
 };
 
 export function recurringMatchKey(movement: MatchableMovement): string | null {
@@ -30,6 +31,11 @@ export function recurringMatchKey(movement: MatchableMovement): string | null {
     return Number.isSafeInteger(movement.amountMinor) && movement.amountMinor > 0 ? `transfer:${movement.currencyCode}:${movement.amountMinor}` : null;
   }
   if (movement.kind !== "purchase") return null;
+  // Itaú Pagos names only the collection network, shared by many billers: the amount tells them apart.
+  if (movement.isBillPayment) {
+    const network = merchantKey(movement.description);
+    return network && Number.isSafeInteger(movement.amountMinor) && movement.amountMinor > 0 ? `payment:${network}:${movement.currencyCode}:${movement.amountMinor}` : null;
+  }
   const key = merchantKey(movement.description);
   return key ? `merchant:${key}` : null;
 }

@@ -127,6 +127,8 @@ export type Transaction = {
   paymentMethod: PaymentMethod | null;
   /** A reversed purchase ("consumo reembolsado"): same merchant and card, amount returned to the owner. */
   isRefund: boolean;
+  /** A bill paid through Itaú Pagos ("Pago realizado"); the description is the collection network. */
+  isBillPayment: boolean;
   /** Outgoing transfers: destination bank and last four account digits from the notice; null otherwise. */
   counterpartyBank: string | null;
   counterpartyLast4: string | null;
@@ -418,6 +420,13 @@ export function migrate() {
       updated_at TEXT NOT NULL,
       UNIQUE (user_id, last4)
     );
+    -- "Aviso de pago de tarjeta de crédito": the statement was paid. Itaú sends only an image, so the amount is unknown.
+    CREATE TABLE IF NOT EXISTS card_payments (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message_id TEXT NOT NULL,
+      paid_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, message_id)
+    );
     -- One-time data steps that must not repeat (e.g. backfills). Schema changes stay idempotent DDL.
     CREATE TABLE IF NOT EXISTS schema_migrations (
       name TEXT PRIMARY KEY,
@@ -457,6 +466,7 @@ export function migrate() {
   ensureUserAuthColumns();
   migrateLegacyLocalUser();
   ensureColumn("recurring_expenses", "match_key", "TEXT");
+  ensureColumn("transactions", "is_bill_payment", "INTEGER NOT NULL DEFAULT 0 CHECK (is_bill_payment IN (0, 1))");
   ensureColumn("transactions", "is_refund", "INTEGER NOT NULL DEFAULT 0 CHECK (is_refund IN (0, 1))");
   ensureColumn("transactions", "counterparty_bank", "TEXT CHECK (counterparty_bank IS NULL OR length(counterparty_bank) BETWEEN 1 AND 60)");
   ensureColumn("transactions", "counterparty_last4", "TEXT CHECK (counterparty_last4 IS NULL OR (length(counterparty_last4) BETWEEN 3 AND 4 AND counterparty_last4 NOT GLOB '*[^0-9]*'))");
@@ -1572,6 +1582,7 @@ export function insertImportedTransaction(input: {
   counterpartyBank?: string | null;
   counterpartyLast4?: string | null;
   isRefund?: boolean;
+  isBillPayment?: boolean;
   source: string;
   messageId: string;
   rawExcerpt?: string | null;
@@ -1584,9 +1595,9 @@ export function insertImportedTransaction(input: {
       INSERT INTO transactions (
         user_id, txn_date, description, currency_code, amount_minor, category_id,
         card_network, card_last4, source, message_id, raw_excerpt, status, created_at, kind, sender_auth, payment_method,
-        counterparty_bank, counterparty_last4, is_refund
+        counterparty_bank, counterparty_last4, is_refund, is_bill_payment
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, message_id) DO NOTHING
     `)
     .run(
@@ -1608,7 +1619,8 @@ export function insertImportedTransaction(input: {
       input.kind === "transfer_out" || input.kind === "transfer_in" ? null : input.paymentMethod ?? null,
       input.kind === "transfer_out" ? input.counterpartyBank ?? null : null,
       input.kind === "transfer_out" ? input.counterpartyLast4 ?? null : null,
-      (input.kind ?? "purchase") === "purchase" && input.isRefund ? 1 : 0
+      (input.kind ?? "purchase") === "purchase" && input.isRefund ? 1 : 0,
+      (input.kind ?? "purchase") === "purchase" && input.isBillPayment ? 1 : 0
     );
 
   return { inserted: result.changes > 0 };
@@ -1621,7 +1633,7 @@ export function listTransactions(limit = 200): Transaction[] {
       SELECT t.id, t.user_id, t.txn_date, t.description, t.currency_code, t.amount_minor, t.category_id,
         t.card_network, t.card_last4, t.source, t.message_id, t.raw_excerpt, t.kind,
         COALESCE(r.decision, t.status) AS status, t.created_at, t.sender_auth, t.payment_method,
-        t.counterparty_bank, t.counterparty_last4, t.is_refund
+        t.counterparty_bank, t.counterparty_last4, t.is_refund, t.is_bill_payment
       FROM transactions t
       LEFT JOIN transaction_reviews r ON r.transaction_id = t.id
       WHERE t.user_id = ?
@@ -1649,6 +1661,7 @@ export function listTransactions(limit = 200): Transaction[] {
     counterparty_bank: string | null;
     counterparty_last4: string | null;
     is_refund: number;
+    is_bill_payment: number;
   }>;
 
   return rows.map((row) => ({
@@ -1671,7 +1684,8 @@ export function listTransactions(limit = 200): Transaction[] {
     paymentMethod: row.payment_method === "credit" || row.payment_method === "debit" ? row.payment_method : null,
     counterpartyBank: row.counterparty_bank,
     counterpartyLast4: row.counterparty_last4,
-    isRefund: row.is_refund === 1
+    isRefund: row.is_refund === 1,
+    isBillPayment: row.is_bill_payment === 1
   }));
 }
 
@@ -1860,10 +1874,10 @@ export function createRecurringExpenseFromTransaction(input: { transactionId: nu
   migrate();
   const db = getDb();
   const row = db
-    .prepare("SELECT kind, description, currency_code, amount_minor, txn_date, counterparty_bank, counterparty_last4 FROM transactions WHERE id = ? AND user_id = ? AND is_refund = 0")
-    .get(input.transactionId, LOCAL_USER_ID) as { kind: TransactionKind; description: string; currency_code: string; amount_minor: number; txn_date: string; counterparty_bank: string | null; counterparty_last4: string | null } | undefined;
+    .prepare("SELECT kind, description, currency_code, amount_minor, txn_date, counterparty_bank, counterparty_last4, is_bill_payment FROM transactions WHERE id = ? AND user_id = ? AND is_refund = 0")
+    .get(input.transactionId, LOCAL_USER_ID) as { kind: TransactionKind; description: string; currency_code: string; amount_minor: number; txn_date: string; counterparty_bank: string | null; counterparty_last4: string | null; is_bill_payment: number } | undefined;
   if (!row) throw new Error("Transaction not found.");
-  const matchKey = recurringMatchKey({ kind: row.kind, description: row.description, currencyCode: row.currency_code, amountMinor: row.amount_minor, counterpartyBank: row.counterparty_bank, counterpartyLast4: row.counterparty_last4 });
+  const matchKey = recurringMatchKey({ kind: row.kind, description: row.description, currencyCode: row.currency_code, amountMinor: row.amount_minor, counterpartyBank: row.counterparty_bank, counterpartyLast4: row.counterparty_last4, isBillPayment: row.is_bill_payment === 1 });
   if (!matchKey) throw new Error("This movement cannot become recurring.");
   if (db.prepare("SELECT 1 FROM recurring_expenses WHERE user_id = ? AND is_active = 1 AND match_key = ?").get(LOCAL_USER_ID, matchKey)) {
     throw new Error("Already recurring.");
@@ -1923,4 +1937,18 @@ export function saveContactForTransaction(transactionId: number, name: string, i
 export function deleteContact(id: number): void {
   migrate();
   getDb().prepare("DELETE FROM contacts WHERE id = ? AND user_id = ?").run(id, LOCAL_USER_ID);
+}
+
+/** Records a card statement payment notice (date only). Idempotent per Message-ID. */
+export function insertCardPayment(messageId: string, paidAt: string): { inserted: boolean } {
+  migrate();
+  const result = getDb().prepare("INSERT INTO card_payments (user_id, message_id, paid_at) VALUES (?, ?, ?) ON CONFLICT(user_id, message_id) DO NOTHING").run(LOCAL_USER_ID, messageId, paidAt);
+  return { inserted: result.changes === 1 };
+}
+
+/** Card statement payments whose timestamp falls in the month (YYYY-MM prefix, UTC as stored). */
+export function listCardPayments(month: string): string[] {
+  migrate();
+  const rows = getDb().prepare("SELECT paid_at FROM card_payments WHERE user_id = ? AND substr(paid_at, 1, 7) = ? ORDER BY paid_at").all(LOCAL_USER_ID, month) as Array<{ paid_at: string }>;
+  return rows.map((row) => row.paid_at);
 }

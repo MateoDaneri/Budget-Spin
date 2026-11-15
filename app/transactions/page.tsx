@@ -67,7 +67,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
               const currency = currencies.get(transaction.currencyCode);
               const formatted = currency ? formatMoney(transaction.amountMinor, currency) : `${transaction.currencyCode} ${transaction.amountMinor}`;
               const amount = transaction.isRefund ? `−${formatted}` : formatted;
-              const kind = transaction.isRefund ? "Refund" : transaction.kind === "purchase" ? "Purchase" : transaction.kind === "transfer_out" ? "Transfer sent" : "Transfer received";
+              const kind = transaction.isRefund ? "Refund" : transaction.isBillPayment ? "Itaú Pagos" : transaction.kind === "purchase" ? "Purchase" : transaction.kind === "transfer_out" ? "Transfer sent" : "Transfer received";
               return (
                 <article className="transaction-card" key={transaction.id}>
                   <div className="transaction-card-top">

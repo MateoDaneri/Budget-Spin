@@ -37,7 +37,7 @@ characters** (`YYYY-MM`) of the stored timestamp.
 
 | Source | Included | Excluded before any matching |
 |---|---|---|
-| Bank notices (`transactions`) | `kind = purchase`, amount > 0, status `pending` or `confirmed`; a **refund** (`is_refund`, from "Aviso de consumo reembolsado") **subtracts** its amount on its own date and never takes part in pairing | transfers (`transfer_out`/`transfer_in`), notices reviewed as `discarded`, zero amounts |
+| Bank notices (`transactions`) | `kind = purchase`, amount > 0, status `pending` or `confirmed`; a **refund** (`is_refund`, from "Aviso de consumo reembolsado") **subtracts** its amount on its own date and never takes part in pairing; an **Itaú Pagos** payment ("Pago realizado", `is_bill_payment`) counts like a purchase. A **card statement payment** notice is recorded by date only (`card_payments`) and never counts: the purchases it pays were already counted | transfers (`transfer_out`/`transfer_in`), notices reviewed as `discarded`, zero amounts |
 | Splitwise (`splitwise_imports`, current account only) | expenses that are not payments and not deleted | payments (settlements) and deleted records |
 
 **Pending notices count.** A bank notice is imported as `pending` and is
