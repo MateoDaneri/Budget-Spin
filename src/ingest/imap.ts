@@ -5,6 +5,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { isItauAviso, type ItauEmailInput, type QuarantineReason } from "./itau-parser";
 import { isItauTransfer } from "./itau-transfer";
+import { isItauBillPayment, isItauCardPayment } from "./itau-payments";
 import { authenticationResultsValues } from "./sender-auth";
 
 export type ImapConfig = {
@@ -81,7 +82,7 @@ export async function fetchRecentMail(config: ImapConfig, previous: IngestCursor
           from: header.from?.value.length === 1 ? (header.from.value[0].address ?? "") : "",
           date: new Date(NaN), messageId: "", html: ""
         };
-        if (isItauAviso(candidate) || isItauTransfer(candidate)) candidates.push(message.uid);
+        if (isItauAviso(candidate) || isItauTransfer(candidate) || isItauBillPayment(candidate) || isItauCardPayment(candidate)) candidates.push(message.uid);
       }
       for (const uid of candidates) {
         const message = await client.fetchOne(String(uid), {
