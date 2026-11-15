@@ -8,6 +8,7 @@ WORKDIR /app
 
 # Manifiestos primero: la capa de npm ci se cachea mientras no cambien las
 # dependencias, aunque cambie el código (orden cache-friendly).
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 # npm ci, no install: versiones exactas del lockfile + verificación de hashes.
 RUN npm ci
@@ -19,7 +20,9 @@ COPY . .
 # 3) bundlea el entrypoint de migración (fuera del grafo de Next) -> migrate.mjs
 RUN npm run build \
  && rm -rf .next/standalone/data \
- && node_modules/.bin/esbuild src/db/migrate.ts --bundle --platform=node --format=esm --outfile=migrate.mjs
+ && node_modules/.bin/esbuild src/db/migrate.ts --bundle --platform=node --format=esm --outfile=migrate.mjs \
+ && node_modules/.bin/esbuild scripts/statement-worker.ts --bundle --platform=node --format=esm --packages=external --outfile=statement-worker.mjs \
+ && gcc -O2 -Wall -Wextra -Werror scripts/pdf-sandbox.c -o pdf-sandbox
 
 # ───────────────────────── Stage 2: runtime ─────────────────────────
 # Arranca limpio desde la misma base pinneada: sin toolchain, sin devDeps,
@@ -53,6 +56,9 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static     ./.next/static
 COPY --from=builder /app/public           ./public
 COPY --from=builder /app/migrate.mjs      ./migrate.mjs
+COPY --from=builder /app/statement-worker.mjs ./statement-worker.mjs
+COPY --from=builder /app/pdf-sandbox ./pdf-sandbox
+COPY --from=builder /app/node_modules/pdfjs-dist ./node_modules/pdfjs-dist
 COPY --from=builder /app/scripts/install-provider-secret.mjs ./install-provider-secret.mjs
 
 # El dir de datos es propiedad del usuario sin privilegios; el volume montado

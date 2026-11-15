@@ -515,3 +515,34 @@ Common failures:
 - Browser can't resolve `budget-spin.ts.local` → update `/etc/hosts` with the
   server Tailscale IP.
 - Resolves but Traefik 404 → verify hostname, entrypoint, TLS, labels, network.
+
+## Visa statement summaries
+
+The Itaú IMAP pass also scans Visa statement emails using a **separate** mailbox
+cursor and quarantine, so enabling it does not rewind or replace the purchase
+cursor. A fresh cursor starts at UID 1; up to five statement attachments are
+processed per window, with a bounded number per pass, and later windows resume from the saved checkpoint. Only
+INBOX is scanned; archived or deleted messages cannot be recovered. Candidates
+that are missing, oversized, unreadable, ambiguous or inconsistent with the
+supported template are retained by UID and retried. The Bills page displays a
+separate statement-sync warning if a pass fails or items remain retained.
+
+The email is limited to 8 MiB and its single PDF attachment to 4 MiB. The PDF
+worker accepts at most 12 pages and 40,000 text items, has a 128 MiB V8 old-generation limit, 1.5 GiB virtual address limit, CPU limit and
+10-second time limit, receives no provider credentials or other parent
+variables, and has no filesystem write access. A Linux seccomp filter blocks
+network socket and io_uring creation; Node's permission model limits file reads
+to the worker and PDF.js package. PDF.js is pinned to 6.5.438, newer than the
+fixes in Mozilla advisories [GHSA-wgrm-67xf-hhpq](https://github.com/mozilla/pdf.js/security/advisories/GHSA-wgrm-67xf-hhpq)
+and [GHSA-hq66-cqwq-w95j](https://github.com/mozilla/pdf.js/security/advisories/GHSA-hq66-cqwq-w95j).
+The process is defense in depth, not a claim of a perfect sandbox.
+
+Only the message ID, issue date, current due date and printed totals in UYU and
+USD are retained. The issue month is a statement reference, not an inferred
+closing range. The current due date is checked against its repeated occurrence
+and the following due date. These are printed figures, not an independently
+reconstructed ledger: a naive previous-balance-plus-lines check did not reconcile
+all tested real samples, so no arithmetic reconciliation is claimed. Identical
+summaries are grouped in the view; the database uses Message-ID for idempotence.
+PDFs, attachment names, body text and individual statement lines are not saved.
+Nothing imported from the statement creates expenses, payments or balances.
