@@ -5,6 +5,7 @@ import { isItauAviso, parseItauAviso, UnrecognizedNoticeError, type ItauEmailInp
 import { isItauTransfer, parseItauTransfer } from "./itau-transfer";
 import { isItauBillPayment, isItauCardPayment, parseItauBillPayment } from "./itau-payments";
 import { ImapQuarantine } from "./imap-quarantine";
+import { runStatementIngest } from './ingest-statement';
 import { readTrustedAuthservId, senderAuthVerdict } from "./sender-auth";
 
 export type IngestSummary = { messagesSeen: number; inserted: number; skipped: number };
@@ -86,6 +87,8 @@ export async function runItauIngest(options?: {
       if (!batch.hasMore) break;
     }
     recordIngestRun({ source: SOURCE, startedAt, messagesSeen, inserted, skipped, status: quarantine.count() ? "error" : "ok", ...(quarantine.count() ? { error: "Unrecognized notices retained for review." } : {}) });
+    // Statement history has its own cursor and quarantine; a failure does not rewind purchases.
+    if (!options?.fetcher) { try { await runStatementIngest(config); } catch { /* Recorded separately. */ } }
     return { messagesSeen, inserted, skipped };
   } catch (error) {
     // Provider exceptions can contain server-supplied text; never persist it.

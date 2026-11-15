@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { archiveBillAction, saveBillAction, setBillPaidAction } from "@/src/actions/bills";
 import { formErrorMessage } from "@/src/actions/error-codes";
-import { listBillPayments, listBills, listCardPayments, listCurrencies, listTransactions, type Currency } from "@/src/db/repository";
+import { latestCardStatementRun, listBillPayments, listBills, listCardPayments, listCardStatements, listCurrencies, listTransactions, type Currency } from "@/src/db/repository";
 import { billsForMonth, suggestedPayment, type BillRow, type PaymentCandidate } from "@/src/finance/bills";
 import { addMonths, currentMonthKey, formatMonthLabel } from "@/src/finance/dates";
 import { formatMoney, minorToInputValue } from "@/src/finance/money";
@@ -26,6 +26,8 @@ export default async function BillsPage({ searchParams }: Props) {
     .filter((txn) => txn.isBillPayment && txn.status !== "discarded" && txn.txnDate.startsWith(month))
     .map((txn) => ({ date: txn.txnDate, currencyCode: txn.currencyCode, amountMinor: txn.amountMinor }));
   const cardPaidOn = listCardPayments(month).map((paidAt) => shortDate(paidAt));
+  const statements = listCardStatements().filter((statement) => statement.dueDate.startsWith(month));
+  const statementRun = latestCardStatementRun();
 
   return (
     <>
@@ -45,6 +47,16 @@ export default async function BillsPage({ searchParams }: Props) {
       </section>
 
       {errorMessage ? <div className="alert" role="alert">{errorMessage}</div> : null}
+
+      <section className="panel" aria-labelledby="visa-statements-title">
+        <h2 id="visa-statements-title">Visa statements</h2>
+        <p className="muted">Statements due this month. The issue month identifies the statement; the document does not provide a verified period range. Totals are informational and do not create expenses, payments or balances. Identical summaries are grouped, so different cards with the same figures cannot be distinguished.</p>
+        {statementRun?.status === "error" && <p className="alert" role="status">{statementRun.error === "Statements retained for review." ? "Some statements could not be read. They are retained for review and retried." : "Could not check statements. The next sync will retry."}</p>}
+        {statements.length === 0 ? <p className="muted">No statement found for this due month.</p> : <ul className="bill-list">{statements.map((statement) => <li className="bill-row" key={`${statement.issuedOn}:${statement.dueDate}:${statement.totalUyuMinor}:${statement.totalUsdMinor}`}>
+          <div><strong>Issued {statementDate(statement.issuedOn)}</strong><div className="muted">Due {statementDate(statement.dueDate)}</div></div>
+          <div>{statement.totalUyuMinor !== null && <div>{formatMoney(statement.totalUyuMinor, currencies.find((c) => c.code === "UYU")!)}</div>}{statement.totalUsdMinor !== null && <div>USD {formatMoney(statement.totalUsdMinor, currencies.find((c) => c.code === "USD")!)}</div>}</div>
+        </li>)}</ul>}
+      </section>
 
       <div className="panel">
         {rows.length === 0 ? (
@@ -68,6 +80,10 @@ export default async function BillsPage({ searchParams }: Props) {
       </details>
     </>
   );
+}
+
+function statementDate(iso: string) {
+  return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
 }
 
 function shortDate(iso: string) {

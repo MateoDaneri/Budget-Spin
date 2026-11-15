@@ -262,3 +262,14 @@ ten characters of the stored timestamp, as in section 8).
   amounts with at most the currency's decimals (any extra digit is rejected,
   so `1.000` is not read as 1.00); adjustments different from zero.
 
+
+## Visa statement summaries
+
+A Visa statement is an informational bank document, not a new expense, payment,
+or balance adjustment. The app retains the printed current due date and totals
+per currency; the issue month is a reference and does not assert a closing range.
+Matching values across different currencies does not convert or sum them. The
+printed totals are not independently reconstructed from the statement lines;
+those lines and the PDF are not persisted. Identical summaries are grouped for
+display, so distinct cards with identical summaries cannot be distinguished;
+each source email remains idempotent by Message-ID.

@@ -483,6 +483,7 @@
         <li><strong>Input checks</strong> (server side): known currency; a real date not after today; amounts with at most the currency's decimals (any extra digit is rejected, so <code>1.000</code> is not read as 1.00); adjustments different from zero.</li>
       </ul>
     </section>
+    <section id="visa-statement-summaries"><h2>Visa statement summaries</h2><p>A Visa statement is an informational bank document, not a new expense, payment, or balance adjustment. The app retains the printed current due date and totals per currency; the issue month is a reference and does not assert a closing range. Matching values across different currencies does not convert or sum them. The printed totals are not independently reconstructed from the statement lines; those lines and the PDF are not persisted. Identical summaries are grouped for display, so distinct cards with identical summaries cannot be distinguished; each source email remains idempotent by Message-ID.</p></section>
   </main>
 
   <footer class="wrap">BudgetSpin financial rules. Agent-readable mirror: <code>FINANCIAL-RULES.md</code> — keep both in sync.</footer>

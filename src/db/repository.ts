@@ -1,3 +1,4 @@
+import { validStatementSummary } from '@/src/ingest/itau-statement';
 import { getDb } from "./client";
 import { merchantKey } from "../finance/merchant-key";
 import { isSenderAuthVerdict, type SenderAuthVerdict } from "../ingest/sender-auth";
@@ -421,6 +422,16 @@ export function migrate() {
       UNIQUE (user_id, last4)
     );
     -- "Aviso de pago de tarjeta de crédito": the statement was paid. Itaú sends only an image, so the amount is unknown.
+    CREATE TABLE IF NOT EXISTS card_statements (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message_id TEXT NOT NULL,
+      issued_on TEXT NOT NULL,
+      due_date TEXT NOT NULL,
+      total_uyu_minor INTEGER,
+      total_usd_minor INTEGER,
+      CHECK (total_uyu_minor IS NOT NULL OR total_usd_minor IS NOT NULL),
+      PRIMARY KEY (user_id, message_id)
+    );
     CREATE TABLE IF NOT EXISTS card_payments (
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       message_id TEXT NOT NULL,
@@ -1951,4 +1962,52 @@ export function listCardPayments(month: string): string[] {
   migrate();
   const rows = getDb().prepare("SELECT paid_at FROM card_payments WHERE user_id = ? AND substr(paid_at, 1, 7) = ? ORDER BY paid_at").all(LOCAL_USER_ID, month) as Array<{ paid_at: string }>;
   return rows.map((row) => row.paid_at);
+}
+
+
+export class StatementConflictError extends Error {}
+
+type StoredCardStatement = {
+  issuedOn: string;
+  dueDate: string;
+  totalUyuMinor: number | null;
+  totalUsdMinor: number | null;
+};
+
+/** Store only summary data, not PDFs or individual card lines. */
+export function insertCardStatement(messageId: string, summary: StoredCardStatement): { inserted: boolean } {
+  if (!messageId || messageId.length > 998 || /[\r\n]/.test(messageId) || !validStatementSummary(summary)) {
+    throw new Error("Invalid statement.");
+  }
+  migrate();
+  const db = getDb();
+  const prior = db.prepare(`SELECT issued_on, due_date, total_uyu_minor, total_usd_minor
+    FROM card_statements WHERE user_id=? AND message_id=?`).get(LOCAL_USER_ID, messageId) as {
+      issued_on: string; due_date: string; total_uyu_minor: number | null; total_usd_minor: number | null;
+    } | undefined;
+  if (prior) {
+    if (prior.issued_on !== summary.issuedOn || prior.due_date !== summary.dueDate ||
+        prior.total_uyu_minor !== summary.totalUyuMinor || prior.total_usd_minor !== summary.totalUsdMinor) {
+      throw new StatementConflictError("Conflicting statement ID.");
+    }
+    return { inserted: false };
+  }
+  const result = db.prepare(`INSERT INTO card_statements
+    (user_id, message_id, issued_on, due_date, total_uyu_minor, total_usd_minor) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(LOCAL_USER_ID, messageId, summary.issuedOn, summary.dueDate, summary.totalUyuMinor, summary.totalUsdMinor);
+  return { inserted: result.changes === 1 };
+}
+
+export function listCardStatements(): StoredCardStatement[] {
+  migrate();
+  return getDb().prepare(`SELECT DISTINCT issued_on AS issuedOn, due_date AS dueDate,
+    total_uyu_minor AS totalUyuMinor, total_usd_minor AS totalUsdMinor
+    FROM card_statements WHERE user_id=? ORDER BY issued_on DESC, due_date DESC LIMIT 120`)
+    .all(LOCAL_USER_ID) as StoredCardStatement[];
+}
+
+export function latestCardStatementRun(): { status: string; error: string | null } | null {
+  migrate();
+  return (getDb().prepare("SELECT status, error FROM ingest_runs WHERE source='itau_statement' ORDER BY id DESC LIMIT 1")
+    .get() as { status: string; error: string | null } | undefined) ?? null;
 }
